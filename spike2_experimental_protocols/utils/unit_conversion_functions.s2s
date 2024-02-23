@@ -1,0 +1,38 @@
+' ------------------------------------------------------------------------------
+' SCRIPT CONTAINING NECESSARY CONVERSION FUNCTIONS
+'
+' These functions convert to/from values when passing them to/from sequencer
+' ------------------------------------------------------------------------------
+
+' Angles in the range [-180,180] should span [-2147483648.0,2147483647.0]
+Func Angle2Int32%(angle)
+  Return(angle * 2147483647.0 / 180);
+End
+
+
+' Rates are calculated in degrees per sequencer step, with one degree being 11930465.
+Func Hz2Int32%(hz)
+ 'This assumes a sequencer rate of 1 kHz.
+  Return(hz * 11930465 * 360 / 1000);
+End
+
+' Amplitudes must be converted such that [ 0, 32768 ] spans the positive range of the dac, e.g. [0, 5 ]
+' We have to include the dac maximum and the degrees-per-second-to-voltage conversion factor. Does not include offset.
+Func ChairAmp2Int16%(amp)
+  Return(amp * chairVelocity2Voltage * 32768 / voltageMax);
+End
+
+
+Func DrumAmp2Int16%(amp)
+  Return(amp * drumVelocity2Voltage * 32768 / voltageMax);
+End
+
+
+Func ChairAmp2Int32%(amp)
+  Return(amp * chairVelocity2Voltage * 2147483647 / voltageMax);
+End
+
+
+Func DrumAmp2Int32%(amp)
+  Return(amp * drumVelocity2Voltage * 2147483647 / voltageMax);
+End

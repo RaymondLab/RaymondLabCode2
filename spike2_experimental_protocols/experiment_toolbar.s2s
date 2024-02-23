@@ -1,0 +1,27 @@
+' ------------------------------------------------------------------------------
+' EXPERIMENTAL TOOLBAR LAUNCHER
+'
+' This script launches the selected protocol's toolbar and sequencer.
+' ------------------------------------------------------------------------------
+const toolbarFileNames$[] := {"step_protocols/steps_standard.s2s", "step_protocols/steps_oculomotor.s2s"};
+const toolbarFileLabels$[] := {"Steps - Standard", "Steps - OMC Amin 2023"};
+var toolbarID%, toolbarFileName$;
+
+toolbarLauncher();
+
+Proc toolbarLauncher()
+    var toolbarID$, launcherStatus;
+    Profile("RigParams", "default_toolbarID", "0", toolbarID$);
+    toolbarID% := Val(toolbarID$);
+
+    DlgCreate("EXPERIMENTAL PROTOCOL LAUNCHER", 0, 0, 55, 4);  'Start new dialog
+    DlgText("Experimental protocol:", 2, 2);
+    DlgList(1, 25, toolbarFileLabels$[], 99, 0, 2);
+    launcherStatus := DlgShow(toolbarID%);
+    
+    toolbarFileName$ := toolbarFileNames$[toolbarID%];
+    if launcherStatus then
+        PrintLog("Loaded toolbar:  %s\n", toolbarFileNames$[toolbarID%]);
+        ScriptRun(toolbarFileName$);
+    endif
+End

@@ -1,0 +1,33 @@
+' ------------------------------------------------------------------------------
+' SCRIPT FOR DRIFT CORRECTION FUNCTION
+' ------------------------------------------------------------------------------
+
+var Kp := 1.0;  'Sets the scaling factor of proportional error correction
+
+' Function to check for motor drift and apply correction if necessary
+Func driftFix%()
+    var drumFirstTime, htpos_minID%, htpos_arr[Round(drumStepPeriod)];
+    var chairFirstTime, hhpos_minID%, hhpos_arr[Round(chairStepPeriod)];
+    var htpos_error, hhpos_error;
+    var currentTime := MaxTime();
+    ChanData(htpos_ch%, htpos_arr, currentTime-(1.0/drumFreq), currentTime, drumFirstTime);
+    ChanData(hhpos_ch%, hhpos_arr, currentTime-(1.0/chairFreq), currentTime, chairFirstTime);
+    ArrMul(htpos_arr[], drumSign);
+    ArrMul(hhpos_arr[], chairSign);
+    htpos_minID% := Round(Min(htpos_arr));
+    hhpos_minID% := Round(Min(hhpos_arr));
+    htpos_error := Kp * drumSign * htpos_arr[htpos_minID%];
+    hhpos_error := Kp * chairSign * hhpos_arr[hhpos_minID%];
+    'PrintLog("\nCurrent time: %.4f s | Block flag %d\n\n", currentTime, blockFlag%);
+
+    drumVelocityOffset := drumVelocityOffsetInitial - htpos_error;
+    drumPosStepAmplitude := drumAmp + drumVelocityOffset;
+    drumNegStepAmplitude := -drumAmp + drumVelocityOffset;
+
+    chairVelocityOffset := chairVelocityOffsetInitial - hhpos_error;
+    chairPosStepAmplitude := chairAmp + chairVelocityOffset;
+    chairNegStepAmplitude := -chairAmp + chairVelocityOffset;
+
+    SetSequencerValues();
+    return 1;
+End

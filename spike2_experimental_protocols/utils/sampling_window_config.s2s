@@ -1,0 +1,161 @@
+' ------------------------------------------------------------------------------
+' SAMPLING WINDOW CONFIGURATION/LAYOUT
+' ------------------------------------------------------------------------------
+
+' Sampling configuration parameters
+const voltageMax := 10.0;  'Ensure this is the same value found in Edit -> Edit Preferences -> Sampling
+const sampleRate := 1000;  'Sequencer sample rate in Hz, MUST be the same value given in the sequencer file
+var sampleStepsize := 1/sampleRate;  'Sequencer sample rate step size in seconds
+
+' Define the standard channel layout for all protocols
+const HHVELcom_ch% := 1; 
+const HTVELcom_ch% := 2; 
+const hhpos_ch% := 3; 
+const htpos_ch% := 4; 
+const hepos1_ch% := 5; 
+const hepos2_ch% := 6; 
+const hhvel_ch% := 7; 
+const htvel_ch% := 8;
+const TTL1_ch% := 10;
+const TTL2_ch% := 11; 
+const TTL3_ch% := 12; 
+const TTL4_ch% := 13; 
+const TTL5_ch% := 14;
+
+' Initialize sampling window variable
+var sampling_window%;
+
+
+' Configures the sampling window channels, layout, appearance, etc.
+Proc WindowSetup()
+    ' Set sampling configuration window to a standard state
+    SampleClear();
+
+    ' Attempt to set the sequencer file and halt script on error
+    var setseq_error% := SampleSequencer(sequencerFile$);
+    if setseq_error% < 0 then
+        Message("Sequencer file could not be set: %s", Error$(setseq_error%));
+        halt
+    endif
+
+    SampleSeqCtrl(1, 1);  'Set seqencer jump control to control panel and script only
+    
+    ' Ch 1: HHVEL - Horizontal Head Velocity (Command from 1401 to chair)
+    SampleWaveform(HHVELcom_ch%, HHVELcom_port%, sampleRate, 1);
+    SampleCalibrate(HHVELcom_ch%, "deg/s", HHVELcom_chScaling, HHVELcom_chOffset);
+    SampleTitle$(HHVELcom_ch%, "HHVEL");
+    SampleComment$(HHVELcom_ch%, "Velocity command signal sent from the 1401 to the chair");
+
+    ' Ch 2: HTVEL - Horizontal Target Velocity (Command from 1401 to drum)
+    SampleWaveform(HTVELcom_ch%, HTVELcom_port%, sampleRate, 1);
+    SampleCalibrate(HTVELcom_ch%, "deg/s", HTVELcom_chScaling, HTVELcom_chOffset);
+    SampleTitle$(HTVELcom_ch%, "HTVEL");
+    SampleComment$(HTVELcom_ch%, "Velocity command signal sent from the 1401 to the drum");
+
+    ' Ch 3: hhpos - Horizontal Head Position (Readout from chair motor)
+    'SampleWaveform(hhpos_ch%, hhpos_port%, sampleRate, 1);
+    'SampleCalibrate(hhpos_ch%, "deg", hhpos_chScaling, hhpos_chOffset);
+    'SampleTitle$(hhpos_ch%, "hhpos");
+    'SampleComment$(hhpos_ch%, "Chair position readout from motor encoder");
+
+    ' Ch 4: htpos - Horizontal Target Position (Readout from drum motor)
+    'SampleWaveform(htpos_ch%, htpos_port%, sampleRate, 1);
+    'SampleCalibrate(htpos_ch%, "deg", htpos_chScaling, htpos_chOffset);
+    'SampleTitle$(htpos_ch%, "htpos");
+    'SampleComment$(htpos_ch%, "Drum position readout from motor encoder");
+
+    ' Ch 5: hepos1 - Horizontal Eye Position 1
+    'SampleWaveform(hepos1_ch%, hepos1_port%, sampleRate, 1);
+    'SampleCalibrate(hepos1_ch%, "deg", hepos1_chScaling, hepos1_chOffset);
+    'SampleTitle$(hepos1_ch%, "hepos1");
+    'SampleComment$(hepos1_ch%, "Eye Position 1");
+
+    ' Ch 6: hepos2 - Horizontal Eye Position 2
+    'SampleWaveform(hepos2_ch%, hepos2_port%, sampleRate, 1);
+    'SampleCalibrate(hepos2_ch%, "deg", hepos2_chScaling, hepos2_chOffset);
+    'SampleTitle$(hepos2_ch%, "hepos2");
+    'SampleComment$(hepos2_ch%, "Eye Position 2");
+
+    ' Ch 7: hhvel - Horizontal Head Velocity (Readout from chair motor)
+    'SampleWaveform(hhvel_ch%, hhvel_port%, sampleRate, 1);
+    'SampleCalibrate(hhvel_ch%, "deg/s", hhvel_chScaling, hhvel_chOffset);
+    'SampleTitle$(hhvel_ch%, "hhvel");
+    'SampleComment$(hhvel_ch%, "Chair velocity readout from motor encoder");
+
+    ' Ch 8: htvel - Horizontal Target Velocity (Readout from drum motor)
+    'SampleWaveform(htvel_ch%, htvel_port%, sampleRate, 1);
+    'SampleCalibrate(htvel_ch%, "deg/s", htvel_chScaling, htvel_chOffset);
+    'SampleTitle$(htvel_ch%, "htvel");
+    'SampleComment$(htvel_ch%, "Drum velocity readout from motor encoder");
+    
+    ' TTL1: Shutter/LED/Light
+    SampleEvent(TTL1_ch%, TTL1_port%, 2, sampleRate);
+    SampleTitle$(TTL1_ch%, "TTL1");
+    SampleComment$(TTL1_ch%, "TTL1: Shutter");
+    
+    ' TextMark: Event keyboard markersggTTg
+    SampleTextMark(200);
+    
+    SampleOptimise(1, 1, 0, 2, 50);  'Sets sample rate optimising settings
+    SampleMode(1);  'Sets sampling mode to Continuous recording mode
+    sampling_window% := FileNew(0, 1);  'Create and display immediately a new Spike2 data file
+    
+    ViewColourSet(0, .87, .87, .87);  'Sets the background color
+    FontSet("Verdana", 8, 0);  'Sets the font type and size
+    
+    ' Head (Chair Motor) Velocity (Virtual Channel derived from hhpos)
+    'var HHVEL_expr$ := "ch(1)"; '"ch(" + Str$(hhpos_ch%) + ")";
+    'var HHVEL_vch% := VirtualChan(0, "");
+    'VirtualChan(HHVEL_vch%, HHVEL_expr$, 0, 1.0/sampleRate);
+    'ChanUnits$(HHVEL_vch%, "deg");
+    'ChanProcessAdd(HHVEL_vch%, 1, 0.09);
+    'ChanProcessAdd(HHVEL_vch%, 3, 0.006);    
+    'ChanTitle$(HHVEL_vch%, "HHVEL (V)"); 
+    'ChanComment$(HHVEL_vch%, "Calculated velocity of hhpos");
+
+    ' Target (Drum Motor) Velocity (Virtual Channel derived from htpos)
+    'var HTVEL_expr$ := "ch(" + Str$(htpos_ch%) + ")";
+    'var HTVEL_vch% := VirtualChan(0, "");
+    'VirtualChan(HTVEL_vch%, HTVEL_expr$, 0, 1.0/sampleRate);
+    'ChanUnits$(HTVEL_vch%, "deg");
+    'ChanProcessAdd(HTVEL_vch%, 1, 0.09);
+    'ChanProcessAdd(HTVEL_vch%, 3, 0.006);
+    'ChanTitle$(HTVEL_vch%, "HTVEL (V)"); 
+    'ChanComment$(HTVEL_vch%, "Calculated velocity of htpos");
+    
+    ' Ensure all channels are visible and specify their order
+    ChanHide(-1);
+    ChanShow(1, 2, 10, 31);
+    'ChanShow(-1);
+    ChanOrder(0, -1, "10, 30, 31");
+    
+    ' Initial y-ranges for all channels
+    YRange(HHVELcom_ch%, -11, 11);
+    YRange(HTVELcom_ch%, -11, 11);
+    'YRange(hhpos_ch%, -10, 10);
+    'YRange(htpos_ch%, -10, 10);
+    'YRange(hepos1_ch%, -10, 10);
+    'YRange(hepos2_ch%, -10, 10);
+    'YRange(HHVEL_vch%, -11, 11);
+    'YRange(HTVEL_vch%, -11, 11);
+    
+    ' Initial x-range for all channels
+    XRange(0, 20);
+    
+    ' Set channel colors
+    ChanColourSet("1..14", 1, 0.501961, 0, 0.501961);
+    'ChanColourSet("v1..v5", 1, 0.501961, 0, 0.752941);
+    'ChanColourSet("5,6", 1, 0, 0, 0);
+    
+    ' Add channel horizontal cursors
+    HCursorNew(HHVELcom_ch%);
+    HCursorNew(HTVELcom_ch%);
+    'HCursorNew(hhpos_ch%);
+    'HCursorNew(htpos_ch%);
+    'HCursorNew(HHVEL_vch%);
+    'HCursorNew(HTVEL_vch%);
+    
+    ' DECREASE HEIGHT OF CHANNELS (TODO: REMOVE THIS LATER)
+    'ChanWeight(HTVELcom_ch%, 0.5);
+    'ChanWeight(HHVELcom_ch%, 0.5);
+End

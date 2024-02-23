@@ -1,0 +1,288 @@
+' ------------------------------------------------------------------------------
+' STEPS - OCULOMOTOR CONDITIONING AMIN 2023
+'
+' Values for local (rig-specific) variables are stored in the system registry: 
+' HKEY_CURRENT_USER\Software\CED\Spike2\RigParams
+'
+' ------------------------------------------------------------------------------
+'Sets the sequencer file to use for the protocol
+const sequencerFile$ := "step_protocols/steps_oculomotor.pls";
+
+' This file is the same for all STEP protocols
+#include "steps_core.s2s"
+
+' Gap block parameters
+var halfgapDur, gap1Dur, gap2Dur, gap3Dur;  'Initialize sequencer file variables
+var gapDur := 1.0;  'Total duration (in seconds) of each gap block [default 1.0]
+var flashDur := 0.0;  'Duration of TTL flash (in seconds) halfway into each gap block [default 0.0]
+
+' Pre/post test and training block parameters
+var lightPerSeqSteps, stepRampSeqSlope, stepSeqSteps, stepDelaySeqSteps, pauseSeqSteps;  'Initialize sequencer file variables
+var lightDuration := 1000;  'Duration of TTL light pulses (ms) [default 1000]
+var stepRelStart := 500;  'Start time of step command relative to light pulse (ms) [default 500]
+stepRampTime := 14;  'Time for voltage to ramp from offset to drumAmp (ms) [default 14]
+var lightPeriod := 2 * lightDuration; 'Period of TTL light pulses (ms)
+
+' Compute number of cycle steps for counters in sequencer file
+GenerateGapDurations%();
+GenerateStepDurations%();
+
+' Training block parameters
+var nTrainingBlocks% := 600;  'Number of training blocks [default 600]
+var trainInterval_inMinutes := 10.0; 'Inserts a test block after every number of training minutes [default 10.0]
+var trainDuration := ComputeTrainingDuration(nTrainingBlocks%, lightDuration);
+
+' General block list variables
+GenerateBlockList(nTrainingBlocks%);
+
+
+ToolbarStartup();
+
+
+'--------------------------------------------------------------------------------
+' TOOLBAR FUNCTIONS
+'--------------------------------------------------------------------------------
+
+' Initializes and enables our toolbar functions
+Proc ToolbarStartup()
+    ToolbarClear();
+    ToolbarSet(0, "Idle", ToolbarIdle%);
+    ToolbarSet(1, "Quit", ToolbarQuit%);
+    ToolbarSet(3, "New File", ToolbarNewFile%);
+    ToolbarSet(5, "Expmt Settings", ToolbarExpmtSettings%);
+    ToolbarSet(7, "Run Expmt", ToolbarRunExpmt%);
+    ToolbarEnable(7, 0); 
+    Toolbar("", 231);
+End
+
+' Convert between number of training blocks and total training duration
+Func ComputeTrainingDuration(number_of_blocks%, light_duration)
+    var singleBlockDuration := (6.0 * (light_duration / sampleRate)) / 60.0;  'Total duration of a single training block in minutes
+    var totalBlockDuration := number_of_blocks% * singleBlockDuration;
+    return totalBlockDuration;
+End
+
+' Convert between total training duration number of training blocks
+Func ComputeNumTrainingBlocks%(training_duration, light_duration)
+    var singleBlockDuration := (6.0 * (light_duration / sampleRate)) / 60.0;  'Total duration of a single training block in minutes
+    var totalNumberOfBlocks% := Ceil(training_duration / singleBlockDuration);
+    return totalNumberOfBlocks%;
+End
+
+Func UpdateSettings%(item%)
+    var tempInt%, tempFloat, tempDuration;
+    var temp_gapDur := DlgValue(3);
+    var temp_flashDur := DlgValue(4);
+    var temp_lightDuration := DlgValue(5);
+    var temp_drumAmp := DlgValue(6);
+    var temp_stepRelStart := DlgValue(7);
+    var temp_stepRampTime := DlgValue(8);
+
+    docase
+        case item% = 1 then 
+            tempDuration := DlgValue(5);  'Get the current value for TTL light pulse duration
+            tempInt% := DlgValue(item%);  'Get the current value for the number of training blocks
+            tempFloat := ComputeTrainingDuration(tempInt%, tempDuration);  'Compute the new value for training duration
+            DlgValue(2, tempFloat);  'Update value in window
+        case item% = 2 then
+            tempDuration := DlgValue(5);  'Get the current value for TTL light pulse duration
+            tempFloat := DlgValue(item%);  'Get the current value for the training duration
+            tempInt% := ComputeNumTrainingBlocks%(tempFloat, tempDuration);  'Compute the new value for number of training blocks
+            DlgValue(1, tempInt%);  'Update value in window
+        case item% = 4 then
+            if temp_flashDur >= temp_gapDur then
+                Message("TTL flash duration must be less than Gap duration.");
+                DlgValue(4, 0.1 * temp_gapDur);
+            endif
+        case item% = 5 then
+            tempDuration := DlgValue(5);  'Get the current value for TTL light pulse duration
+            tempInt% := DlgValue(1);  'Get the current value for the number of training blocks
+            tempFloat := ComputeTrainingDuration(tempInt%, tempDuration);  'Compute the new value for training duration
+            DlgValue(2, tempFloat);  'Update value in window
+        case item% = 7 then
+            if round(temp_stepRampTime + temp_stepRelStart + 1) >= round(temp_lightDuration) then
+                Message("The sum of step delay and step ramp time must be less than the light pulse duration.");
+                DlgValue(7, round(0.5 * temp_lightDuration));
+            endif;
+        case item% = 8 then
+            if round(temp_stepRampTime) < round(Abs(temp_drumAmp)) then 
+                Message("For the safety of the motors, ramp time (in ms) must not be less than the largest velocity (in deg/s).");
+                DlgValue(8, round(Abs(temp_drumAmp)));
+            endif;
+            if round(temp_stepRampTime + temp_stepRelStart + 1) >= round(temp_lightDuration) then
+                Message("The sum of step delay and step ramp time must be less than the light pulse duration.");
+                DlgValue(8, 14);
+            endif;
+    endcase;
+    return 1;
+End
+
+' Function that opens window where certain experimental parameters can be changed
+Func ToolbarExpmtSettings%()
+    var gp1%, gp2%;
+    DlgCreate("EXPERIMENT SETTINGS", 0, 0, 55, 17);  'Start new dialog
+
+    DlgInteger(1, "Number of training blocks: ", 1, 99999, 0, 2, 0);
+    DlgText("OR", 10, 3);
+    DlgReal(2, "Total duration of training (minutes): ", 0.001, 99999.0, 0, 4, 0);
+
+    DlgReal(3, "Gap duration (s): |Total duration of each Gap block.", 0, 100, 0, 7, 0);
+    DlgReal(4, "TTL flash duration (s): |Duration of light flash in the middle of each Gap block.", 0, 50, 0, 8, 0);
+    
+    DlgReal(5, "TTL light pulse duration (ms): | Duration of time that light will be on during each pulse.", 0, 100000, 0, 11, 0);
+    DlgReal(6, "Drum step velocity (deg/s): | Drum step velocity.", -30, 30, 0, 12, 0);
+    DlgReal(7, "Drum step light-relative delay (ms): | Duration to delay the drum step relative to the light turning on.", 0, 100000, 0, 13, 0);
+    DlgReal(8, "Drum step ramp time (ms): | Duration of time for step to ramp from zero to the step velocity.", 1, 10000, 0, 14, 0);
+
+    DlgAllow(0x3ff, ToolbarIdle%, UpdateSettings%);  'Allow all, no idle, update settings function
+    gp1% := DlgGroup("Gap Block Params", 0.5, 6, -1, 3.5);
+    gp2% := DlgGroup("Test/Training Block Params", 0.5, 10, -1, 5.5);
+
+    DlgShow(nTrainingBlocks%, trainDuration, gapDur, flashDur, lightDuration, drumAmp, stepRelStart, stepRampTime);
+
+    if drumAmp <> 0.0 then
+        drumSign := (drumAmp / Abs(drumAmp));
+    endif;
+    
+    lightPeriod := 2 * lightDuration;
+
+    ' Re-compute number of cycle steps for counters in sequencer file
+    GenerateGapDurations%();
+    GenerateStepDurations%();
+
+    ' Re-generate the block list
+    GenerateBlockList(nTrainingBlocks%);
+
+    ' Send new variable values to the sequencer
+    SetSequencerValues();
+    return 1;
+End
+
+
+'--------------------------------------------------------------------------------
+' COMPUTE NUMBER OF SEQUENCER STEPS FOR GAP1, GAP2, GAP3 IN SEQUENCER FILE
+'--------------------------------------------------------------------------------
+Func GenerateGapDurations%()
+    halfgapDur := (gapDur - flashDur) / 2.0;
+    gap1Dur := Round((halfgapDur * sampleRate / 3.0) - 2.0);
+    gap2Dur := Round((flashDur * sampleRate / 3.0));
+    gap3Dur := Round((halfgapDur * sampleRate / 3.0) - 1.0);
+    return 1;
+End
+
+
+'--------------------------------------------------------------------------------
+' COMPUTE NUMBER OF SEQUENCER STEPS FOR STEP BLOCKS IN SEQUENCER FILE
+'--------------------------------------------------------------------------------
+Func GenerateStepDurations%()
+    lightPerSeqSteps := Round(lightPeriod);
+    stepRampSeqSlope := round(DrumAmp2Int32%(Abs(drumAmp)) / stepRampTime);
+    stepDelaySeqSteps := Round(((stepRelStart - 2.0) / 3.0) - 1.0);
+    stepSeqSteps := lightDuration - stepRelStart - stepRampTime;
+    pauseSeqSteps := Round((((lightDuration - stepSeqSteps - (3.0 * stepRampTime) + 3.0) / 2.0) / 3.0));
+    stepSeqSteps := Round(stepSeqSteps / 3.0);
+    return 1;
+End
+
+
+'--------------------------------------------------------------------------------
+' GENERATE/UPDATE BLOCK LIST FOR A GIVEN NUMBER OF TRAINING BLOCKS
+'--------------------------------------------------------------------------------
+Proc GenerateBlockList(num%)
+    var i%;
+    var pretestList$[] := {"Gg", "Pp", "Gg", "Pp", "Gg", "Pp", "Gg"};
+    var posttestList$[] := {"Pp", "Gg", "Pp", "Gg", "Pp"};
+    var pretestListLen% := Len(pretestList$[]);
+    var posttestListLen% := Len(posttestList$[]);
+
+    ' Calculate the number of test blocks to insert during training
+    var trainingListLen% := Round(2.0 * num%);
+    var totalTrainingBlocksDuration := 6.0 * lightDuration * num% / sampleRate;
+    var nTrainingBlocksPerTest% := Round((num% * trainInterval_inMinutes * 60.0) / totalTrainingBlocksDuration);
+    var nTestBlocksDuringTraining% := Floor((1.0 * num% / nTrainingBlocksPerTest%) - 0.5);
+    if nTestBlocksDuringTraining% < 0 then
+        nTestBlocksDuringTraining% := 0;
+    endif;
+
+    var experimentTotalListLen% := Round(pretestListLen% + posttestListLen% + trainingListLen% + (2.0 * nTestBlocksDuringTraining%));
+    PrintLog("training list length: %d | n training blocks per test: %d | n test blocks during training: %d", trainingListLen%, nTrainingBlocksPerTest%, nTestBlocksDuringTraining%);
+
+    resize blockList$[experimentTotalListLen%];  'Resize blockList$[] array to the required size
+    ' Reset all elements of the block list to empty string values
+    for i% := 0 to experimentTotalListLen%-1 do
+        blockList$[i%] := "";
+    next;
+
+    ' Populate array with pre-training test blocks
+    for i% := 0 to pretestListLen%-1 do
+        blockList$[i%] := pretestList$[i%];
+    next;
+
+    ' Populate array with post-training test blocks
+    for i% := 0 to posttestListLen%-1 do
+        blockList$[experimentTotalListLen%-posttestListLen%+i%] := posttestList$[i%];
+    next;
+
+    var trainingBlockID%, testingBlockID%, maxTrainingBlockID% := Round(nTrainingBlocksPerTest% * nTestBlocksDuringTraining%);
+    ' Populate array with training blocks
+    for i% := pretestListLen% to Round(pretestListLen% + trainingListLen% + (2 * nTestBlocksDuringTraining%) - 2) step 2 do
+        trainingBlockID% := Round(((i% - pretestListLen%) / 2.0) + 1.0);
+        testingBlockID% := Round((i% - pretestListLen%) / (2.0 * nTrainingBlocksPerTest%));
+        if trainingBlockID% = Round(testingBlockID% * nTrainingBlocksPerTest%)  and (trainingBlockID% <= maxTrainingBlockID%) then
+            blockList$[i%] := "Pp";
+            blockList$[i%+1] := "Gg";
+        else
+            blockList$[i%] := "Tt";
+            blockList$[i%+1] := "Gg";
+        endif;
+    next;
+
+    ' Update nBlocks% with current number of total blocks
+    nBlocks% := Len(blockList$[]);
+    PrintLog("\nBlock list generated:  ", blockList$[], "\n");
+
+    ' Do a final check to make sure there are no consecutive duplicates
+    for i% := 0 to experimentTotalListLen%-2 do
+        if blockList$[i%] = blockList$[i%+1] then
+            Message("[ERROR] Duplicate blocks found between elements %d and %d!", i%, i%+1);
+            halt
+        endif;
+    next;
+
+    ' Compute and display the total experiment duration
+    var nTestTrainBlocksTotal := 6.0 + num% + nTestBlocksDuringTraining%;
+    var totalExperimentDuration := nTestTrainBlocksTotal * ((6.0 * (lightDuration / sampleRate)) + gapDur);
+    PrintLog("Total experiment duration:  %g seconds | %g minutes | %g hours\n\n", totalExperimentDuration, totalExperimentDuration/60.0, totalExperimentDuration/60.0/60.0);
+End
+
+
+'--------------------------------------------------------------------------------
+' SEND CURRENT SPIKE2 VARIABLE VALUES TO SEQUENCER
+'--------------------------------------------------------------------------------
+Proc SetSequencerValues()
+    ' Gap block parameters
+    SampleSeqVar(5, gap1Dur);
+    SampleSeqVar(6, gap2Dur);
+    SampleSeqVar(7, gap3Dur);
+
+    ' Drum parameters
+    SampleSeqVar(8, DrumAmp2Int32%(drumVelocityOffset));
+    SampleSeqVar(9, DrumAmp2Int32%(drumPosStepAmplitude));
+    SampleSeqVar(10, DrumAmp2Int32%(drumNegStepAmplitude));
+
+    ' Chair parameters
+    SampleSeqVar(13, ChairAmp2Int32%(chairVelocityOffset));
+    SampleSeqVar(14, ChairAmp2Int32%(chairPosStepAmplitude));
+    SampleSeqVar(15, ChairAmp2Int32%(chairNegStepAmplitude));
+
+    ' Testing block parameters
+    SampleSeqVar(18, lightPerSeqSteps);
+
+    ' Training block parameters
+    SampleSeqVar(19, stepDelaySeqSteps);
+    SampleSeqVar(20, stepSeqSteps);
+    SampleSeqVar(21, pauseSeqSteps);
+
+    ' Step RAMP slope parameter
+    SampleSeqVar(22, stepRampSeqSlope);
+End
