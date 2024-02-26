@@ -29,7 +29,7 @@ end
 
 app.BadFramesListBox.Items = badFrames;
 
-if nanBadFrames && ~isnan(badFrames{1})
+if nanBadFrames && (badFrames{1,1} ~= "None")
     for i = 1:length(badFrames)
         badFrame = str2double(badFrames{i});
         frameData(badFrame).cr1_x = nan;
