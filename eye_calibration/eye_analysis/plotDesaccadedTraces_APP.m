@@ -99,7 +99,11 @@ if ~updateOnly
     plot(app.UIAxesMag1Threshold, mag1.time_aligned, mag1VelThresh, 'Color',sigColor, 'DisplayName','Magnet 1');
     plot(app.UIAxesMag1Threshold, mag1.time_aligned, mag1Thresh, 'Color',altColor, 'LineStyle',':', 'LineWidth',2, 'DisplayName','Saccade Threshold');
     xlim(app.UIAxesMag1Threshold, [0, timeLen]);
-    ylim(app.UIAxesMag1Threshold, [0, mag1ThreshYLim]);
+    try
+        ylim(app.UIAxesMag1Threshold, [0, mag1ThreshYLim]);
+    catch
+        % Do nothing
+    end
     ylabel(app.UIAxesMag1Threshold, threshYLabel);
     legend(app.UIAxesMag1Threshold);
     hold(app.UIAxesMag1Threshold, 'off');
@@ -109,7 +113,11 @@ if ~updateOnly
     hold(app.UIAxesMag1Position, 'on');
     plot(app.UIAxesMag1Position, mag1.time_aligned, mag1Pos, 'Color',sigColor, 'DisplayName','Magnet 1 Position');
     xlim(app.UIAxesMag1Position, [0, timeLen]);
-    ylim(app.UIAxesMag1Position, [min(mag1.pos_data_aligned), max(mag1.pos_data_aligned)]);
+    try
+        ylim(app.UIAxesMag1Position, [min(mag1.pos_data_aligned), max(mag1.pos_data_aligned)]);
+    catch
+        % Do nothing
+    end
     ylabel(app.UIAxesMag1Position, 'Position (V)');
     hold(app.UIAxesMag1Position, 'off');
     
@@ -119,7 +127,11 @@ if ~updateOnly
     plot(app.UIAxesMag1Velocity, mag1.time_aligned, mag1Vel, 'Color',sigColor, 'DisplayName','Magnet 1 Velocity');
     plot(app.UIAxesMag1Velocity, mag1.time_aligned, mag1.vel_fit, 'Color',altColor, 'LineWidth',2, 'DisplayName','Magnet 1 Velocity Fit');
     xlim(app.UIAxesMag1Velocity, [0, timeLen]);
-    ylim(app.UIAxesMag1Velocity, [-mag1VelYLim, mag1VelYLim]);
+    try
+        ylim(app.UIAxesMag1Velocity, [-mag1VelYLim, mag1VelYLim]);
+    catch
+        % Do nothing
+    end
     ylabel(app.UIAxesMag1Velocity, 'Velocity (V/s)');
     title(app.UIAxesMag1Velocity, mag1Text, ...
           'Units','characters', ...
@@ -144,7 +156,11 @@ if ~updateOnly
     plot(app.UIAxesMag2Threshold, mag2.time_aligned, mag2VelThresh, 'Color',sigColor, 'DisplayName','Magnet 2');
     plot(app.UIAxesMag2Threshold, mag2.time_aligned, mag2Thresh, 'Color',altColor, 'LineStyle',':', 'LineWidth',2, 'DisplayName','Saccade Threshold');
     xlim(app.UIAxesMag2Threshold, [0, timeLen]);
-    ylim(app.UIAxesMag2Threshold, [0, mag2ThreshYLim]);
+    try
+        ylim(app.UIAxesMag2Threshold, [0, mag2ThreshYLim]);
+    catch
+        % Do nothing
+    end
     ylabel(app.UIAxesMag2Threshold, threshYLabel);
     legend(app.UIAxesMag2Threshold);
     hold(app.UIAxesMag2Threshold, 'off');
@@ -154,7 +170,11 @@ if ~updateOnly
     hold(app.UIAxesMag2Position, 'on');
     plot(app.UIAxesMag2Position, mag2.time_aligned, mag2Pos, 'Color',sigColor, 'DisplayName','Magnet 2 Position');
     xlim(app.UIAxesMag2Position, [0, timeLen]);
-    ylim(app.UIAxesMag2Position, [min(mag2.pos_data_aligned), max(mag2.pos_data_aligned)]);
+    try
+        ylim(app.UIAxesMag2Position, [min(mag2.pos_data_aligned), max(mag2.pos_data_aligned)]);
+    catch
+        % Do nothing
+    end
     ylabel(app.UIAxesMag2Position, 'Position (V)');
     hold(app.UIAxesMag2Position, 'off');
     
@@ -229,19 +249,27 @@ else
     set(app.UIAxesMag1Threshold.Children(1), 'YData',mag1Thresh);
     set(app.UIAxesMag1Threshold.Children(2), 'YData',mag1VelThresh);
     set(app.UIAxesMag1Threshold.Children(3), 'YData',mag1VelThreshSac);
-    ylim(app.UIAxesMag1Threshold, [0, mag1ThreshYLim]);
     set(app.UIAxesMag1Position.Children(1), 'YData',mag1Pos);
     set(app.UIAxesMag1Velocity.Children(2), 'YData',mag1Vel);
-    ylim(app.UIAxesMag1Velocity, [-mag1VelYLim, mag1VelYLim]);
+    try
+        ylim(app.UIAxesMag1Threshold, [0, mag1ThreshYLim]);
+        ylim(app.UIAxesMag1Velocity, [-mag1VelYLim, mag1VelYLim]);
+    catch
+        % Do nothing
+    end
     app.UIAxesMag1Velocity.Title.String = mag1Text;
 
     set(app.UIAxesMag2Threshold.Children(1), 'YData',mag2Thresh);
     set(app.UIAxesMag2Threshold.Children(2), 'YData',mag2VelThresh);
     set(app.UIAxesMag2Threshold.Children(3), 'YData',mag2VelThreshSac);
-    ylim(app.UIAxesMag2Threshold, [0, mag2ThreshYLim]);
     set(app.UIAxesMag2Position.Children(1), 'YData',mag2Pos);
     set(app.UIAxesMag2Velocity.Children(2), 'YData',mag2Vel);
-    ylim(app.UIAxesMag2Velocity, [-mag2VelYLim, mag2VelYLim]);
+    try
+        ylim(app.UIAxesMag2Threshold, [0, mag2ThreshYLim]);
+        ylim(app.UIAxesMag2Velocity, [-mag2VelYLim, mag2VelYLim]);
+    catch
+        % Do nothing
+    end
     app.UIAxesMag2Velocity.Title.String = mag2Text;
 
     set(app.UIAxesVidThreshold.Children(1), 'YData',vidThresh);
