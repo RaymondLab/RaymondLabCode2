@@ -53,40 +53,40 @@ Proc WindowSetup()
     SampleComment$(HTVELcom_ch%, "Velocity command signal sent from the 1401 to the drum");
 
     ' Ch 3: hhpos - Horizontal Head Position (Readout from chair motor)
-    'SampleWaveform(hhpos_ch%, hhpos_port%, sampleRate, 1);
-    'SampleCalibrate(hhpos_ch%, "deg", hhpos_chScaling, hhpos_chOffset);
-    'SampleTitle$(hhpos_ch%, "hhpos");
-    'SampleComment$(hhpos_ch%, "Chair position readout from motor encoder");
+    SampleWaveform(hhpos_ch%, hhpos_port%, sampleRate, 1);
+    SampleCalibrate(hhpos_ch%, "deg", hhpos_chScaling, hhpos_chOffset);
+    SampleTitle$(hhpos_ch%, "hhpos");
+    SampleComment$(hhpos_ch%, "Chair position readout from motor encoder");
 
     ' Ch 4: htpos - Horizontal Target Position (Readout from drum motor)
-    'SampleWaveform(htpos_ch%, htpos_port%, sampleRate, 1);
-    'SampleCalibrate(htpos_ch%, "deg", htpos_chScaling, htpos_chOffset);
-    'SampleTitle$(htpos_ch%, "htpos");
-    'SampleComment$(htpos_ch%, "Drum position readout from motor encoder");
+    SampleWaveform(htpos_ch%, htpos_port%, sampleRate, 1);
+    SampleCalibrate(htpos_ch%, "deg", htpos_chScaling, htpos_chOffset);
+    SampleTitle$(htpos_ch%, "htpos");
+    SampleComment$(htpos_ch%, "Drum position readout from motor encoder");
 
     ' Ch 5: hepos1 - Horizontal Eye Position 1
-    'SampleWaveform(hepos1_ch%, hepos1_port%, sampleRate, 1);
-    'SampleCalibrate(hepos1_ch%, "deg", hepos1_chScaling, hepos1_chOffset);
-    'SampleTitle$(hepos1_ch%, "hepos1");
-    'SampleComment$(hepos1_ch%, "Eye Position 1");
+    SampleWaveform(hepos1_ch%, hepos1_port%, sampleRate, 1);
+    SampleCalibrate(hepos1_ch%, "deg", hepos1_chScaling, hepos1_chOffset);
+    SampleTitle$(hepos1_ch%, "hepos1");
+    SampleComment$(hepos1_ch%, "Eye Position 1");
 
     ' Ch 6: hepos2 - Horizontal Eye Position 2
-    'SampleWaveform(hepos2_ch%, hepos2_port%, sampleRate, 1);
-    'SampleCalibrate(hepos2_ch%, "deg", hepos2_chScaling, hepos2_chOffset);
-    'SampleTitle$(hepos2_ch%, "hepos2");
-    'SampleComment$(hepos2_ch%, "Eye Position 2");
+    SampleWaveform(hepos2_ch%, hepos2_port%, sampleRate, 1);
+    SampleCalibrate(hepos2_ch%, "deg", hepos2_chScaling, hepos2_chOffset);
+    SampleTitle$(hepos2_ch%, "hepos2");
+    SampleComment$(hepos2_ch%, "Eye Position 2");
 
     ' Ch 7: hhvel - Horizontal Head Velocity (Readout from chair motor)
-    'SampleWaveform(hhvel_ch%, hhvel_port%, sampleRate, 1);
-    'SampleCalibrate(hhvel_ch%, "deg/s", hhvel_chScaling, hhvel_chOffset);
-    'SampleTitle$(hhvel_ch%, "hhvel");
-    'SampleComment$(hhvel_ch%, "Chair velocity readout from motor encoder");
+    SampleWaveform(hhvel_ch%, hhvel_port%, sampleRate, 1);
+    SampleCalibrate(hhvel_ch%, "deg/s", hhvel_chScaling, hhvel_chOffset);
+    SampleTitle$(hhvel_ch%, "hhvel");
+    SampleComment$(hhvel_ch%, "Chair velocity readout from motor encoder");
 
     ' Ch 8: htvel - Horizontal Target Velocity (Readout from drum motor)
-    'SampleWaveform(htvel_ch%, htvel_port%, sampleRate, 1);
-    'SampleCalibrate(htvel_ch%, "deg/s", htvel_chScaling, htvel_chOffset);
-    'SampleTitle$(htvel_ch%, "htvel");
-    'SampleComment$(htvel_ch%, "Drum velocity readout from motor encoder");
+    SampleWaveform(htvel_ch%, htvel_port%, sampleRate, 1);
+    SampleCalibrate(htvel_ch%, "deg/s", htvel_chScaling, htvel_chOffset);
+    SampleTitle$(htvel_ch%, "htvel");
+    SampleComment$(htvel_ch%, "Drum velocity readout from motor encoder");
     
     ' TTL1: Shutter/LED/Light
     SampleEvent(TTL1_ch%, TTL1_port%, 2, sampleRate);
@@ -124,18 +124,18 @@ Proc WindowSetup()
     'ChanComment$(HTVEL_vch%, "Calculated velocity of htpos");
     
     ' Ensure all channels are visible and specify their order
-    ChanHide(-1);
-    ChanShow(1, 2, 10, 31);
-    'ChanShow(-1);
-    ChanOrder(0, -1, "10, 30, 31");
+    'ChanHide(-1);
+    'ChanShow(1, 2, 10, 31);
+    ChanShow(-1);
+    ChanOrder(0, -1, "5, 6, 1, 2, 10, 30, 31");
     
     ' Initial y-ranges for all channels
     YRange(HHVELcom_ch%, -11, 11);
     YRange(HTVELcom_ch%, -11, 11);
-    'YRange(hhpos_ch%, -10, 10);
-    'YRange(htpos_ch%, -10, 10);
-    'YRange(hepos1_ch%, -10, 10);
-    'YRange(hepos2_ch%, -10, 10);
+    YRange(hhpos_ch%, -10, 10);
+    YRange(htpos_ch%, -10, 10);
+    YRange(hepos1_ch%, -10, 10);
+    YRange(hepos2_ch%, -10, 10);
     'YRange(HHVEL_vch%, -11, 11);
     'YRange(HTVEL_vch%, -11, 11);
     
@@ -144,14 +144,16 @@ Proc WindowSetup()
     
     ' Set channel colors
     ChanColourSet("1..14", 1, 0.501961, 0, 0.501961);
+    ChanColourSet("5,6", 1, 0, 0, 0);
+    ChanColourSet("3,4,7,8", 1, 0.122, 0.239, 0.58);
     'ChanColourSet("v1..v5", 1, 0.501961, 0, 0.752941);
-    'ChanColourSet("5,6", 1, 0, 0, 0);
+    
     
     ' Add channel horizontal cursors
     HCursorNew(HHVELcom_ch%);
     HCursorNew(HTVELcom_ch%);
-    'HCursorNew(hhpos_ch%);
-    'HCursorNew(htpos_ch%);
+    HCursorNew(hhpos_ch%);
+    HCursorNew(htpos_ch%);
     'HCursorNew(HHVEL_vch%);
     'HCursorNew(HTVEL_vch%);
     

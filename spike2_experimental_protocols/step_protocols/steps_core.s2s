@@ -97,7 +97,6 @@ Func ToolbarNewFile%()
     ToolbarEnable(-1, 1);  'Enables buttons that require a new sampling window
     ToolbarEnable(3, 0); 
     SetSequencerValues(); Yield();
-    SampleStart(); Yield();
     SampleKey("R");  'Ensures that sequencer is set to its default configuration prior to sampling
     return 1;
 End
