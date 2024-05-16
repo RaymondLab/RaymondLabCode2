@@ -3,10 +3,16 @@
 '
 ' This script launches the selected protocol's toolbar and sequencer.
 ' ------------------------------------------------------------------------------
+' Define the parent directory all other paths will be relative to
+const rootpath$ := "C:/Users/Public/RaymondLabCode2/spike2_experimental_protocols";
+FilePathSet(rootpath$, 0);
+
+' Define the toolbar file names and labels
 const toolbarFileNames$[] := {"step_protocols/steps_standard.s2s", "step_protocols/steps_oculomotor.s2s"};
 const toolbarFileLabels$[] := {"Steps - Standard", "Steps - OMC Amin 2023"};
 var toolbarID%, toolbarFileName$;
 
+' Launch the toolbar
 toolbarLauncher();
 
 Proc toolbarLauncher()

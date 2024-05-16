@@ -10,6 +10,7 @@ function d = readSpikeFile(filename,chans)
 % -------------------------------------------------------------------------
 %
 % Revisions:
+% Modified by Brian Angeles 04/2024 for Raymond lab
 % Modified by Hannah Payne 07/2012 for Raymond lab
 % If no channels specified, output is structure c with channel list
 
@@ -25,7 +26,7 @@ end
 %fprintf('Reading Spike2 file: %s\n',fullfile(pathname, filename2));
 warning('off','backtrace')
 
-if strcmpi(extension,'.smr')==1 || strcmpi(extension,'.srf')==1
+if strcmpi(extension,'.smr')==1 || strcmpi(extension,'.smrx')==1 || strcmpi(extension,'.srf')==1
     % Spike2 for Windows source file so little-endian
     fid=fopen(filename,'r','l');
 elseif strcmpi(extension,'.son')==1

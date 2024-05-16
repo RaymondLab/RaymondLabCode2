@@ -4,7 +4,7 @@
 ' Contains variables/functions that are shared by all steps protocols
 ' ------------------------------------------------------------------------------
 ' Define the parent directory all other paths will be relative to
-const rootpath$ := "G:/Shared drives/Raymond Lab/Current Members/Brian Angeles/Temporary Spike2 scripts/RaymondLabCodeV2/spike2_experimental_protocols";
+const rootpath$ := "C:/Users/Public/RaymondLabCode2/spike2_experimental_protocols";
 FilePathSet(rootpath$, 0);
 
 ' These files are the same for ALL EXPERIMENTAL protocols
