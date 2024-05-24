@@ -1,0 +1,50 @@
+InitializeRigParams();
+
+' Note: Channel numbers set to "99" will be ignored and not shown
+Proc InitializeRigParams()
+    Profile("RigParams", "drumVelocity2Voltage", "");
+    Profile("RigParams", "drumVelocityOffsetInitial", "");
+    Profile("RigParams", "chairVelocity2Voltage", "");
+    Profile("RigParams", "chairVelocityOffsetInitial", "");
+    Profile("RigParams", "drumClockwiseVelVoltage", "");
+    Profile("RigParams", "drumClockwisePosVoltage", "");
+    Profile("RigParams", "chairClockwiseVelVoltage", ""); 
+    Profile("RigParams", "chairClockwisePosVoltage", "");
+
+    Profile("RigParams\\ChannelScalingOffset", "HTPOScom_chScaling", "");
+    Profile("RigParams\\ChannelScalingOffset", "HTPOScom_chOffset", "");
+    Profile("RigParams\\ChannelScalingOffset", "HHPOScom_chScaling", "");
+    Profile("RigParams\\ChannelScalingOffset", "HHPOScom_chOffset", "");
+    Profile("RigParams\\ChannelScalingOffset", "HTVELcom_chScaling", "");
+    Profile("RigParams\\ChannelScalingOffset", "HTVELcom_chOffset", "");
+    Profile("RigParams\\ChannelScalingOffset", "HHVELcom_chScaling", "");
+    Profile("RigParams\\ChannelScalingOffset", "HHVELcom_chOffset", "");
+    Profile("RigParams\\ChannelScalingOffset", "hepos1_chScaling", "");
+    Profile("RigParams\\ChannelScalingOffset", "hepos1_chOffset", "");
+    Profile("RigParams\\ChannelScalingOffset", "hepos2_chScaling", "");
+    Profile("RigParams\\ChannelScalingOffset", "hepos2_chOffset", "");
+    Profile("RigParams\\ChannelScalingOffset", "htpos_chScaling", "");
+    Profile("RigParams\\ChannelScalingOffset", "htpos_chOffset", "");
+    Profile("RigParams\\ChannelScalingOffset", "hhpos_chScaling", "");
+    Profile("RigParams\\ChannelScalingOffset", "hhpos_chOffset", "");
+    Profile("RigParams\\ChannelScalingOffset", "htvel_chScaling", "");
+    Profile("RigParams\\ChannelScalingOffset", "htvel_chOffset", "");
+    Profile("RigParams\\ChannelScalingOffset", "hhvel_chScaling", "");
+    Profile("RigParams\\ChannelScalingOffset", "hhvel_chOffset", "");
+    
+    Profile("RigParams\\ChannelNumbers", "HHPOScom_port", "");
+    Profile("RigParams\\ChannelNumbers", "HTPOScom_port", "");
+    Profile("RigParams\\ChannelNumbers", "HHVELcom_port", "");
+    Profile("RigParams\\ChannelNumbers", "HTVELcom_port", "");
+    Profile("RigParams\\ChannelNumbers", "hhpos_port", "");
+    Profile("RigParams\\ChannelNumbers", "htpos_port", "");
+    Profile("RigParams\\ChannelNumbers", "hepos1_port", "");
+    Profile("RigParams\\ChannelNumbers", "hepos2_port", "");
+    Profile("RigParams\\ChannelNumbers", "hhvel_port", "");
+    Profile("RigParams\\ChannelNumbers", "htvel_port", "");
+    Profile("RigParams\\ChannelNumbers", "TTL1_port", "");
+    Profile("RigParams\\ChannelNumbers", "TTL2_port", "");
+    Profile("RigParams\\ChannelNumbers", "TTL3_port", "");
+    Profile("RigParams\\ChannelNumbers", "TTL4_port", "");
+    Profile("RigParams\\ChannelNumbers", "TTL5_port", "");
+End

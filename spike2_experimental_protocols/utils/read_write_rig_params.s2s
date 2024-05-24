@@ -8,6 +8,7 @@
 ' Initialize RigParams variables
 var drumVelocity2Voltage, drumVelocityOffsetInitial, drumVelocityOffset, drumPhaseActual;
 var chairVelocity2Voltage, chairVelocityOffsetInitial, chairVelocityOffset, chairPhaseActual;
+var HTPOScom_chScaling, HTPOScom_chOffset, HHPOScom_chScaling, HHPOScom_chOffset;
 var HTVELcom_chScaling, HTVELcom_chOffset, HHVELcom_chScaling, HHVELcom_chOffset;
 var htpos_chScaling, htpos_chOffset, hhpos_chScaling, hhpos_chOffset;
 var htvel_chScaling, htvel_chOffset, hhvel_chScaling, hhvel_chOffset;
@@ -16,7 +17,7 @@ var drumClockwiseVelVoltage, drumClockwisePosVoltage, chairClockwiseVelVoltage, 
 var rigparam_error%;
 
 ' Initialize general toolbar-related variables
-var HHVELcom_port%, HTVELcom_port%, hhpos_port%, htpos_port%, hepos1_port%, hepos2_port%, hhvel_port%, htvel_port%;
+var HHVELcom_port%, HTVELcom_port%, HHPOScom_port%, HTPOScom_port%, hhpos_port%, htpos_port%, hepos1_port%, hepos2_port%, hhvel_port%, htvel_port%;
 var TTL1_port%, TTL2_port%, TTL3_port%, TTL4_port%, TTL5_port%;
 
 
@@ -83,6 +84,8 @@ Proc LoadRigParams()
 
     ' Channel numbers relative to their connection to the 1401
     ' Note: Channel numbers set to "99" will be ignored and not shown
+    HHPOScom_port% := Val(ReadRigParam$("RigParams\\ChannelNumbers", "HHPOScom_port"));
+    HTPOScom_port% := Val(ReadRigParam$("RigParams\\ChannelNumbers", "HTPOScom_port"));
     HHVELcom_port% := Val(ReadRigParam$("RigParams\\ChannelNumbers", "HHVELcom_port"));
     HTVELcom_port% := Val(ReadRigParam$("RigParams\\ChannelNumbers", "HTVELcom_port"));
     hhpos_port% := Val(ReadRigParam$("RigParams\\ChannelNumbers", "hhpos_port"));
