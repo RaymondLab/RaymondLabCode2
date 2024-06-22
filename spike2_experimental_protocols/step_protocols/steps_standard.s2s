@@ -11,18 +11,6 @@ const sequencerFile$ := "step_protocols/steps_standard.pls";
 ' This file is the same for all STEP protocols
 #include "steps_core.s2s"
 
-' Drum and Chair initial amplitudes particularly set for this protocol
-drumAmp := 10.0;  'In deg/s [default 10.0]
-chairAmp := -10.0;  'In deg/s [default -10.0]
-
-drumPosStepAmplitude := drumAmp;
-drumNegStepAmplitude := -1.0 * drumAmp;
-drumSign := (drumAmp / Abs(drumAmp));
-
-chairPosStepAmplitude := chairAmp;
-chairNegStepAmplitude := -1.0 * chairAmp;
-chairSign := chairAmp / Abs(chairAmp);
-
 ' TTL parameters
 var lightType% := 1;
 var optoOn% := 0;
@@ -68,7 +56,6 @@ var totalExperimentDuration := (5.0 * blockdurationTestGap) + (1.0 * nTrainingBl
 ' Initial block list generated from default parameter values
 GenerateBlockList(nTrainingBlocks%);
 
-
 ToolbarStartup();
 
 
@@ -78,6 +65,7 @@ ToolbarStartup();
 
 ' Initializes and enables our toolbar functions
 Proc ToolbarStartup()
+    const initialDisabled%[] := {5, 7, 9};
     ToolbarClear();
     ToolbarSet(0, "Idle", ToolbarIdle%);
     ToolbarSet(1, "Quit", ToolbarQuit%);
@@ -85,7 +73,7 @@ Proc ToolbarStartup()
     ToolbarSet(5, "Opto Settings", ToolbarOptoSettings%);
     ToolbarSet(7, "Expmt Settings", ToolbarExpmtSettings%);
     ToolbarSet(9, "Run Expmt", ToolbarRunExpmt%);
-    ToolbarEnable(9, 0); 
+    ToolbarEnable(initialDisabled%, 0); 
     Toolbar("", 231);
 End
 
@@ -103,7 +91,7 @@ Func UpdateExpmtSettings%(item%)
     var temp_stepAmpTime := DlgValue(12);
     var temp_stepPauseTime := DlgValue(13);
     var temp_lightType% := DlgValue(14);
-    var temp_maxAmp := Max(Abs(temp_drumAmp), Abs(temp_drumAmp));
+    var temp_maxAmp := 15; 'Max(Abs(temp_drumAmp), Abs(temp_drumAmp));
 
     DlgEnable(0, 8, 10);
 
@@ -144,18 +132,18 @@ Func UpdateExpmtSettings%(item%)
         case item% = 7 then
             docase
                 case temp_trainingType% = 0 then
-                    DlgValue(9, (-1) * (temp_drumAmp / Abs(temp_drumAmp)) * Abs(temp_chairAmp));
+                    DlgValue(9, (-1) * (temp_drumAmp / Abs(temp_drumAmp)) * Abs(temp_drumAmp));
                 case temp_trainingType% = 1 then
-                    DlgValue(9, (temp_drumAmp / Abs(temp_drumAmp)) * Abs(temp_chairAmp));
+                    DlgValue(9, (temp_drumAmp / Abs(temp_drumAmp)) * Abs(temp_drumAmp));
                 case temp_trainingType% = 2 then
                     DlgValue(7, 0.0);
             endcase;
         case item% = 9 then
             docase
                 case temp_trainingType% = 0 then
-                    DlgValue(7, (-1) * (temp_chairAmp / Abs(temp_chairAmp)) * Abs(temp_drumAmp));
+                    DlgValue(7, (-1) * (temp_chairAmp / Abs(temp_chairAmp)) * Abs(temp_chairAmp));
                 case temp_trainingType% = 1 then
-                    DlgValue(7, (temp_chairAmp / Abs(temp_chairAmp)) * Abs(temp_drumAmp));
+                    DlgValue(7, (temp_chairAmp / Abs(temp_chairAmp)) * Abs(temp_chairAmp));
             endcase;
         case item% = 11 then
             if round(temp_stepRampTime) < round(temp_maxAmp) then 
@@ -274,6 +262,10 @@ Func ToolbarExpmtSettings%()
         chairSign := chairAmp / Abs(chairAmp);
     endif
 
+    ' Ensure that the position magnitude virtual channels are in the positive direction
+    VirtualChan(HTPOSdf_vch%, Str$(drumSign)+"*ch("+Str$(htpos_ch%)+")", 0, 1.0/sampleRate);
+    VirtualChan(HHPOSdf_vch%, Str$(chairSign)+"*ch("+Str$(hhpos_ch%)+")", 0, 1.0/sampleRate);
+
     if lightType% = 2 then
         docase
             case optoType% = 0 then
@@ -370,7 +362,7 @@ End
 '--------------------------------------------------------------------------------
 Proc CalculateRampSeqSteps()
     stepSeqSteps := round(((stepAmpTime - 1.0) / 3.0) - 1.0);
-    pauseSeqSteps := round((stepPauseTime / 3.0) - 1.0);
+    pauseSeqSteps := round(((stepPauseTime - 1.0) / 3.0) - 1.0);
 
     drumRampSeqSlope := round(DrumAmp2Int32%(Abs(drumAmp)) / stepRampTime);
     drumDelaySeqSteps := round(drumStepDelayTime / 3.0);

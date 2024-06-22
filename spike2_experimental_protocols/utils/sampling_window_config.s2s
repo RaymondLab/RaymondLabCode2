@@ -21,10 +21,26 @@ const TTL2_ch% := 11;
 const TTL3_ch% := 12; 
 const TTL4_ch% := 13; 
 const TTL5_ch% := 14;
+var HTPOSdf_vch%, HHPOSdf_vch%;
 
 ' Initialize sampling window variable
 var sampling_window%;
 
+' Initialize filepath variables for an optional waveform
+var waveFilePath$;
+var wavefile_error%;
+
+' Gets the file path of a selected waveform file to add online
+Proc LoadWaveform()
+    wavefile_error% := FileOpen("", 0, 8, "Select waveform file to use");
+    if wavefile_error% > -1 then
+        FrontView(wavefile_error%); 
+        waveFilePath$ := FileName$();
+        PrintLog("Waveform loaded: %s\n\n", waveFilePath$);
+    else
+        PrintLog("No waveform loaded!\n\n", waveFilePath$);
+    endif
+end
 
 ' Configures the sampling window channels, layout, appearance, etc.
 Proc WindowSetup()
@@ -39,6 +55,12 @@ Proc WindowSetup()
     endif
 
     SampleSeqCtrl(1, 1);  'Set seqencer jump control to control panel and script only
+
+    'LoadWaveform();
+    'if wavefile_error% > -1 then
+    '    PlayWaveAdd("w", "wave", HHVELcom_port%, 0, 10000, HHVELcom_ch%, 0, waveFilePath$);
+    '    PlayWaveCycles("w", 0);
+    'endif
     
     ' Ch 1: HHVEL - Horizontal Head Velocity (Command from 1401 to chair)
     SampleWaveform(HHVELcom_ch%, HHVELcom_port%, sampleRate, 1);
@@ -103,41 +125,36 @@ Proc WindowSetup()
     ViewColourSet(0, .87, .87, .87);  'Sets the background color
     FontSet("Verdana", 8, 0);  'Sets the font type and size
     
-    ' Head (Chair Motor) Velocity (Virtual Channel derived from hhpos)
-    'var HHVEL_expr$ := "ch(1)"; '"ch(" + Str$(hhpos_ch%) + ")";
-    'var HHVEL_vch% := VirtualChan(0, "");
-    'VirtualChan(HHVEL_vch%, HHVEL_expr$, 0, 1.0/sampleRate);
-    'ChanUnits$(HHVEL_vch%, "deg");
-    'ChanProcessAdd(HHVEL_vch%, 1, 0.09);
-    'ChanProcessAdd(HHVEL_vch%, 3, 0.006);    
-    'ChanTitle$(HHVEL_vch%, "HHVEL (V)"); 
-    'ChanComment$(HHVEL_vch%, "Calculated velocity of hhpos");
+    ' Head Position for driftFix (Virtual Channel derived from hhpos)
+    HHPOSdf_vch% := VirtualChan(0, "");
+    VirtualChan(HHPOSdf_vch%, "ch("+Str$(hhpos_ch%)+")", 0, 1.0/sampleRate);
+    ChanUnits$(HHPOSdf_vch%, "deg");
+    ChanTitle$(HHPOSdf_vch%, "HHPOSdf");    
+    ChanComment$(HHPOSdf_vch%, "Head Position for driftFix derived from hhpos");
 
-    ' Target (Drum Motor) Velocity (Virtual Channel derived from htpos)
-    'var HTVEL_expr$ := "ch(" + Str$(htpos_ch%) + ")";
-    'var HTVEL_vch% := VirtualChan(0, "");
-    'VirtualChan(HTVEL_vch%, HTVEL_expr$, 0, 1.0/sampleRate);
-    'ChanUnits$(HTVEL_vch%, "deg");
-    'ChanProcessAdd(HTVEL_vch%, 1, 0.09);
-    'ChanProcessAdd(HTVEL_vch%, 3, 0.006);
-    'ChanTitle$(HTVEL_vch%, "HTVEL (V)"); 
-    'ChanComment$(HTVEL_vch%, "Calculated velocity of htpos");
+    ' Drum Position for driftFix (Virtual Channel derived from htpos)
+    HTPOSdf_vch% := VirtualChan(0, "");
+    VirtualChan(HTPOSdf_vch%, "ch("+Str$(htpos_ch%)+")", 0, 1.0/sampleRate);
+    ChanUnits$(HTPOSdf_vch%, "deg");
+    ChanTitle$(HTPOSdf_vch%, "HTPOSmag"); 
+    ChanComment$(HTPOSdf_vch%, "Head Position for driftFix derived from htpos");
     
     ' Ensure all channels are visible and specify their order
     'ChanHide(-1);
-    'ChanShow(1, 2, 10, 31);
+    'ChanShow(3, 7);
     ChanShow(-1);
+    'ChanHide("v1", "v2");
     ChanOrder(0, -1, "5, 6, 1, 2, 10, 30, 31");
     
     ' Initial y-ranges for all channels
     YRange(HHVELcom_ch%, -11, 11);
     YRange(HTVELcom_ch%, -11, 11);
-    YRange(hhpos_ch%, -10, 10);
-    YRange(htpos_ch%, -10, 10);
+    YRange(hhvel_ch%, -11, 11);
+    YRange(htvel_ch%, -11, 11);
+    YRange(hhpos_ch%, -7, 7);
+    YRange(htpos_ch%, -7, 7);
     YRange(hepos1_ch%, -10, 10);
     YRange(hepos2_ch%, -10, 10);
-    'YRange(HHVEL_vch%, -11, 11);
-    'YRange(HTVEL_vch%, -11, 11);
     
     ' Initial x-range for all channels
     XRange(0, 20);
@@ -150,12 +167,10 @@ Proc WindowSetup()
     
     
     ' Add channel horizontal cursors
-    HCursorNew(HHVELcom_ch%);
-    HCursorNew(HTVELcom_ch%);
-    HCursorNew(hhpos_ch%);
-    HCursorNew(htpos_ch%);
-    'HCursorNew(HHVEL_vch%);
-    'HCursorNew(HTVEL_vch%);
+    HCursorNew(HHVELcom_ch%, 0);
+    HCursorNew(HTVELcom_ch%, 0);
+    HCursorNew(hhpos_ch%, 0);
+    HCursorNew(htpos_ch%, 0);
     
     ' DECREASE HEIGHT OF CHANNELS (TODO: REMOVE THIS LATER)
     'ChanWeight(HTVELcom_ch%, 0.5);

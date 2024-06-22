@@ -70,6 +70,7 @@ TTL1ON: 'L  DIGOUT [.......1]      ;Turn TTL 1 on      >=
 ; RESET: Resets sequencer to initial state
 ;-----------------------------------------------------------------------------
 RESET:  'R  DIGOUT [.......0]      ;Reset to initial state >=
+            WAVEST S
             RAMP   1,ChairOff,CRampSlp ;Ramp chair voltage back to offset >=
             RAMP   0,DrumOff,DRampSlp ;Ramp drum voltage back to offset >=
 RESET1:     WAITC  1,RESET1        ;Wait for chair ramp to finish >=
@@ -109,7 +110,7 @@ DRAMP4:     WAITC  0,DRAMP4        ;Wait for ramp to finish >=
 DWAIT4:     DAC    0,DrumOff       ;Set drum offset    >=
             DAC    1,ChairOff      ;Set chair offset   >=
             DBNZ   Counter3,DWAIT4 ;Repeat until counter hits zero >=
-DSKIP2:     NOP    
+DSKIP2:     NOP    ;                   >=
             RETURN 
 
 
@@ -251,3 +252,10 @@ GAP3:       DAC    0,DrumOff       ;Apply drum and chair drift correction >"
             DBNZ   Counter1,GAP3   ;Repeat until counter hits zero >"
             MOVI   BlockFlg,0      ;Set block as inactive >"
             JUMP   IDLELOOP
+
+
+;-----------------------------------------------------------------------------
+; WAVE: Custom waveform stimuli (if provided)
+;-----------------------------------------------------------------------------
+;WAVE:   'W  WAVEGO w,TW
+;            WAVEST T
