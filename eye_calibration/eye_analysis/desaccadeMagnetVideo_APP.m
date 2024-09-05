@@ -42,8 +42,8 @@ if ~isfield(vid, 'saccades_manual')
 end
 
 % Add video saccades to those found in magnets 1 and 2
-mag1.saccades_all = mag1.saccades | mag1.saccades_manual | vid.saccades;
-mag2.saccades_all = mag2.saccades | mag2.saccades_manual | vid.saccades;
+mag1.saccades_all = mag1.saccades | mag1.saccades_manual | vid.saccades | vid.saccades_manual;
+mag2.saccades_all = mag2.saccades | mag2.saccades_manual | vid.saccades | vid.saccades_manual;
 
 
 %% SINE FIT AND SCALE FACTOR
