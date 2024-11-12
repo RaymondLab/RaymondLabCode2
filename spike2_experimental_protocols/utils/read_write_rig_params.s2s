@@ -6,15 +6,14 @@
 ' ------------------------------------------------------------------------------
 
 ' Initialize RigParams variables
-var drumVelocity2Voltage, drumVelocityOffsetInitial, drumVelocityOffset, drumPhaseActual;
-var chairVelocity2Voltage, chairVelocityOffsetInitial, chairVelocityOffset, chairPhaseActual;
+var drumVelocity2Voltage, drumVelocityOffsetInitial, drumVelocityOffset, drumPhaseActual, drumPosition2Voltage, drumPositionOffsetInitial;
+var chairVelocity2Voltage, chairVelocityOffsetInitial, chairVelocityOffset, chairPhaseActual, chairPosition2Voltage, chairPositionOffsetInitial;
 var HTPOScom_chScaling, HTPOScom_chOffset, HHPOScom_chScaling, HHPOScom_chOffset;
 var HTVELcom_chScaling, HTVELcom_chOffset, HHVELcom_chScaling, HHVELcom_chOffset;
 var htpos_chScaling, htpos_chOffset, hhpos_chScaling, hhpos_chOffset;
 var htvel_chScaling, htvel_chOffset, hhvel_chScaling, hhvel_chOffset;
 var hepos1_chScaling, hepos1_chOffset, hepos2_chScaling, hepos2_chOffset;
-var drumClockwiseVelVoltage, drumClockwisePosVoltage, chairClockwiseVelVoltage, chairClockwisePosVoltage;
-var rigparam_error%;
+var rigID$, rigparam_error%;
 
 ' Initialize general toolbar-related variables
 var HHVELcom_port%, HTVELcom_port%, HHPOScom_port%, HTPOScom_port%, hhpos_port%, htpos_port%, hepos1_port%, hepos2_port%, hhvel_port%, htvel_port%;
@@ -40,47 +39,58 @@ End
 
 
 Proc LoadRigParams()
-    drumClockwiseVelVoltage := Val(ReadRigParam$("RigParams", "drumClockwiseVelVoltage"));  'Drum velocity voltage sign for clockwise rotation
-    drumClockwisePosVoltage := Val(ReadRigParam$("RigParams", "drumClockwisePosVoltage"));  'Drum position voltage sign for clockwise rotation
-    drumVelocity2Voltage := Val(ReadRigParam$("RigParams", "drumVelocity2Voltage")) * drumClockwiseVelVoltage;   'Drum velocity scaling converted to voltage
-    drumVelocityOffsetInitial := Val(ReadRigParam$("RigParams", "drumVelocityOffsetInitial")) * drumClockwiseVelVoltage;  'Drum velocity offset converted to voltage (initial)
-    drumVelocityOffset := drumVelocityOffsetInitial;  'Drum velocity offset (continuously updated)
+    PrintLog("Loading rig parameters from registry (HKEY_CURRENT_USER\\Software\\CED\\Spike2\\RigParams)...\n");
+    rigID$ := ReadRigParam$("RigParams", "rigID");  'Unique ID/Number of Rig
+
+    drumVelocity2Voltage      := Val(ReadRigParam$("RigParams", "drumVelocity2Voltage"));       'Drum velocity scaling converted to voltage
+    drumVelocityOffsetInitial := Val(ReadRigParam$("RigParams", "drumVelocityOffsetInitial"));  'Drum velocity offset converted to voltage (initial)
+    drumVelocityOffset        := drumVelocityOffsetInitial;                                     'Drum velocity offset (continuously updated)
+    drumPosition2Voltage      := Val(ReadRigParam$("RigParams", "drumPosition2Voltage"));       'Drum position scaling converted to voltage
+    drumPositionOffsetInitial := Val(ReadRigParam$("RigParams", "drumPositionOffsetInitial"));  'Drum position offset converted to voltage (initial)
     
-    chairClockwiseVelVoltage := Val(ReadRigParam$("RigParams", "chairClockwiseVelVoltage"));  'Chair velocity voltage sign for clockwise rotation
-    chairClockwisePosVoltage := Val(ReadRigParam$("RigParams", "chairClockwisePosVoltage"));  'Chair position voltage sign for clockwise rotation
-    chairVelocity2Voltage := Val(ReadRigParam$("RigParams", "chairVelocity2Voltage")) * chairClockwiseVelVoltage;  'Chair velocity scaling converted to voltage
-    chairVelocityOffsetInitial := Val(ReadRigParam$("RigParams", "chairVelocityOffsetInitial")) * chairClockwiseVelVoltage;  'Chair velocity offset converted to voltage (initial)
-    chairVelocityOffset := chairVelocityOffsetInitial;  'Chair velocity offset (continuously updated)
+    chairVelocity2Voltage      := Val(ReadRigParam$("RigParams", "chairVelocity2Voltage"));       'Chair velocity scaling converted to voltage
+    chairVelocityOffsetInitial := Val(ReadRigParam$("RigParams", "chairVelocityOffsetInitial"));  'Chair velocity offset converted to voltage (initial)
+    chairVelocityOffset        := chairVelocityOffsetInitial;                                     'Chair velocity offset (continuously updated)
+    chairPosition2Voltage      := Val(ReadRigParam$("RigParams", "chairPosition2Voltage"));       'Chair position scaling converted to voltage
+    chairPositionOffsetInitial := Val(ReadRigParam$("RigParams", "chairPositionOffsetInitial"));  'Chair position offset converted to voltage (initial)
 
     ' Displayed drum COMMAND channel signal scaling/offset
-    HTVELcom_chScaling := Val(ReadRigParam$("RigParams\\ChannelScalingOffset", "HTVELcom_chScaling")) * drumClockwiseVelVoltage;  'Voltage to drum velocity (scaling)
-    HTVELcom_chOffset := Val(ReadRigParam$("RigParams\\ChannelScalingOffset", "HTVELcom_chOffset"));  'Voltage to drum velocity (offset)
+    HTPOScom_chScaling := Val(ReadRigParam$("RigParams\\ChannelScalingOffset", "HTPOScom_chScaling"));  'Voltage to drum position (scaling)
+    HTPOScom_chOffset  := Val(ReadRigParam$("RigParams\\ChannelScalingOffset", "HTPOScom_chOffset"));   'Voltage to drum position (offset)
 
     ' Displayed chair COMMAND channel signal scaling/offset
-    HHVELcom_chScaling := Val(ReadRigParam$("RigParams\\ChannelScalingOffset", "HHVELcom_chScaling")) * chairClockwiseVelVoltage;  'Voltage to chair velocity (scaling)
-    HHVELcom_chOffset := Val(ReadRigParam$("RigParams\\ChannelScalingOffset", "HHVELcom_chOffset"));  'Voltage to chair velocity (offset)
+    HHPOScom_chScaling := Val(ReadRigParam$("RigParams\\ChannelScalingOffset", "HHPOScom_chScaling"));  'Voltage to chair position (scaling)
+    HHPOScom_chOffset  := Val(ReadRigParam$("RigParams\\ChannelScalingOffset", "HHPOScom_chOffset"));   'Voltage to chair position (offset)
+
+    ' Displayed drum COMMAND channel signal scaling/offset
+    HTVELcom_chScaling := Val(ReadRigParam$("RigParams\\ChannelScalingOffset", "HTVELcom_chScaling"));  'Voltage to drum velocity (scaling)
+    HTVELcom_chOffset  := Val(ReadRigParam$("RigParams\\ChannelScalingOffset", "HTVELcom_chOffset"));   'Voltage to drum velocity (offset)
+
+    ' Displayed chair COMMAND channel signal scaling/offset
+    HHVELcom_chScaling := Val(ReadRigParam$("RigParams\\ChannelScalingOffset", "HHVELcom_chScaling"));  'Voltage to chair velocity (scaling)
+    HHVELcom_chOffset  := Val(ReadRigParam$("RigParams\\ChannelScalingOffset", "HHVELcom_chOffset"));   'Voltage to chair velocity (offset)
 
     ' Displayed drum position feedback channel signal scaling/offset
-    htpos_chScaling := Val(ReadRigParam$("RigParams\\ChannelScalingOffset", "htpos_chScaling")) * drumClockwisePosVoltage;  'Voltage to drum position (scaling)
-    htpos_chOffset := Val(ReadRigParam$("RigParams\\ChannelScalingOffset", "htpos_chOffset"));  'Voltage to drum position (offset)
+    htpos_chScaling := Val(ReadRigParam$("RigParams\\ChannelScalingOffset", "htpos_chScaling"));  'Voltage to drum position (scaling)
+    htpos_chOffset  := Val(ReadRigParam$("RigParams\\ChannelScalingOffset", "htpos_chOffset"));   'Voltage to drum position (offset)
 
     ' Displayed chair position feedback channel signal scaling/offset
-    hhpos_chScaling := Val(ReadRigParam$("RigParams\\ChannelScalingOffset", "hhpos_chScaling")) * chairClockwisePosVoltage;  'Voltage to chair position (scaling)
-    hhpos_chOffset := Val(ReadRigParam$("RigParams\\ChannelScalingOffset", "hhpos_chOffset"));  'Voltage to chair position (offset)
+    hhpos_chScaling := Val(ReadRigParam$("RigParams\\ChannelScalingOffset", "hhpos_chScaling"));  'Voltage to chair position (scaling)
+    hhpos_chOffset  := Val(ReadRigParam$("RigParams\\ChannelScalingOffset", "hhpos_chOffset"));   'Voltage to chair position (offset)
 
     ' Displayed drum velocity feedback channel signal (if available) scaling/offset
-    htvel_chScaling := Val(ReadRigParam$("RigParams\\ChannelScalingOffset", "htvel_chScaling")) * drumClockwiseVelVoltage;  'Voltage to drum velocity (scaling)
-    htvel_chOffset := Val(ReadRigParam$("RigParams\\ChannelScalingOffset", "htvel_chOffset"));  'Voltage to drum velocity (offset)
+    htvel_chScaling := Val(ReadRigParam$("RigParams\\ChannelScalingOffset", "htvel_chScaling"));  'Voltage to drum velocity (scaling)
+    htvel_chOffset  := Val(ReadRigParam$("RigParams\\ChannelScalingOffset", "htvel_chOffset"));   'Voltage to drum velocity (offset)
 
     ' Displayed chair velocity feedback channel signal scaling/offset
-    hhvel_chScaling := Val(ReadRigParam$("RigParams\\ChannelScalingOffset", "hhvel_chScaling")) * chairClockwiseVelVoltage;  'Voltage to chair velocity (scaling)
-    hhvel_chOffset := Val(ReadRigParam$("RigParams\\ChannelScalingOffset", "hhvel_chOffset"));  'Voltage to chair velocity (offset)
+    hhvel_chScaling := Val(ReadRigParam$("RigParams\\ChannelScalingOffset", "hhvel_chScaling"));  'Voltage to chair velocity (scaling)
+    hhvel_chOffset  := Val(ReadRigParam$("RigParams\\ChannelScalingOffset", "hhvel_chOffset"));   'Voltage to chair velocity (offset)
 
     ' Displayed eye position channels 1 and 2 signal scaling/offset
     hepos1_chScaling := Val(ReadRigParam$("RigParams\\ChannelScalingOffset", "hepos1_chScaling"));  'Voltage to eye position (scaling)
-    hepos1_chOffset := Val(ReadRigParam$("RigParams\\ChannelScalingOffset", "hepos1_chOffset"));  'Voltage to eye position (offset)
+    hepos1_chOffset  := Val(ReadRigParam$("RigParams\\ChannelScalingOffset", "hepos1_chOffset"));   'Voltage to eye position (offset)
     hepos2_chScaling := Val(ReadRigParam$("RigParams\\ChannelScalingOffset", "hepos2_chScaling"));  'Voltage to eye position (scaling)
-    hepos2_chOffset := Val(ReadRigParam$("RigParams\\ChannelScalingOffset", "hepos2_chOffset"));  'Voltage to eye position (offset)
+    hepos2_chOffset  := Val(ReadRigParam$("RigParams\\ChannelScalingOffset", "hepos2_chOffset"));   'Voltage to eye position (offset)
 
     ' Channel numbers relative to their connection to the 1401
     ' Note: Channel numbers set to "99" will be ignored and not shown
@@ -88,17 +98,17 @@ Proc LoadRigParams()
     HTPOScom_port% := Val(ReadRigParam$("RigParams\\ChannelNumbers", "HTPOScom_port"));
     HHVELcom_port% := Val(ReadRigParam$("RigParams\\ChannelNumbers", "HHVELcom_port"));
     HTVELcom_port% := Val(ReadRigParam$("RigParams\\ChannelNumbers", "HTVELcom_port"));
-    hhpos_port% := Val(ReadRigParam$("RigParams\\ChannelNumbers", "hhpos_port"));
-    htpos_port% := Val(ReadRigParam$("RigParams\\ChannelNumbers", "htpos_port"));
-    hepos1_port% := Val(ReadRigParam$("RigParams\\ChannelNumbers", "hepos1_port"));
-    hepos2_port% := Val(ReadRigParam$("RigParams\\ChannelNumbers", "hepos2_port"));
-    hhvel_port% := Val(ReadRigParam$("RigParams\\ChannelNumbers", "hhvel_port"));
-    htvel_port% := Val(ReadRigParam$("RigParams\\ChannelNumbers", "htvel_port"));
-    TTL1_port% := Val(ReadRigParam$("RigParams\\ChannelNumbers", "TTL1_port"));
-    TTL2_port% := Val(ReadRigParam$("RigParams\\ChannelNumbers", "TTL2_port"));
-    TTL3_port% := Val(ReadRigParam$("RigParams\\ChannelNumbers", "TTL3_port"));
-    TTL4_port% := Val(ReadRigParam$("RigParams\\ChannelNumbers", "TTL4_port"));
-    TTL5_port% := Val(ReadRigParam$("RigParams\\ChannelNumbers", "TTL5_port"));
+    hhpos_port%    := Val(ReadRigParam$("RigParams\\ChannelNumbers", "hhpos_port"));
+    htpos_port%    := Val(ReadRigParam$("RigParams\\ChannelNumbers", "htpos_port"));
+    hepos1_port%   := Val(ReadRigParam$("RigParams\\ChannelNumbers", "hepos1_port"));
+    hepos2_port%   := Val(ReadRigParam$("RigParams\\ChannelNumbers", "hepos2_port"));
+    hhvel_port%    := Val(ReadRigParam$("RigParams\\ChannelNumbers", "hhvel_port"));
+    htvel_port%    := Val(ReadRigParam$("RigParams\\ChannelNumbers", "htvel_port"));
+    TTL1_port%     := Val(ReadRigParam$("RigParams\\ChannelNumbers", "TTL1_port"));
+    TTL2_port%     := Val(ReadRigParam$("RigParams\\ChannelNumbers", "TTL2_port"));
+    TTL3_port%     := Val(ReadRigParam$("RigParams\\ChannelNumbers", "TTL3_port"));
+    TTL4_port%     := Val(ReadRigParam$("RigParams\\ChannelNumbers", "TTL4_port"));
+    TTL5_port%     := Val(ReadRigParam$("RigParams\\ChannelNumbers", "TTL5_port"));
 
     if rigparam_error% then
         Message("Invalid RigParam values were found. Please correct the values described in the Log and try again.");

@@ -1,0 +1,247 @@
+' ------------------------------------------------------------------------------
+' STEPS - CORE SCRIPT USED BY ALL STEPS PROTOCOLS (REQUIRES SPIKE2 VERSION 10)
+'
+' Contains variables/functions that are shared by all steps protocols
+' ------------------------------------------------------------------------------
+' Define the parent directory all other paths will be relative to
+const rootpath$ := "C:/Users/Public/RaymondLabCode2/spike2_experimental_protocols";
+FilePathSet(rootpath$, 0);
+
+' These files are the same for ALL EXPERIMENTAL protocols
+#include "../utils/read_write_rig_params.s2s"
+#include "../utils/sampling_window_config.s2s"
+#include "../utils/unit_conversion_functions.s2s"
+
+' Load rig-specific parameters from local-computer's registry
+LoadRigParams();
+
+' Drum stimulus parameters
+var drumAmp := 10.0;  'In deg/s
+var drumStepDelayTime := 0;  'In ms
+var drumPosStepAmplitude := drumAmp;
+var drumNegStepAmplitude := -1*drumAmp;
+var drumSign := drumAmp / Abs(drumAmp);  'Sign of given drum amplitude
+
+' Chair stimulus parameters
+var chairAmp := -10.0;  'In deg/s
+var chairStepDelayTime := 0;  'In ms
+var chairPosStepAmplitude := chairAmp;
+var chairNegStepAmplitude := -1*chairAmp;
+var chairSign := chairAmp / Abs(chairAmp);  'Sign of given drum amplitude
+
+' Step parameters
+var stepRampTime := 25;  'In ms
+var stepAmpTime := 600;  'In ms
+var stepPauseTime := 500;  'In ms
+var stepPeriod := (4.0*stepRampTime) + (2.0*stepAmpTime) + (2.0*stepPauseTime);  'In ms
+var stepFreq := 1.0 / (stepPeriod/1000);  'Frequency converted to seconds
+
+' driftFix parameters
+var Kp := 0.5;  'Proportional correction gain (default 0.5)
+var Kd := 0.5;  'Derivative correction gain (default 0.5)
+var numErrors% := 3;  'Number of error values to collect in an array
+var htposErrors[numErrors%], hhposErrors[numErrors%];  'Array of errors
+var htposPrevError, hhposPrevError;  'Previous mean error
+
+' ToolbarIdle% variables
+var nBlocks%, blockList$[1];
+var blockNum%;  'Counter which defines which block number is currently active
+var blockFlag%;  'Flag which defines whether a block is actively running or not
+var blockMarkers$;  'Provides the SampleKey commands for the currently active block
+var runFlag%;  'Flag which denotes whether the experiment is activately running or not
+
+'Total duration (s) of test blocks (not including Gap blocks) [default 50.0]
+var testBlockDuration := 50;
+var shuffleParams% := 1;  'Set to 1 to randomly shuffles the order, or 0 to not change order
+
+'var drumAmpsArr[]       := {10,   20,   30,   40,   50};
+'var stepRampTimesArr[]  := {30,   30,   30,   30,   30};
+'var stepAmpTimesArr[]   := {500,  500,  500,  500,  500};
+'var stepPauseTimesArr[] := {1500, 1500, 1500, 1500, 1500};
+
+var drumAmpsArr[]       := {10, 9.7, 10, 10, 7, 10};
+var stepRampTimesArr[]  := {159, 172, 99, 140, 15, 100};
+var stepAmpTimesArr[]   := {159, 156, 219, 40, 304, 537};
+var stepPauseTimesArr[] := {23, 3, 83, 180, 15, 263};
+
+var nParams% := Round(Len(drumAmpsArr[]));
+nBlocks% := Round(nParams%*3);
+var drumAmps[nBlocks%];
+var stepRampTimes[nBlocks%];
+var stepAmpTimes[nBlocks%];
+var stepPauseTimes[nBlocks%];
+var blockIds%[nBlocks%];
+
+
+'--------------------------------------------------------------------------------
+' DRIFTFIX: Applies velocity offset correction when necessary
+'
+' Applies Proportional-Derivative control such that the output velocity offset 
+' v(t) is given by the formula:
+'
+' v(t) = v(0) - Kp*e(t) - Kd*(de/dt)
+' 
+' Where:
+' v(0)  - is the initial velocity offset of the motor
+' e(t)  - is the position error
+' de/dt - is the change in error over some time dt
+'
+' We "soften" the correction by averaging over the previous errors.
+'--------------------------------------------------------------------------------
+Func driftFix%()
+    ' Get the current sampling time
+    var currentTime := MaxTime();
+
+    ' Shift array of errors by one element
+    ArrConst(htposErrors[1:numErrors%-1], htposErrors[0:numErrors%-1]);
+    ArrConst(hhposErrors[1:numErrors%-1], hhposErrors[0:numErrors%-1]);
+
+    ' Error is defined as the minimum of the magnitude of position over a cycle period
+    htposErrors[0] := ChanMeasure(HTPOSdf_vch%, 9, currentTime-(stepPeriod/1000), currentTime);
+    hhposErrors[0] := ChanMeasure(HHPOSdf_vch%, 9, currentTime-(stepPeriod/1000), currentTime);
+
+    ' Proportional error term is the mean of the all errors over the last period
+    var htposCurrError := drumSign * ArrSum(htposErrors) / numErrors%;
+    var hhposCurrError := chairSign * ArrSum(hhposErrors) / numErrors%;
+
+    ' Derivative error term is the change in proportional errors
+    var htposErrorSlope := (htposCurrError - htposPrevError);
+    var hhposErrorSlope := (hhposCurrError - hhposPrevError);
+
+    ' Current proportional error becomes the previous one
+    htposPrevError := htposCurrError;
+    hhposPrevError := hhposCurrError;
+
+    ' Apply PD error correction to the drum and chair velocity offset commands
+    drumVelocityOffset := drumVelocityOffsetInitial - (Kp*htposCurrError) - (Kd*htposErrorSlope); 
+    drumPosStepAmplitude := drumAmp + drumVelocityOffset; 
+    drumNegStepAmplitude := -drumAmp + drumVelocityOffset; 
+
+    chairVelocityOffset := chairVelocityOffsetInitial - (Kp*hhposCurrError) - (Kd*hhposErrorSlope); 
+    chairPosStepAmplitude := chairAmp + chairVelocityOffset; 
+    chairNegStepAmplitude := -chairAmp + chairVelocityOffset; 
+
+    ' Update the sequencer variables with the corrected velocity offsets
+    SetSequencerValues();
+    return 1;
+End
+
+
+'--------------------------------------------------------------------------------
+' GENERAL TOOLBAR FUNCTIONS
+'--------------------------------------------------------------------------------
+
+' Function that opens a new sampling window
+Func ToolbarNewFile%()
+    WindowSetup();  'Sets up channels in the new sampling configuration window
+    WindowVisible(3);  'Maximizes the new sampling window to fit the screen
+    ToolbarEnable(-1, 1);  'Enables buttons that require a new sampling window
+    ToolbarEnable(3, 0); 
+    SetSequencerValues(); Yield();
+    ' Ensure that the position magnitude virtual channels are in the positive direction
+    VirtualChan(HTPOSdf_vch%, Str$(drumSign)+"*ch("+Str$(htpos_ch%)+")", 0, 1.0/sampleRate);
+    VirtualChan(HHPOSdf_vch%, Str$(chairSign)+"*ch("+Str$(hhpos_ch%)+")", 0, 1.0/sampleRate);
+    SampleKey("R");  'Ensures that sequencer is set to its default configuration prior to sampling
+    return 1;
+End
+
+' Function that defines what happens during idle times (in computer cycles) while actively sampling
+var blockCounter% := 0;
+Func ToolbarIdle%()
+    ' Check whether a valid sampling view is currently running before continuing
+    if ViewKind() <> 0 then
+        return 1;
+    endif;
+
+    ' Check whether motors are drifting and apply correction if needed
+    driftFix%();
+
+    if runFlag% = 1 then  'Check whether the "Run Experiment" button was pressed
+        blockFlag% := SampleSeqVar(1);  'Get the current blockFlag% value from the 1401 sequencer variable
+        if blockFlag% = 0 then  'Check whether a block is not currently running
+            if blockNum% > 0 then
+                SampleKey(Right$(blockMarkers$, 1));  'Sends a lower-case keyboard command that defines the end of a block (useful only for analysis)
+                PrintLog("Sample time: %.4f seconds | Block number: %d of %d | Block marker: %s\n", MaxTime(), blockNum%, nBlocks%, Right$(blockMarkers$,1));
+            endif; 
+            if blockNum% < nBlocks% then  'Check whether current block number is not greater than or equal to maximum number of blocks
+                blockMarkers$ := blockList$[blockNum%];
+                if Left$(blockMarkers$, 1) = "P" then
+                    drumAmp := drumAmps[blockCounter%];
+                    stepAmpTime := stepAmpTimes[blockCounter%];
+                    stepRampTime := stepRampTimes[blockCounter%];
+                    stepPauseTime := stepPauseTimes[blockCounter%];
+                
+                    ' Re-compute step period
+                    stepPeriod := (4.0*stepRampTime) + (2.0*stepAmpTime) + (2.0*stepPauseTime);
+
+                    ' Re-compute drum stimulus parameters
+                    drumPosStepAmplitude := drumAmp;
+                    drumNegStepAmplitude := -1.0 * drumAmp;
+                    if drumAmp <> 0.0 then
+                        drumSign := (drumAmp / Abs(drumAmp));
+                    endif   
+                    
+                    ' Re-compute chair stimulus parameters
+                    chairPosStepAmplitude := -1.0 * drumAmp;
+                    chairAmp := chairPosStepAmplitude;
+                    chairNegStepAmplitude := -1.0 * chairAmp;
+                    if chairAmp <> 0.0 then
+                        chairSign := chairAmp / Abs(chairAmp);
+                    endif
+                
+                    ' Re-compute number of cycle steps for GAP1, GAP2, and GAP3 in sequencer file
+                    CalculateGapSeqSteps();
+
+                    ' Re-compute number of step cycles for testing and training blocks
+                    CalculateNumberOfCycles();
+
+                    ' Re-compute number of cycle steps for ramps
+                    CalculateRampSeqSteps();
+                
+                    ' Send new variable values to the sequencer
+                    SetSequencerValues();
+                    SampleKey(Str$(blockIds%[blockCounter%]));
+                    blockCounter% := blockCounter% + 1;
+                endif;
+                SampleKey(Left$(blockMarkers$, 1));  'Send SampleKey() command to the 1401 sequencer of the current block's letter marker
+                PrintLog("Sample time: %.4f seconds | Block number: %d of %d | Block marker: %s\n", MaxTime(), blockNum%+1, nBlocks%, Left$(blockMarkers$,1));
+                blockNum% := blockNum% + 1;  'Increase the block number by one
+            else
+                runFlag% := 0;  'Set experiment flag to off
+                SampleKey("R");  'Reset 1401 sequencer to initial state
+                SampleKey("a");  'Sends a lower-case keyboard command that defines the end of the experiment (useful only for analysis)
+                XRange();  'Zoom out to view entire experiement
+                PrintLog("EXPERIMENT COMPLETE!\n\n");
+            endif;
+        endif;
+    endif;
+    
+    return 1;
+End
+
+' Function that runs experiment based on parameters provided in experimental configuration window
+Func ToolbarRunExpmt%()
+    SampleKey("A");
+    SetSequencerValues();
+    runFlag% := 1;
+    ToolbarSet(9, "Stop Expmt", ToolbarStopExpmt%);
+    return 1;
+End
+
+' Function that runs experiment based on parameters provided in experimental configuration window
+Func ToolbarStopExpmt%()
+    SampleKey("R");
+    SampleKey("a");
+    runFlag% := 0;
+    ToolbarSet(9, "Run Expmt", ToolbarRunExpmt%);
+    return 1;
+End
+
+' Function that stops all stimuli, resets the sequencer to default, and quits out of the toolbar
+Func ToolbarQuit%()
+    SampleKey("R");
+    SampleKey("a");
+    SampleStop();
+    PrintLog("MANUALLY QUIT!\n\n");
+    return 0;
+End

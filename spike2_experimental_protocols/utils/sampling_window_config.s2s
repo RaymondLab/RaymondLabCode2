@@ -3,25 +3,27 @@
 ' ------------------------------------------------------------------------------
 
 ' Sampling configuration parameters
-const voltageMax := 10.0;  'Ensure this is the same value found in Edit -> Edit Preferences -> Sampling
 const sampleRate := 1000;  'Sequencer sample rate in Hz, MUST be the same value given in the sequencer file
+var voltageMax := 5.0;  'Ensure this is the same value found in Edit -> Edit Preferences -> Sampling
 var sampleStepsize := 1/sampleRate;  'Sequencer sample rate step size in seconds
 
 ' Define the standard channel layout for all protocols
-const HHVELcom_ch% := 1; 
-const HTVELcom_ch% := 2; 
-const hhpos_ch% := 3; 
-const htpos_ch% := 4; 
-const hepos1_ch% := 5; 
-const hepos2_ch% := 6; 
-const hhvel_ch% := 7; 
-const htvel_ch% := 8;
-const TTL1_ch% := 10;
-const TTL2_ch% := 11; 
-const TTL3_ch% := 12; 
-const TTL4_ch% := 13; 
-const TTL5_ch% := 14;
-var HTPOSdf_vch%, HHPOSdf_vch%;
+' Note: 1401 ports start from 0 but Spike2 channels start from 1
+var HTVELcom_ch% := 1;
+var HHVELcom_ch% := 2;
+var HTPOScom_ch% := 3; 
+var HHPOScom_ch% := 4; 
+var hepos1_ch% := 5; 
+var hepos2_ch% := 6; 
+var htpos_ch% := 7; 
+var hhpos_ch% := 8; 
+var htvel_ch% := 9;
+var hhvel_ch% := 10;
+var TTL1_ch% := 11;
+var TTL2_ch% := 12; 
+var TTL3_ch% := 13; 
+var TTL4_ch% := 14; 
+var TTL5_ch% := 15;
 
 ' Initialize sampling window variable
 var sampling_window%;
@@ -40,6 +42,19 @@ Proc LoadWaveform()
     else
         PrintLog("No waveform loaded!\n\n", waveFilePath$);
     endif
+end
+
+Proc AddWaveformChannel(channel%, port%, units$, scale, offset, title$, comment$)
+    SampleWaveform(channel%, port%, sampleRate, 1);
+    SampleCalibrate(channel%, units$, scale, offset);
+    SampleTitle$(channel%, title$);
+    SampleComment$(channel%, comment$);
+end
+
+Proc AddTalkerChannel(channel%, port$, title$, comment$)
+    SampleTalker(channel%, port$, 0);
+    SampleTitle$(channel%, title$);
+    SampleComment$(channel%, comment$);
 end
 
 ' Configures the sampling window channels, layout, appearance, etc.
@@ -61,61 +76,91 @@ Proc WindowSetup()
     '    PlayWaveAdd("w", "wave", HHVELcom_port%, 0, 10000, HHVELcom_ch%, 0, waveFilePath$);
     '    PlayWaveCycles("w", 0);
     'endif
+
+    ' Ch 1: HTVEL - Horizontal Target Velocity (Command from 1401 to drum)
+    if HTVELcom_port% >= 0 then 
+        'AddWaveformChannel(HTVELcom_ch%, HTVELcom_port%, "deg/s", 1.0, 0.0, "HTVEL", "Velocity command signal sent from the 1401 to the drum");
+        AddWaveformChannel(HTVELcom_ch%, HTVELcom_port%, "deg/s", HTVELcom_chScaling, HTVELcom_chOffset, "HTVEL", "Velocity command signal sent from the 1401 to the drum");
+    endif
+
+    ' Ch 2: HHVEL - Horizontal Head Velocity (Command from 1401 to chair)
+    if HHVELcom_port% >= 0 then
+        'AddWaveformChannel(HHVELcom_ch%, HHVELcom_port%, "deg/s", 1.0, 0.0, "HHVEL", "Velocity command signal sent from the 1401 to the chair");
+        AddWaveformChannel(HHVELcom_ch%, HHVELcom_port%, "deg/s", HHVELcom_chScaling, HHVELcom_chOffset, "HHVEL", "Velocity command signal sent from the 1401 to the chair");
+    endif
+
+    ' Ch 3: HTPOS - Drum Position for driftFix (Virtual Channel derived from htpos)
+    if HTPOScom_port% >= 0 then
+        AddWaveformChannel(HTPOScom_ch%, HTPOScom_port%, "deg", HTPOScom_chScaling, HTPOScom_chOffset, "HTPOS", "Position command signal sent from the 1401 to the drum");
+    endif
     
-    ' Ch 1: HHVEL - Horizontal Head Velocity (Command from 1401 to chair)
-    SampleWaveform(HHVELcom_ch%, HHVELcom_port%, sampleRate, 1);
-    SampleCalibrate(HHVELcom_ch%, "deg/s", HHVELcom_chScaling, HHVELcom_chOffset);
-    SampleTitle$(HHVELcom_ch%, "HHVEL");
-    SampleComment$(HHVELcom_ch%, "Velocity command signal sent from the 1401 to the chair");
-
-    ' Ch 2: HTVEL - Horizontal Target Velocity (Command from 1401 to drum)
-    SampleWaveform(HTVELcom_ch%, HTVELcom_port%, sampleRate, 1);
-    SampleCalibrate(HTVELcom_ch%, "deg/s", HTVELcom_chScaling, HTVELcom_chOffset);
-    SampleTitle$(HTVELcom_ch%, "HTVEL");
-    SampleComment$(HTVELcom_ch%, "Velocity command signal sent from the 1401 to the drum");
-
-    ' Ch 3: hhpos - Horizontal Head Position (Readout from chair motor)
-    SampleWaveform(hhpos_ch%, hhpos_port%, sampleRate, 1);
-    SampleCalibrate(hhpos_ch%, "deg", hhpos_chScaling, hhpos_chOffset);
-    SampleTitle$(hhpos_ch%, "hhpos");
-    SampleComment$(hhpos_ch%, "Chair position readout from motor encoder");
-
-    ' Ch 4: htpos - Horizontal Target Position (Readout from drum motor)
-    SampleWaveform(htpos_ch%, htpos_port%, sampleRate, 1);
-    SampleCalibrate(htpos_ch%, "deg", htpos_chScaling, htpos_chOffset);
-    SampleTitle$(htpos_ch%, "htpos");
-    SampleComment$(htpos_ch%, "Drum position readout from motor encoder");
+    ' Ch 4: HHPOS - Head Position for driftFix (Virtual Channel derived from hhpos)
+    if HHPOScom_port% >= 0 then
+        AddWaveformChannel(HHPOScom_ch%, HHPOScom_port%, "deg", HHPOScom_chScaling, HHPOScom_chOffset, "HHPOS", "Position command signal sent from the 1401 to the chair");
+    endif
 
     ' Ch 5: hepos1 - Horizontal Eye Position 1
-    SampleWaveform(hepos1_ch%, hepos1_port%, sampleRate, 1);
-    SampleCalibrate(hepos1_ch%, "deg", hepos1_chScaling, hepos1_chOffset);
-    SampleTitle$(hepos1_ch%, "hepos1");
-    SampleComment$(hepos1_ch%, "Eye Position 1");
+    AddWaveformChannel(hepos1_ch%, hepos1_port%, "V", hepos1_chScaling, hepos1_chOffset, "hepos1", "Eye position 1");
 
     ' Ch 6: hepos2 - Horizontal Eye Position 2
-    SampleWaveform(hepos2_ch%, hepos2_port%, sampleRate, 1);
-    SampleCalibrate(hepos2_ch%, "deg", hepos2_chScaling, hepos2_chOffset);
-    SampleTitle$(hepos2_ch%, "hepos2");
-    SampleComment$(hepos2_ch%, "Eye Position 2");
+    AddWaveformChannel(hepos2_ch%, hepos2_port%, "V", hepos2_chScaling, hepos2_chOffset, "hepos2", "Eye position 2");
 
-    ' Ch 7: hhvel - Horizontal Head Velocity (Readout from chair motor)
-    SampleWaveform(hhvel_ch%, hhvel_port%, sampleRate, 1);
-    SampleCalibrate(hhvel_ch%, "deg/s", hhvel_chScaling, hhvel_chOffset);
-    SampleTitle$(hhvel_ch%, "hhvel");
-    SampleComment$(hhvel_ch%, "Chair velocity readout from motor encoder");
+    ' Ch 7: htpos - Horizontal Target Position (feedback from drum motor)
+    docase
+        case htpos_port% >= 0 then
+            AddWaveformChannel(htpos_ch%, htpos_port%, "deg", htpos_chScaling, htpos_chOffset, "htpos", "Drum position feedback from motor encoder");
+        case htpos_port% = -1 then
+            AddTalkerChannel(htpos_ch%, "LS7366", "htpos", "Drum position feedback from motor encoder (talker)");
+        case htpos_port% = -2 then
+            AddTalkerChannel(htpos_ch%, "LS7366-3", "htpos", "Drum position feedback from motor encoder (talker)");
+    endcase
 
-    ' Ch 8: htvel - Horizontal Target Velocity (Readout from drum motor)
-    SampleWaveform(htvel_ch%, htvel_port%, sampleRate, 1);
-    SampleCalibrate(htvel_ch%, "deg/s", htvel_chScaling, htvel_chOffset);
-    SampleTitle$(htvel_ch%, "htvel");
-    SampleComment$(htvel_ch%, "Drum velocity readout from motor encoder");
+    ' Ch 8: hhpos - Horizontal Head Position (feedback from chair motor)
+    docase
+        case hhpos_port% >= 0 then
+            AddWaveformChannel(hhpos_ch%, hhpos_port%, "deg", hhpos_chScaling, hhpos_chOffset, "hhpos", "Chair position feedback from motor encoder");
+        case hhpos_port% = -1 then
+            AddTalkerChannel(hhpos_ch%, "LS7366", "hhpos", "Chair position feedback from motor encoder (talker)");
+        case hhpos_port% = -2 then
+            AddTalkerChannel(hhpos_ch%, "LS7366-3", "hhpos", "Chair position feedback from motor encoder (talker)");
+    endcase
+
+    ' Ch 9: htvel - Horizontal Target Velocity (feedback from drum motor)
+    if htvel_port% >= 0 then
+        AddWaveformChannel(htvel_ch%, htvel_port%, "deg/s", htvel_chScaling, htvel_chOffset, "htvel", "Drum velocity feedback from motor encoder");
+    endif
+
+    ' Ch 10: hhvel - Horizontal Head Velocity (feedback from chair motor)
+    if hhvel_port% >= 0 then
+        AddWaveformChannel(hhvel_ch%, hhvel_port%, "deg/s", hhvel_chScaling, hhvel_chOffset, "hhvel", "Chair velocity feedback from motor encoder");
+    endif
     
-    ' TTL1: Shutter/LED/Light
+    ' TTL 1: Shutter/LED/Light
     SampleEvent(TTL1_ch%, TTL1_port%, 2, sampleRate);
     SampleTitle$(TTL1_ch%, "TTL1");
     SampleComment$(TTL1_ch%, "TTL1: Shutter");
+
+    ' TTL 2: IR LED
+    SampleEvent(TTL2_ch%, TTL2_port%, 2, sampleRate);
+    SampleTitle$(TTL2_ch%, "TTL2");
+    SampleComment$(TTL2_ch%, "TTL2: IR LED");
     
-    ' TextMark: Event keyboard markersggTTg
+    ' TTL 3: L Laser
+    SampleEvent(TTL3_ch%, TTL3_port%, 2, sampleRate);
+    SampleTitle$(TTL3_ch%, "TTL3");
+    SampleComment$(TTL3_ch%, "TTL3: L Laser");
+
+    ' TTL 4: R Laser
+    SampleEvent(TTL4_ch%, TTL4_port%, 2, sampleRate);
+    SampleTitle$(TTL4_ch%, "TTL4");
+    SampleComment$(TTL4_ch%, "TTL4: R Laser");
+
+    ' TTL 5
+    SampleEvent(TTL5_ch%, TTL5_port%, 2, sampleRate);
+    SampleTitle$(TTL5_ch%, "TTL5");
+    SampleComment$(TTL5_ch%, "TTL5");
+    
+    ' TextMark: Event keyboard markers
     SampleTextMark(200);
     
     SampleOptimise(1, 1, 0, 2, 50);  'Sets sample rate optimising settings
@@ -124,55 +169,131 @@ Proc WindowSetup()
     
     ViewColourSet(0, .87, .87, .87);  'Sets the background color
     FontSet("Verdana", 8, 0);  'Sets the font type and size
-    
-    ' Head Position for driftFix (Virtual Channel derived from hhpos)
-    HHPOSdf_vch% := VirtualChan(0, "");
-    VirtualChan(HHPOSdf_vch%, "ch("+Str$(hhpos_ch%)+")", 0, 1.0/sampleRate);
-    ChanUnits$(HHPOSdf_vch%, "deg");
-    ChanTitle$(HHPOSdf_vch%, "HHPOSdf");    
-    ChanComment$(HHPOSdf_vch%, "Head Position for driftFix derived from hhpos");
 
-    ' Drum Position for driftFix (Virtual Channel derived from htpos)
-    HTPOSdf_vch% := VirtualChan(0, "");
-    VirtualChan(HTPOSdf_vch%, "ch("+Str$(htpos_ch%)+")", 0, 1.0/sampleRate);
-    ChanUnits$(HTPOSdf_vch%, "deg");
-    ChanTitle$(HTPOSdf_vch%, "HTPOSmag"); 
-    ChanComment$(HTPOSdf_vch%, "Head Position for driftFix derived from htpos");
+    ' Adjust scaling, offset, and units of htpos channel if necessary
+    if (htpos_port% = -1) or (htpos_port% = -2) then
+        ChanScale(htpos_ch%, htpos_chScaling);
+        ChanOffset(htpos_ch%, htpos_chOffset);
+        ChanUnits$(htpos_ch%, "deg");
+    endif
+
+    ' Adjust scaling, offset, and units of hhpos channel if necessary
+    if (hhpos_port% = -1) or (hhpos_port% = -2) then
+        ChanScale(hhpos_ch%, hhpos_chScaling);
+        ChanOffset(hhpos_ch%, hhpos_chOffset);
+        ChanUnits$(hhpos_ch%, "deg");
+    endif
+
+    ' Ch v1: HTVEL - Horizontal Target Velocity (Virtual Channel derived from HTPOS)
+    if HTVELcom_port% = -3 then 
+        HTVELcom_ch% := VirtualChan(0, "", 0, 0.001);
+        VirtualChan(HTVELcom_ch%, Str$(HTVELcom_chScaling)+"*ch("+Str$(HTPOScom_ch%)+")");
+        ChanProcessAdd(HTVELcom_ch%, 1, 0.011);
+        ChanProcessAdd(HTVELcom_ch%, 3, 0.003);
+        ChanUnits$(HTVELcom_ch%, "deg/s");
+        ChanTitle$(HTVELcom_ch%, "HTVEL"); 
+        ChanComment$(HTVELcom_ch%, "Drum velocity derived from HTPOS");
+    endif
+
+    ' Ch v2: HHVEL - Horizontal Head Velocity (Virtual Channel derived from HHPOS)
+    if HHVELcom_port% = -3 then 
+        HHVELcom_ch% := VirtualChan(0, "", 0, 0.001);
+        VirtualChan(HHVELcom_ch%, Str$(HHVELcom_chScaling)+"*ch("+Str$(HHPOScom_ch%)+")");
+        ChanProcessAdd(HHVELcom_ch%, 1, 0.011);
+        ChanProcessAdd(HHVELcom_ch%, 3, 0.003);
+        ChanUnits$(HHVELcom_ch%, "deg/s");
+        ChanTitle$(HHVELcom_ch%, "HHVEL"); 
+        ChanComment$(HHVELcom_ch%, "Chair velocity derived from HHPOS");
+    endif
+
+    ' Ch v3: HTPOS - Horizontal Target Position (Virtual Channel derived from htpos)
+    if HTPOScom_port% = -3 then 
+        HTPOScom_ch% := VirtualChan(0, "", 0, 0.001);
+        VirtualChan(HTPOScom_ch%, "ch("+Str$(htpos_ch%)+")", 0, 1.0/sampleRate);
+        ChanUnits$(HTPOScom_ch%, "deg");
+        ChanTitle$(HTPOScom_ch%, "HTPOS"); 
+        ChanComment$(HTPOScom_ch%, "Target Position for driftFix derived from htpos");
+    endif
+
+    ' Ch v4: HHPos - Horizontal Head Position (Virtual Channel derived from hhpos)
+    if HHPOScom_port% = -3 then 
+        HHPOScom_ch% := VirtualChan(0, "", 0, 0.001);
+        VirtualChan(HHPOScom_ch%, "ch("+Str$(hhpos_ch%)+")", 0, 1.0/sampleRate);
+        ChanUnits$(HHPOScom_ch%, "deg");
+        ChanTitle$(HHPOScom_ch%, "HHPOS"); 
+        ChanComment$(HHPOScom_ch%, "Head Position for driftFix derived from hhpos");
+    endif
+
+    ' Ch v9: htvel - Horizontal Target Velocity (feedback derived from htpos)
+    if (htvel_port% = -3) or (htvel_port% = -4) then 
+        htvel_ch% := VirtualChan(0, "", 0, 0.001);
+        if (htvel_port% = -4) then
+            VirtualChan(htvel_ch%, Str$(htvel_chScaling)+"*rm("+Str$(htpos_ch%)+")");
+        else
+            VirtualChan(htvel_ch%, Str$(htvel_chScaling)+"*ch("+Str$(htpos_ch%)+")");
+        endif
+        ChanProcessAdd(htvel_ch%, 1, 0.011);
+        ChanProcessAdd(htvel_ch%, 3, 0.003);
+        ChanUnits$(htvel_ch%, "deg/s");
+        ChanTitle$(htvel_ch%, "htvel"); 
+        ChanComment$(htvel_ch%, "Drum velocity feedback derived from htpos");
+    endif
+
+    ' Ch v10: hhvel - Horizontal Head Velocity (feedback derived from hhpos)
+    if (hhvel_port% = -3) or (hhvel_port% = -4) then 
+        hhvel_ch% := VirtualChan(0, "", 0, 0.001);
+        if (hhvel_port% = -4) then
+            VirtualChan(hhvel_ch%, Str$(hhvel_chScaling)+"*rm("+Str$(hhpos_ch%)+")");
+        else
+            VirtualChan(hhvel_ch%, Str$(hhvel_chScaling)+"*ch("+Str$(hhpos_ch%)+")");
+        endif
+        ChanProcessAdd(hhvel_ch%, 1, 0.011);
+        ChanProcessAdd(hhvel_ch%, 3, 0.003);
+        ChanUnits$(hhvel_ch%, "deg/s");
+        ChanTitle$(hhvel_ch%, "hhvel"); 
+        ChanComment$(hhvel_ch%, "Chair velocity feedback derived from hhpos");
+    endif
     
-    ' Ensure all channels are visible and specify their order
-    'ChanHide(-1);
-    'ChanShow(3, 7);
+    ' Ensure the standard channels are visible and in default order
     ChanShow(-1);
-    'ChanHide("v1", "v2");
-    ChanOrder(0, -1, "5, 6, 1, 2, 10, 30, 31");
+    ChanOrder(0, -1, "11, 12, 13, 14, 15, 30, 31");
+    ChanHide("12..15");  'Hide TTL channels 2-5 (not used for most protocols)
     
     ' Initial y-ranges for all channels
-    YRange(HHVELcom_ch%, -11, 11);
-    YRange(HTVELcom_ch%, -11, 11);
-    YRange(hhvel_ch%, -11, 11);
-    YRange(htvel_ch%, -11, 11);
-    YRange(hhpos_ch%, -7, 7);
-    YRange(htpos_ch%, -7, 7);
-    YRange(hepos1_ch%, -10, 10);
-    YRange(hepos2_ch%, -10, 10);
+    YRange(HTVELcom_ch%, -10.2, 10.2);
+    YRange(HHVELcom_ch%, -10.2, 10.2);
+    YRange(HTPOScom_ch%, -3.2, 3.2);
+    YRange(HHPOScom_ch%, -3.2, 3.2);
+    YRange(hepos1_ch%, -3.2, 3.2);
+    YRange(hepos2_ch%, -3.2, 3.2); 
+    YRange(htpos_ch%, -3.2, 3.2);
+    YRange(hhpos_ch%, -3.2, 3.2);
+    YRange(htvel_ch%, -10.2, 10.2);
+    YRange(hhvel_ch%, -10.2, 10.2); 
     
     ' Initial x-range for all channels
-    XRange(0, 20);
+    XRange(0, 60);
     
     ' Set channel colors
-    ChanColourSet("1..14", 1, 0.501961, 0, 0.501961);
-    ChanColourSet("5,6", 1, 0, 0, 0);
-    ChanColourSet("3,4,7,8", 1, 0.122, 0.239, 0.58);
-    'ChanColourSet("v1..v5", 1, 0.501961, 0, 0.752941);
-    
+    ChanColourSet("1..15", 1, 0.501961, 0, 0.501961);
+    ChanColourSet("1..4", 1, 0, 0, 0);
+    ChanColourSet("7..10", 1, 0.122, 0.239, 0.58);
+    ChanColourSet("v1..v6", 1, 0.501961, 0, 0.752941);
     
     ' Add channel horizontal cursors
-    HCursorNew(HHVELcom_ch%, 0);
-    HCursorNew(HTVELcom_ch%, 0);
-    HCursorNew(hhpos_ch%, 0);
-    HCursorNew(htpos_ch%, 0);
+    'HCursorNew(HTVELcom_ch%, 0);
+    'HCursorNew(HHVELcom_ch%, 0);
+    'HCursorNew(HTPOScom_ch%, 0);
+    'HCursorNew(HHPOScom_ch%, 0);
+    'HCursorNew(htpos_ch%, 0);
+    'HCursorNew(hhpos_ch%, 0);
+    'HCursorNew(htvel_ch%, 0);
+    'HCursorNew(hhvel_ch%, 0);
     
-    ' DECREASE HEIGHT OF CHANNELS (TODO: REMOVE THIS LATER)
+    ' Decrease the height of channels (TODO: do we want this?)
     'ChanWeight(HTVELcom_ch%, 0.5);
     'ChanWeight(HHVELcom_ch%, 0.5);
+
+    ' Displays TextMark channel as text labels rather than colored squares
+    DrawMode(30, 14);
 End

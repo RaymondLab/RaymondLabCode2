@@ -1,0 +1,510 @@
+' ------------------------------------------------------------------------------
+' SINE - SINGLE TRIAL OPTOSTIM EXPERIMENTAL PROTOCOL (REQUIRES SPIKE2 VERSION 10)
+'
+' Values for local (rig-specific) variables are stored in the system registry: 
+' HKEY_CURRENT_USER\Software\CED\Spike2\RigParams
+' 
+' ------------------------------------------------------------------------------
+'Set the sequencer file to use for the protocol
+const sequencerFile$ := "sine_protocols/sine_stopto.pls";
+
+' This file is the same for all SINE protocols
+#include "sine_core.s2s"
+
+' TTL parameters
+var lightType%      := 1;
+var optoOn%         := 0;
+var optoRelativeTo% := 0;
+var optoType%       := 0;
+var optoCycles%     := 1;
+var optoStart%      := 300;
+var optoDuration%   := 30;
+var optoInterval%   := 600;
+var skipOptoA%      := 1; 
+var skipOptoB%      := 1;
+
+const shiftDelay2% := 12;
+const shift0p5Hz% := 500;
+const shift1Hz% := 250;
+const shift2Hz% := 125;
+const delays0p5Hz%[] := {0, 125, 250, 375, 500, 625, 750, 875, 1000, 1125, 1250, 1375, 1500, 1625, 1750, 1875, -1};
+const delays1Hz%[] := {0, 250, 500, -1}; '{0, 125, 188, 250, 313, 375, 500, 625, 750, 875, -1};
+const delays2Hz%[] := {0, 63, 125, 188, 250, 313, 375, 438, -1};
+
+' Opto training block parameters
+var optoTrainingType%  := 1;  'Defines the training type for opto experiments [default 0]
+var optoTimingOrder%   := 1;  'Defines the timing ordering for opto experiments [default 0]
+var optoEveryNthCycle% := 4;  'Sets opto timing to occur every Nth cycle [default 4]
+var delayArrLen%, delayShift%;
+var prevIdx1% := -1;
+
+var digpsCycleCount% := 4;  '1 or 4
+var digpsDuration% := 2;  '14 or 2
+var digpsInterval% := 4;  '15 or 4
+
+optoEveryNthCycle% := 2; '4 or 8
+
+var ttlNum1% := 1;
+var ttlNum2% := 2;
+var newChairPhase, newChairAngle;
+var currDelay1%, currDelay2%, txt1$, txt2$;
+UpdateOptoParamsForSequencer();
+
+' Compute number of sequencer steps for GAP1, GAP2, and GAP3 in the sequencer file
+var halfgapSeqSteps, gap1SeqSteps, gap2SeqSteps, gap3SeqSteps;  'Initialize sequencer file variables
+CalculateGapSeqSteps();
+  
+' Compute total experiment duration for settings window text information
+var imageArr%[4];
+var textStepPeriod%, textMinutes%;
+var blockdurationTestGap      := gapDur + testBlockDuration;
+var blockdurationTestTrainGap := gapDur + testBlockDuration + gapDur + trainBlockDuration;
+var totalExperimentDuration   := (5.0 * blockdurationTestGap) + (1.0 * nTrainingBlocks% * blockdurationTestTrainGap);
+
+' Initial block list generated from default parameter values
+GenerateBlockList(nTrainingBlocks%);
+
+ToolbarStartup();
+
+
+'--------------------------------------------------------------------------------
+' PROTOCOL-SPECIFIC TOOLBAR FUNCTIONS
+'--------------------------------------------------------------------------------
+
+' Updates sampling window with protocol-specific configuration
+Proc WindowUpdate()
+    ChanShow("12..15");
+    HCursorNew(HHVELcom_ch%, -0.3750415);
+    HCursorNew(HHVELcom_ch%, -9.0);
+    HCursorNew(HHVELcom_ch%, 9.0);
+    ChanHide("1,5,6,7,8,10", "v1", "v2", "11,14,15");
+    SetOptoDelays();
+End
+
+Func ToolbarSineOn%()
+    ' TODO: Implement regular sine on button
+    return 1;
+end
+
+' Initializes and enables our toolbar functions
+Proc ToolbarStartup()
+    const initialDisabled%[] := {11}; '{5, 7, 9, 11};
+    ToolbarClear();
+    ToolbarSet(0, "Idle", ToolbarIdle%);
+    ToolbarSet(1, "Quit", ToolbarQuit%);
+    ToolbarSet(3, "New File", ToolbarNewFile%);
+    ToolbarSet(5, "Opto Settings", ToolbarOptoSettings%);
+    ToolbarSet(7, "Expmt Settings", ToolbarExpmtSettings%);
+    ToolbarSet(9, "Sine On", ToolbarSineOn%);
+    ToolbarSet(11, "Run Expmt", ToolbarRunExpmt%);
+    ToolbarEnable(initialDisabled%, 0); 
+    Toolbar("", 231);
+End
+
+' Updates settings values whenever another value is changed
+Func UpdateExpmtSettings%(item%) 
+    var trainingType_value% := DlgValue(1);
+    var nTrainingBlocks_value% := DlgValue(2);
+    var trainBlockDuration_value := DlgValue(3);
+    var nTestBlocks_value% := DlgValue(4);
+    var testBlockDuration_value := DlgValue(5);
+    var gapDur_value := DlgValue(6);
+    var flashDur_value := DlgValue(7);
+    var drumAmp_value := DlgValue(8);
+    var drumFreq_value := DlgValue(9);
+    var drumPhase_value := DlgValue(10);
+    var chairAmp_value := DlgValue(11);
+    var chairFreq_value := DlgValue(12);
+    var chairPhase_value := DlgValue(13);
+
+    ' Ensure drumAmp and chairAmp are valid values for the training type
+    if (trainingType_value% = 0) or (trainingType_value% = 3) then
+        if (drumAmp_value = 0) or (chairAmp_value = 0) then
+            Message("Zero deg/s is not a valid value for `x2 gain up` or `opto stim` experiments.\nVelocities wil be reset to default values.");
+            drumAmp_value := -10.0;
+            chairAmp_value := 10.0;
+            DlgValue(8, drumAmp_value);
+            DlgValue(11, chairAmp_value);
+        endif;
+    endif;
+
+    docase
+        case item% = 1 then
+            docase
+                case (trainingType_value% = 0) or (trainingType_value% = 3) then
+                    DlgValue(8, -10.0);
+                    DlgValue(11, 10.0);
+                case trainingType_value% = 1 then
+                    DlgValue(8, 10.0);
+                    DlgValue(11, 10.0);
+                case trainingType_value% = 2 then
+                    DlgValue(8, 0.0);
+                    DlgValue(11, 10.0);
+            endcase;
+        case item% = 7 then
+            if flashDur_value >= gapDur_value then
+                Message("TTL flash duration must be less than Gap duration.");
+                DlgValue(7, 0.1 * gapDur_value);
+            endif;
+        case item% = 8 then
+            docase
+                case (trainingType_value% = 0) or (trainingType_value% = 3) then
+                    DlgValue(11, (-1) * (drumAmp_value / Abs(drumAmp_value)) * Abs(drumAmp_value));
+                case trainingType_value% = 1 then
+                    DlgValue(11, (drumAmp_value / Abs(drumAmp_value)) * Abs(drumAmp_value));
+                case trainingType_value% = 2 then
+                    DlgValue(8, 0.0);
+            endcase;
+        case item% = 11 then
+            docase
+                case (trainingType_value% = 0) or (trainingType_value% = 3) then
+                    DlgValue(8, (-1) * (chairAmp_value / Abs(chairAmp_value)) * Abs(chairAmp_value));
+                case trainingType_value% = 1 then
+                    DlgValue(8, (chairAmp_value / Abs(chairAmp_value)) * Abs(chairAmp_value));
+                case trainingType_value% = 2 then
+                    DlgValue(8, 0.0);
+            endcase;
+    endcase;
+
+    return 1;
+End
+
+' Settings window for modifying general experimental parameters
+Func ToolbarExpmtSettings%()
+    var width% := 85;
+    DlgCreate("EXPERIMENT SETTINGS", 0, 0, width%, 13);  'Initialize new dialog window
+
+    var col1box% := 31, col1width% := col1box% + 12;
+    DlgText("Training type:", 4, 2);
+    DlgList(1, 20, "x2 gain up|x0 gain down|x1 light & chair only|opto stim", 9, col1box%-9, 2);
+    DlgText("Number of train blocks:", 4, 3);
+    DlgInteger(2, 11, 1, 99999, col1box%, 3, 0);
+    DlgText("Train block duration (s):", 4, 4);
+    DlgReal(3, 11, 0.001, 99999.0, col1box%, 4, 0);
+    DlgText("Number of test blocks:", 4, 6);
+    DlgInteger(4, 11, 1, 99999, col1box%, 6, 0);
+    DlgText("Test block duration (s):", 4, 7);
+    DlgReal(5, 11, 0.001, 99999.0, col1box%, 7, 0);
+    DlgText("Gap block duration (s):|Total duration of each Gap block.", 4, 9);
+    DlgReal(6, 11, 0.001, 100.0, col1box%, 9, 0);
+    DlgText("Gap flash duration (s):|Duration of light flash in the middle of each Gap block.", 4, 10);
+    DlgReal(7, 11, 0.000, 50.0, col1box%, 10, 0);
+
+    ' Drum parameters boxes
+    var col2txt% := col1width% + 6; 
+    var col2box% := col2txt% + 21, col2width% := 36;
+    DlgText("Velocity (deg/s):", col2txt%, 2);
+    DlgReal(8, 11, -50.0, 50.0, col2box%, 2, 0);
+    DlgText("Frequency (Hz):", col2txt%, 3);
+    DlgReal(9, 11, 0.1, 10.0, col2box%, 3, 0);
+    DlgText("Phase (deg):", col2txt%, 4);
+    DlgReal(10, 11, -360, 360, col2box%, 4, 0);
+
+    ' Chair parameters boxes
+    DlgText("Velocity (deg/s):", col2txt%, 7);
+    DlgReal(11, 11, -50.0, 50.0, col2box%, 7, 0);
+    DlgText("Frequency (Hz):", col2txt%, 8);
+    DlgReal(12, 11, 0.1, 10.0, col2box%, 8, 0);
+    DlgText("Phase (deg):", col2txt%, 9);
+    DlgReal(13, 11, -360, 360, col2box%, 9, 0);
+     
+    DlgAllow(0x3ff, ToolbarIdle%, UpdateExpmtSettings%);  'Allow all, no idle, update settings function
+    var gp1% := DlgGroup("General Parameters", 2, 1, col1width%, 10.5);
+    var gp2% := DlgGroup("Drum Parameters", col2txt%-2, 1, col2width%, 4.5);
+    var gp3% := DlgGroup("Chair Parameters", col2txt%-2, 6, col2width%, 4.5);
+
+    DlgShow(trainingType%, nTrainingBlocks%, trainBlockDuration, nTestBlocks%, testBlockDuration, 
+            gapDur, flashDur, drumAmp, drumFreq, drumPhase, chairAmp, chairFreq, chairPhase);
+
+    UpdateOptoParamsForSequencer();
+
+    'if lightType% = 2 then
+    '    docase
+    '        case optoType% = 0 then
+    '            skipOptoA% := 0;
+    '            skipOptoB% := 0;
+    '        case optoType% = 1 then
+    '            skipOptoA% := 0;
+    '            skipOptoB% := 1;
+    '        case optoType% = 2 then
+    '            skipOptoA% := 1;
+    '            skipOptoB% := 0;
+    '    endcase
+    'else
+    '    skipOptoA% := 1;
+    '    skipOptoB% := 1;
+    'endif
+
+    ' Re-compute number of cycle steps for GAP1, GAP2, and GAP3 in sequencer file
+    'CalculateGapSeqSteps();
+
+    ' Re-compute number of step cycles for testing and training blocks
+    'CalculateNumberOfCycles();
+
+    ' Re-compute number of cycle steps for ramps
+    'CalculateRampSeqSteps();
+
+    ' Re-generate the block list
+    'GenerateBlockList(nTrainingBlocks%);
+
+    ' Send new variable values to the sequencer
+    SetSequencerValues();
+    return 1;
+End
+
+
+' Updates settings values whenever another value is changed
+Func UpdateOptoSettings%(item%)
+    var temp_optoTrainingType% := DlgValue(1);
+    var temp_optoTimingOrder% := DlgValue(2);
+    var temp_optoEveryNthCycle% := DlgValue(3);
+
+    docase
+        case item% = 1 then
+            DlgEnable(0, imageArr%);
+            DlgEnable(1, imageArr%[temp_optoTrainingType%]);
+            if temp_optoTrainingType% = 3 then
+                DlgValue(3, 8);
+            else
+                DlgValue(3, 4);
+            endif;
+    endcase;
+
+    return 1;
+End
+
+' Settings window for modifying opto-related parameters
+Func ToolbarOptoSettings%()
+    var width% := 121;
+    DlgCreate("OPTO SETTINGS", 0, 0, width%, 21);  'Initialize new dialog window
+    DlgList(1, "Training type: ", "1Hz Singles|1Hz Pairs|0.5Hz Singles|2Hz Singles", 10, 20, 1);
+    DlgList(2, "Timing order: ", "Random|Sequential", 7, 20, 2); 
+    DlgInteger(3, "Every Nth cycle: ", 1, 16, 20, 3, 0);
+
+    imageArr%[3] := DlgImage(rootpath$+"/images/sine_2_hz_singles.jpg", 3, 5, -3, 15);
+    imageArr%[2] := DlgImage(rootpath$+"/images/sine_0-5_hz_singles.jpg", 3, 5, -3, 15);
+    imageArr%[1] := DlgImage(rootpath$+"/images/sine_1_hz_pairs.jpg", 3, 5, -3, 15);
+    imageArr%[0] := DlgImage(rootpath$+"/images/sine_1_hz_singles.jpg", 3, 5, -3, 15);
+
+    DlgAllow(0x3ff, ToolbarIdle%, UpdateOptoSettings%);  'Allow all, no idle, update settings function
+    DlgShow(optoTrainingType%, optoTimingOrder%, optoEveryNthCycle%);
+
+    UpdateOptoParamsForSequencer();
+    SetOptoDelays();
+
+    ' Send new variable values to the sequencer
+    SetSequencerValues();
+    return 1;
+End
+
+'--------------------------------------------------------------------------------
+' COMPUTE NUMBER OF SEQUENCER STEPS FOR GAP1, GAP2, GAP3 IN SEQUENCER FILE
+'--------------------------------------------------------------------------------
+Proc CalculateGapSeqSteps()
+    halfgapSeqSteps := (gapDur - flashDur) / 2.0;
+    gap1SeqSteps := Round((halfgapSeqSteps * sampleRate / 3.0) - 2.0);
+    gap2SeqSteps := Round((flashDur * sampleRate / 3.0));
+    gap3SeqSteps := Round((halfgapSeqSteps * sampleRate / 3.0) - 1.0);
+End
+
+
+'--------------------------------------------------------------------------------
+' GENERATE/UPDATE BLOCK LIST FOR A GIVEN NUMBER OF TRAINING BLOCKS
+'--------------------------------------------------------------------------------
+Proc GenerateBlockList(num%)
+    var i%;
+    var pretestList$[] := {"Gg", "Pp", "Gg", "Pp"};
+    var trainingList$[] := {"Gg", "Pp", "Gg", "Tt"};
+    var posttestList$[] := {"Gg", "Pp", "Gg", "Pp", "Gg", "Pp"};
+    var pretestListLen% := Len(pretestList$[]);
+    var trainingListLen% := Len(trainingList$[]);
+    var posttestListLen% := Len(posttestList$[]);
+
+    ' Compute total number of blocks for during training section and for the entire experiment
+    var trainingTotalListLen% := Round(num% * trainingListLen%);
+    var experimentTotalListLen% := Round(pretestListLen% + posttestListLen% + trainingTotalListLen%);
+
+    resize blockList$[experimentTotalListLen%];  'Resize blockList$[] array to the required size
+    ' Reset all elements of the block list to empty string values
+    for i% := 0 to experimentTotalListLen%-1 do
+        blockList$[i%] := "";
+    next;
+
+    ' Populate array with pre-training test blocks
+    for i% := 0 to pretestListLen%-1 do
+        blockList$[i%] := pretestList$[i%];
+    next;
+
+    for i% := 0 to posttestListLen%-1 do
+        blockList$[experimentTotalListLen%-posttestListLen%+i%] := posttestList$[i%];
+    next;
+
+    ' Populate array with training blocks
+    for i% := pretestListLen% to Round(pretestListLen% + trainingTotalListLen% - 3) step 4 do
+        blockList$[i%] := trainingList$[0];
+        blockList$[i%+1] := trainingList$[1];
+        blockList$[i%+2] := trainingList$[2];
+        blockList$[i%+3] := trainingList$[3];
+    next;
+
+    ' Update nBlocks% with current number of total blocks
+    nBlocks% := Len(blockList$[]);
+    PrintLog("\nBlock list generated:  ", blockList$[], "\n");
+
+    ' Do a final check to make sure there are no consecutive duplicates
+    for i% := 0 to experimentTotalListLen%-2 do
+        if blockList$[i%] = blockList$[i%+1] then
+            Message("[ERROR] Duplicate blocks found between elements %d and %d!", i%, i%+1);
+            halt
+        endif;
+    next;
+End
+
+
+'--------------------------------------------------------------------------------
+' SEND CURRENT SPIKE2 VARIABLE VALUES TO SEQUENCER
+'--------------------------------------------------------------------------------
+Proc SetSequencerValues()
+    ' Gap block parameters
+    SampleSeqVar(6, gap1SeqSteps);  'Gap1Dur
+    SampleSeqVar(7, gap2SeqSteps);  'FlashDur
+    SampleSeqVar(8, gap3SeqSteps);  'Gap3Dur
+
+    ' Drum parameters
+    SampleSeqVar(9, Amp2Int32%(drumVelocityOffset, drumVelocity2Voltage));  'DrumOff
+    SampleSeqVar(10, Amp2Int16%(drumAmp, drumVelocity2Voltage));            'DrumAmp
+    SampleSeqVar(11, Hz2Int32%(drumFreq));                                  'DrumFrq
+    SampleSeqVar(12, Angle2Int32%(drumPhase));                              'DrumPhs
+
+    ' Chair parameters
+    SampleSeqVar(13, Amp2Int32%(chairVelocityOffset, chairVelocity2Voltage));  'ChairOff
+    SampleSeqVar(14, Amp2Int16%(chairAmp, chairVelocity2Voltage));             'ChairAmp
+    SampleSeqVar(15, Hz2Int32%(chairFreq));                                    'ChairFrq
+    SampleSeqVar(16, Angle2Int32%(newChairPhase));                             'ChairPhs
+    SampleSeqVar(17, Angle2Int32%(newChairAngle));                             'ChairAng
+
+    ' Opto stim parameters
+    SampleSeqVar(18, delayArrLen%-1);      'NDelays
+    SampleSeqVar(19, digpsDuration%);      'PulDur
+    SampleSeqVar(20, digpsInterval%);      'PulInt
+    SampleSeqVar(21, digpsCycleCount%);    'PulNCycl
+    SampleSeqVar(22, optoEveryNthCycle%);  'CycleInt
+    SampleSeqVar(23, ttlNum1%);            'TTLNum1
+    SampleSeqVar(24, ttlNum2%);            'TTLNum2
+
+    CheckDelayChange(); 
+End
+
+Proc SetOptoDelays()
+    var tempArrLen%, delayArr%[1];
+    docase
+        case optoTrainingType% = 0 then
+            delayShift% := shift1Hz%;
+            delayArrLen% := Len(delays1Hz%[]);
+            resize delayArr%[delayArrLen%];
+            ArrConst(delayArr%[], delays1Hz%[]);
+        case optoTrainingType% = 1 then
+            delayShift% := shift1Hz%;
+            delayArrLen% := Len(delays1Hz%[]);
+            resize delayArr%[delayArrLen%];
+            ArrConst(delayArr%[], delays1Hz%[]);
+            tempArrLen% := delayArrLen%;
+            delayArrLen% := Round(BinomialC(delayArrLen%,2) + 1);
+        case optoTrainingType% = 2 then
+            delayShift% := shift0p5Hz%;
+            delayArrLen% := Len(delays0p5Hz%[]);
+            resize delayArr%[delayArrLen%];
+            ArrConst(delayArr%[], delays0p5Hz%[]);
+        case optoTrainingType% = 3 then
+            delayShift% := shift2Hz%;
+            delayArrLen% := Len(delays2Hz%[]);
+            resize delayArr%[delayArrLen%];
+            ArrConst(delayArr%[], delays2Hz%[]);
+    endcase;
+
+    var delays1%[delayArrLen%];
+    var delays2%[delayArrLen%];
+
+    var ii%, jj%, num%;
+    if optoTrainingType% = 1 then
+        for ii% := 0 to tempArrLen%-1 do
+            for jj% := (ii%+1) to tempArrLen%-1 do
+                delays1%[num%] := delayArr%[ii%];
+                delays2%[num%] := delayArr%[jj%];
+                if delays2%[num%] > (shiftDelay2% + 5) then
+                    delays2%[num%] := delays2%[num%] - delays1%[num%] - shiftDelay2%;
+                endif;
+                num% := num% + 1;
+            next;
+        next;
+        delays1%[num%] := -1;
+        delays2%[num%] := -1;
+    else
+        for ii% := 0 to delayArrLen%-1 do
+            delays1%[ii%] := delayArr%[ii%];
+            delays2%[ii%] := -1;
+        next;
+    endif;
+
+    var nrepeats% := 2;
+    var fullDelays1%[Round(nrepeats%*delayArrLen%)];
+    var fullDelays2%[Round(nrepeats%*delayArrLen%)];
+    num% := 0;
+    for ii% := 1 to nrepeats% do
+        for jj% := 0 to delayArrLen%-1 do
+            if optoTimingOrder% = 0 then
+                ArrSort(delays1%[], -1, delays2%[]);
+            endif;
+            fullDelays1%[num%] := delays1%[jj%];
+            fullDelays2%[num%] := delays2%[jj%];
+            num% := num% + 1;
+        next;
+    next;
+
+    PrintLog("delays1: ", fullDelays1%[]);
+    PrintLog("delays2: ", fullDelays2%[], "\n");
+    SampleSeqTable(fullDelays1%[], 0);
+    SampleSeqTable(fullDelays2%[], 5000);
+End
+
+Proc CheckDelayChange()
+    var currIdx1% := SampleSeqVar(26);
+    var currIdx2% := SampleSeqVar(27);
+    if (currIdx1% + currIdx2% > 0) then
+        if  (currIdx1% <> prevIdx1%) then
+            currDelay1% := SampleSeqVar(28);
+            currDelay2% := SampleSeqVar(29);
+            if currDelay1% = -1 then
+                txt1$ := "NoStim";
+            else
+                txt1$ := Str$(currDelay1%-delayShift%)+"ms";
+            endif;
+            if currDelay2% = -1 then
+                txt2$ := "NoStim";
+            else
+                txt2$ := Str$(currDelay1%-delayShift%+currDelay2%+shiftDelay2%)+"ms"; 'currDelay1%+currDelay2%-delayShift%
+            endif;
+            SampleText("("+txt1$+", "+txt2$+")", -1, 1);
+            prevIdx1% := currIdx1%;
+            PrintLog("optoDelay1 (%d): %s | optoDelay2 (%d): %s\n", SampleSeqVar(26), txt1$, SampleSeqVar(27), txt2$);
+        endif;
+    endif;
+End
+
+Proc UpdateOptoParamsForSequencer()
+    if digpsInterval% <= digpsDuration% then
+        digpsInterval% := digpsDuration% + 1;
+    endif;
+
+    var pulseGap%;
+    if digpsCycleCount% > 1 then
+        pulseGap% := Round(digpsInterval% - digpsDuration%);
+    else
+        pulseGap% := 0;
+    endif;
+
+    optoDuration% := Round((digpsInterval% * digpsCycleCount%) - pulseGap%);
+    var offsetPhaseAngle% := Round(((optoDuration%/2) + 22) * 360 / sampleRate);
+    newChairPhase := chairPhase - offsetPhaseAngle%;
+    newChairAngle := 1.0 * offsetPhaseAngle%;
+End

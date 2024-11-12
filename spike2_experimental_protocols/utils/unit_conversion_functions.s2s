@@ -4,7 +4,7 @@
 ' These functions convert to/from values when passing them to/from sequencer
 ' ------------------------------------------------------------------------------
 
-' Angles in the range [-180,180] should span [-2147483648.0,2147483647.0]
+' Angles in the range [-180, 180] should span [-2147483648.0, 2147483647.0]
 Func Angle2Int32%(angle)
   Return(angle * 2147483647.0 / 180);
 End
@@ -16,23 +16,68 @@ Func Hz2Int32%(hz)
   Return(hz * 11930465 * 360 / 1000);
 End
 
-' Amplitudes must be converted such that [ 0, 32768 ] spans the positive range of the dac, e.g. [0, 5 ]
-' We have to include the dac maximum and the degrees-per-second-to-voltage conversion factor. Does not include offset.
-Func ChairAmp2Int16%(amp)
-  Return(amp * chairVelocity2Voltage * 32768 / voltageMax);
+' Amplitudes for DAC, ADDAC, RAMP, and OFFSET commands must be converted such that it
+'   spans the 32-bit range of integer values [-32768, 32768]. We have to include the DAC
+'   maximum and the degrees-per-second-to-voltage conversion factor. Does not include offset.
+'   Modified version of CED conversion code found in: 
+'   "C:\Users\Public\Documents\Spike10Shared\Include\seqlib.s2s"
+Func Amp2Int32%(amp, scale)
+    var int32%;
+    'var float32 := ((amp * scale * (6553.6/voltageMax)) * 65536.0);  'Floating point result
+    var float32 := amp * scale * 2147483647 / voltageMax;  'Floating point result
+    if float32 > 2147483647.0 then       '2147483647 is the largest positive
+        PrintLog("AMP2INT32 OVERFLOW: %.1f\n", float32);
+        int32% := 2147483647;            'integer value
+    else
+        if float32 < -2147483647.0 then  '-2147483648 is the lowest negative value
+            PrintLog("AMP2INT32 OVERFLOW: %.1f\n", float32);
+            int32% := -2147483647;       'but we have to stay one above that
+        else
+            int32% := round(float32);    'We can be sure this will not overflow
+        endif;
+    endif;
+    return int32%;
 End
 
+' Amplitudes for SZ command must be converted such that it spans the 16-bit range of integer 
+'   values [-32768, 32768]. We have to include the DAC maximum and the degrees-per-second-to-voltage 
+'   conversion factor. Does not include offset.
+func Amp2Int16%(amp, scale)
+    var int16%;                        'Integer value for the result
+    'var float16:= (amp * scale * (6553.6/voltageMax));  ' Floating point result
+    var float16 := amp * scale * 32768 / voltageMax;  'Floating point result
+    if float16 > 32767.0 then          '32767 is the largest positive 16-bit
+        PrintLog("AMP2INT16 OVERFLOW: %.1f\n", float16);
+        int16% := 32767;               'integer value
+    else
+        if float16 < -32767.0 then     '-32768 is the lowest negative value
+            PrintLog("AMP2INT16 OVERFLOW: %.1f\n", float16);
+            int16% := -32767;          'but we have to stay one above that
+        else
+            int16% := round(float16);  'We can be sure this will not overflow
+        endif;
+    endif;
+    return int16%;
+end
 
-Func DrumAmp2Int16%(amp)
-  Return(amp * drumVelocity2Voltage * 32768 / voltageMax);
-End
+' ----------
+' Below are the original function definitions for conversion to Int16% and Int32%.
+' However, these do not properly convert voltages to their required integer ranges.
+' I (Brian) am unsure why these were written this way as they are not accurate...
+' I will keep them here as a record of how these values were being calculated before.
 
+'Func ChairAmp2Int16%(amp)
+'  Return(amp * chairVelocity2Voltage * 32768 / voltageMax);
+'End
 
-Func ChairAmp2Int32%(amp)
-  Return(amp * chairVelocity2Voltage * 2147483647 / voltageMax);
-End
+'Func DrumAmp2Int16%(amp)
+'  Return(amp * drumVelocity2Voltage * 32768 / voltageMax);
+'End
 
+'Func ChairAmp2Int32%(amp)
+'  Return(amp * chairVelocity2Voltage * 2147483647 / voltageMax);
+'End
 
-Func DrumAmp2Int32%(amp)
-  Return(amp * drumVelocity2Voltage * 2147483647 / voltageMax);
-End
+'Func DrumAmp2Int32%(amp)
+'  Return(amp * drumVelocity2Voltage * 2147483647 / voltageMax);
+'End

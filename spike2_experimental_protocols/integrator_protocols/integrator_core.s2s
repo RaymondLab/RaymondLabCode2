@@ -1,0 +1,158 @@
+' ------------------------------------------------------------------------------
+' INTEGRATOR - CORE SCRIPT USED BY ALL INTEGRATOR PROTOCOLS (REQUIRES SPIKE2 VERSION 10)
+'
+' Contains variables/functions that are shared by all integrator protocols
+' NOTE: Integrator scripts only work with motors in POSITION command mode
+' ------------------------------------------------------------------------------
+' Define the parent directory all other paths will be relative to
+const rootpath$ := "C:/Users/Public/RaymondLabCode2/spike2_experimental_protocols";
+FilePathSet(rootpath$, 0);
+
+' These files are the same for ALL EXPERIMENTAL protocols
+#include "../utils/read_write_rig_params.s2s"
+#include "../utils/sampling_window_config.s2s"
+#include "../utils/unit_conversion_functions.s2s"
+
+' Load rig-specific parameters from local-computer's registry
+LoadRigParams();
+
+' Gap block parameters
+var gapDur := 5.0;  'Total duration (in seconds) of each gap block [default 5.0]
+
+' Testing and Training block parameters
+var nTestingBlocks%    := 1;       'Number of training blocks [default 1]
+var testBlockDuration  := 300.0;   'Total duration (s) of test blocks (not including Gap blocks) [default 300.0]
+var nTrainingBlocks%   := 1;       'Number of training blocks [default 1]
+var trainBlockDuration := 600.0;  'Total duration (s) of training blocks (not including Gap blocks) [default 2700.0]
+var trainingType%      := 0;       'Defines the training type for the experiment [default 0]
+
+' Sinusoidal test stimulus parameters
+var sinAmp   := 20.0;  'In deg/s
+var sinFreq  := 1.0;   'In Hz
+var sinPhase := -90;   'In deg
+
+' Initialize variables for ToolbarIdle% function
+var nBlocks%, blockList$[1];
+var blockNum%;                                            'Counter which defines which block number is currently active
+var pretestBlockNum%, trainBlockNum%, posttestBlockNum%;  'Stores current block numbers by type
+var blockMarkers$;                                        'Provides the SampleKey commands for the currently active block
+var blockFlag%;                                           'Flag which defines whether a block is actively running
+var runFlag%;                                             'Flag which denotes whether the experiment is activately running
+var lowerSampleKey$, upperSampleKey$;                     'Stores start/end sampleykeys of current block
+
+var blockStartTime, blockEndTime, prevCommandTime, commandVelocity;
+var hepos_expression$;
+var hepos_vch% := 0;
+var scaleCh1 := 1.0; 
+var scaleCh2 := 1.0;
+var bestChannel% := 0;
+var nullCursorNum%;
+var nullEyePos := 0.0;
+var nullEyePosType% := 0;
+var nullEyePosBlock% := 2;
+
+var trainingGain := -1.0;  '<0 trains to leak, >0 trains to instability
+var velocityGainMin := 2.0;  'Considered as a "low" velocity gain in Debowy paper
+var velocityGainMax := 40.0;  'Maximum velocity gain used in Major and Debowy papers
+
+
+'--------------------------------------------------------------------------------
+' GENERAL TOOLBAR FUNCTIONS
+'--------------------------------------------------------------------------------
+' Updates the window with additional protocol-specific modifications
+Proc WindowUpdate()
+    hepos_vch% := VirtualChan(0, "", 0, 0.001);
+    if bestChannel% = 0 then
+        hepos_expression$ := Str$(scaleCh1)+"*ch("+Str$(hepos1_ch%)+")";
+    else
+        hepos_expression$ := Str$(scaleCh2)+"*ch("+Str$(hepos2_ch%)+")";
+    endif;
+    VirtualChan(hepos_vch%, hepos_expression$, 0, 1.0/sampleRate);
+    ChanProcessAdd(hepos_vch%, 1, 0.05); 
+    ChanUnits$(hepos_vch%, "deg");
+    ChanTitle$(hepos_vch%, "hepos"); 
+    ChanComment$(hepos_vch%, "Scaled eye position used for velocity command");
+    nullCursorNum% := HCursorNew(hepos_vch%, 0);
+    'ChanHide(-1);
+    ChanShow(-1);
+    ChanHide("12..15", "v1", "v2");  'Hide channels not used
+End
+
+' Function that defines what happens during idle times (in computer cycles) while actively sampling
+Func ToolbarIdle%()
+    ' Check whether a valid sampling view is currently running before continuing
+    if ViewKind() <> 0 then
+        return 1;
+    endif;
+    SendDrumCommand();
+    if runFlag% = 1 then  'Check whether the "Run Experiment" button was pressed
+        blockFlag% := SampleSeqVar(1);  'Get the current blockFlag% value from the 1401 sequencer variable
+        if blockFlag% = 0 then  'Check whether a block is not currently running
+            if blockNum% > 0 then
+                blockEndTime := MaxTime();
+                lowerSampleKey$ := Right$(blockMarkers$, 1);
+                SampleKey(lowerSampleKey$);  'Sends a lower-case keyboard command that defines the end of a block (useful only for analysis)
+                PrintLog("Sample time: %.4f seconds | Block number: %d of %d | Block marker: %s\n", blockEndTime, blockNum%, nBlocks%, lowerSampleKey$);
+                if (blockNum% <= nullEyePosBlock%) and (lowerSampleKey$ = "p") then
+                    CalculateNullPosition();
+                endif;
+            endif; 
+            if blockNum% < nBlocks% then  'Check whether current block number is not greater than or equal to maximum number of blocks
+                blockStartTime := MaxTime();
+                blockMarkers$ := blockList$[blockNum%];
+                upperSampleKey$ := Left$(blockMarkers$, 1);
+                SampleKey(upperSampleKey$);  'Send SampleKey() command to the 1401 sequencer of the current block's letter marker
+                AddTextMark(upperSampleKey$, blockNum%);
+                blockNum% := blockNum% + 1;  'Increase the block number by one
+                PrintLog("Sample time: %.4f seconds | Block number: %d of %d | Block marker: %s\n", blockStartTime, blockNum%, nBlocks%, upperSampleKey$);
+            else
+                runFlag% := 0;  'Set experiment flag to off
+                SampleKey("R");  'Reset 1401 sequencer to initial state
+                SampleText("END", -1, 0); 
+                SampleKey("a");  'Sends a lower-case keyboard command that defines the end of the experiment (useful only for analysis)
+                ToolbarSet(40, "Run Expmt", ToolbarRunExpmt%);
+                PrintLog("EXPERIMENT COMPLETE!\n\n");
+                Yield(2);
+                XRange();  'Zoom out to view entire experiement
+            endif;
+        endif;
+    endif;
+    return 1;
+End
+
+Proc CalculateNullPosition()
+    var nullEyeDuration := Min(blockEndTime-blockStartTime, 100000);  'Max array size in Spike2
+    if nullEyePosType% = 1 then
+        'Use quantile mean
+        var lowerQ := 0.05;
+        var upperQ := 0.95;
+        var buffer[nullEyeDuration * 1000];
+        var n% := ChanData(hepos_vch%, buffer, blockStartTime, blockEndTime);
+        ArrSort(buffer[:n%]);
+        var lowerIdx% := Round(n% * lowerQ);
+        var upperIdx% := Round(n% * upperQ);
+        lowerQ := buffer[lowerIdx%];
+        upperQ := buffer[upperIdx%];
+        nullEyePos := (lowerQ + upperQ) / 2.0;
+    else
+        'Use median
+        nullEyePos := ChanMeasure(hepos_vch%, 21, blockStartTime, blockEndTime);
+    endif;
+    ' Update "hepos" channel (v3) with provided scalings
+    if bestChannel% = 0 then
+        hepos_expression$ := Str$(scaleCh1)+"*ch("+Str$(hepos1_ch%)+")-"+Str$(nullEyePos);
+    else
+        hepos_expression$ := Str$(scaleCh2)+"*ch("+Str$(hepos2_ch%)+")-"+Str$(nullEyePos);
+    endif;
+    VirtualChan(hepos_vch%, hepos_expression$, 0, 1.0/sampleRate);
+    PrintLog("\nCaculated Null Position: %.3f deg\n\n", nullEyePos);
+End
+
+' Function that stops all stimuli, resets the sequencer to default, and quits out of the toolbar
+Func ToolbarQuit%()
+    SampleKey("R");
+    SampleKey("a");
+    SampleStop();
+    PrintLog("MANUALLY QUIT!\n\n");
+    return 0;
+End

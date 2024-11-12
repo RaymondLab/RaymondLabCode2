@@ -75,8 +75,8 @@ Func driftFix%()
     ArrConst(hhposErrors[1:numErrors%-1], hhposErrors[0:numErrors%-1]);
 
     ' Error is defined as the minimum of the magnitude of position over a cycle period
-    htposErrors[0] := ChanMeasure(HTPOSdf_vch%, 9, currentTime-(stepPeriod/1000), currentTime);
-    hhposErrors[0] := ChanMeasure(HHPOSdf_vch%, 9, currentTime-(stepPeriod/1000), currentTime);
+    htposErrors[0] := ChanMeasure(HTPOScom_ch%, 9, currentTime-(stepPeriod/1000), currentTime);
+    hhposErrors[0] := ChanMeasure(HHPOScom_ch%, 9, currentTime-(stepPeriod/1000), currentTime);
 
     ' Proportional error term is the mean of the all errors over the last period
     var htposCurrError := drumSign * ArrSum(htposErrors) / numErrors%;
@@ -117,8 +117,8 @@ Func ToolbarNewFile%()
     ToolbarEnable(3, 0); 
     SetSequencerValues(); Yield();
     ' Ensure that the position magnitude virtual channels are in the positive direction
-    VirtualChan(HTPOSdf_vch%, Str$(drumSign)+"*ch("+Str$(htpos_ch%)+")", 0, 1.0/sampleRate);
-    VirtualChan(HHPOSdf_vch%, Str$(chairSign)+"*ch("+Str$(hhpos_ch%)+")", 0, 1.0/sampleRate);
+    VirtualChan(HTPOScom_ch%, Str$(drumSign)+"*ch("+Str$(htpos_ch%)+")", 0, 1.0/sampleRate);
+    VirtualChan(HHPOScom_ch%, Str$(chairSign)+"*ch("+Str$(hhpos_ch%)+")", 0, 1.0/sampleRate);
     SampleKey("R");  'Ensures that sequencer is set to its default configuration prior to sampling
     return 1;
 End
@@ -138,7 +138,7 @@ Func ToolbarIdle%()
         if blockFlag% = 0 then  'Check whether a block is not currently running
             if blockNum% > 0 then
                 SampleKey(Right$(blockMarkers$, 1));  'Sends a lower-case keyboard command that defines the end of a block (useful only for analysis)
-                PrintLog("Sample time: %.4f seconds | Block number: %d of %d | Block marker: %s\n", MaxTime(), blockNum%+1, nBlocks%, Right$(blockMarkers$,1));
+                PrintLog("Sample time: %.4f seconds | Block number: %d of %d | Block marker: %s\n", MaxTime(), blockNum%, nBlocks%, Right$(blockMarkers$,1));
             endif; 
             if blockNum% < nBlocks% then  'Check whether current block number is not greater than or equal to maximum number of blocks
                 blockMarkers$ := blockList$[blockNum%];

@@ -145,11 +145,11 @@ Func UpdateExpmtSettings%(item%)
                 case temp_trainingType% = 1 then
                     DlgValue(7, (temp_chairAmp / Abs(temp_chairAmp)) * Abs(temp_chairAmp));
             endcase;
-        case item% = 11 then
-            if round(temp_stepRampTime) < round(temp_maxAmp) then 
-                Message("For the safety of the motors, ramp time (in ms) must not be less than the largest velocity (in deg/s).");
-                DlgValue(11, round(temp_maxAmp));
-            endif;
+        'case item% = 11 then
+        '    if round(temp_stepRampTime) < round(temp_maxAmp) then 
+        '        Message("For the safety of the motors, ramp time (in ms) must not be less than the largest velocity (in deg/s).");
+        '        DlgValue(11, round(temp_maxAmp));
+        '    endif;
         case item% = 14 then
             docase
                 case temp_lightType% = 0 then
@@ -206,12 +206,12 @@ Func ToolbarExpmtSettings%()
     var col2box% := col2txt% + 21, col2width% := 36;
     ' Drum parameters boxes
     DlgText("Velocity (deg/s):", col2txt%, 2);
-    DlgReal(7, 11, -30.0, 30.0, col2box%, 2, 0);
+    DlgReal(7, 11, -50.0, 50.0, col2box%, 2, 0);
     DlgText("A. Delay time (ms):", col2txt%, 3);
     DlgReal(8, 11, -10000, 10000, col2box%, 3, 0);
     ' Chair parameters boxes
     DlgText("Velocity (deg/s):", col2txt%, 6);
-    DlgReal(9, 11, -30.0, 30.0, col2box%, 6, 0);
+    DlgReal(9, 11, -50.0, 50.0, col2box%, 6, 0);
     DlgText("A. Delay time (ms):", col2txt%, 7);
     DlgReal(10, 11, -10000, 10000, col2box%, 7, 0);
 
@@ -263,8 +263,8 @@ Func ToolbarExpmtSettings%()
     endif
 
     ' Ensure that the position magnitude virtual channels are in the positive direction
-    VirtualChan(HTPOSdf_vch%, Str$(drumSign)+"*ch("+Str$(htpos_ch%)+")", 0, 1.0/sampleRate);
-    VirtualChan(HHPOSdf_vch%, Str$(chairSign)+"*ch("+Str$(hhpos_ch%)+")", 0, 1.0/sampleRate);
+    VirtualChan(HTPOScom_ch%, Str$(drumSign)+"*ch("+Str$(htpos_ch%)+")", 0, 1.0/sampleRate);
+    VirtualChan(HHPOScom_ch%, Str$(chairSign)+"*ch("+Str$(hhpos_ch%)+")", 0, 1.0/sampleRate);
 
     if lightType% = 2 then
         docase
@@ -364,10 +364,10 @@ Proc CalculateRampSeqSteps()
     stepSeqSteps := round(((stepAmpTime - 1.0) / 3.0) - 1.0);
     pauseSeqSteps := round(((stepPauseTime - 1.0) / 3.0) - 1.0);
 
-    drumRampSeqSlope := round(DrumAmp2Int32%(Abs(drumAmp)) / stepRampTime);
+    drumRampSeqSlope := round(Amp2Int32%(Abs(drumAmp), drumVelocity2Voltage) / stepRampTime);
     drumDelaySeqSteps := round(drumStepDelayTime / 3.0);
 
-    chairRampSeqSlope := round(ChairAmp2Int32%(Abs(chairAmp)) / stepRampTime);
+    chairRampSeqSlope := round(Amp2Int32%(Abs(chairAmp), chairVelocity2Voltage) / stepRampTime);
     chairDelaySeqSteps := round(chairStepDelayTime / 3.0);
 End
 
@@ -445,18 +445,18 @@ Proc SetSequencerValues()
     SampleSeqVar(8, gap3SeqSteps);
 
     ' Drum parameters
-    SampleSeqVar(9, DrumAmp2Int32%(drumVelocityOffset));
-    SampleSeqVar(10, DrumAmp2Int32%(drumPosStepAmplitude));
-    SampleSeqVar(11, DrumAmp2Int32%(drumNegStepAmplitude));
+    SampleSeqVar(9, Amp2Int32%(drumVelocityOffset, drumVelocity2Voltage));
+    SampleSeqVar(10, Amp2Int32%(drumPosStepAmplitude, drumVelocity2Voltage));
+    SampleSeqVar(11, Amp2Int32%(drumNegStepAmplitude, drumVelocity2Voltage));
     SampleSeqVar(12, drumRampSeqSlope);
     SampleSeqVar(13, stepSeqSteps);
     SampleSeqVar(14, pauseSeqSteps);
     SampleSeqVar(15, drumDelaySeqSteps);
 
     ' Chair parameters
-    SampleSeqVar(16, ChairAmp2Int32%(chairVelocityOffset));
-    SampleSeqVar(17, ChairAmp2Int32%(chairPosStepAmplitude));
-    SampleSeqVar(18, ChairAmp2Int32%(chairNegStepAmplitude));
+    SampleSeqVar(16, Amp2Int32%(chairVelocityOffset, chairVelocity2Voltage));
+    SampleSeqVar(17, Amp2Int32%(chairPosStepAmplitude, chairVelocity2Voltage));
+    SampleSeqVar(18, Amp2Int32%(chairNegStepAmplitude, chairVelocity2Voltage));
     SampleSeqVar(19, chairRampSeqSlope);
     SampleSeqVar(20, stepSeqSteps);
     SampleSeqVar(21, pauseSeqSteps);
