@@ -13,7 +13,7 @@ var HTVELcom_chScaling, HTVELcom_chOffset, HHVELcom_chScaling, HHVELcom_chOffset
 var htpos_chScaling, htpos_chOffset, hhpos_chScaling, hhpos_chOffset;
 var htvel_chScaling, htvel_chOffset, hhvel_chScaling, hhvel_chOffset;
 var hepos1_chScaling, hepos1_chOffset, hepos2_chScaling, hepos2_chOffset;
-var rigID$, rigparam_error%;
+var rigID$, rigparam_error%, voltageMax;
 
 ' Initialize general toolbar-related variables
 var HHVELcom_port%, HTVELcom_port%, HHPOScom_port%, HTPOScom_port%, hhpos_port%, htpos_port%, hepos1_port%, hepos2_port%, hhvel_port%, htvel_port%;
@@ -40,7 +40,8 @@ End
 
 Proc LoadRigParams()
     PrintLog("Loading rig parameters from registry (HKEY_CURRENT_USER\\Software\\CED\\Spike2\\RigParams)...\n");
-    rigID$ := ReadRigParam$("RigParams", "rigID");  'Unique ID/Number of Rig
+    rigID$     := ReadRigParam$("RigParams", "rigID");            'Unique ID/Number of Rig
+    voltageMax := Val(ReadRigParam$("RigParams", "voltageMax"));  'Maximum voltage range set in Spike2 for the 1401
 
     drumVelocity2Voltage      := Val(ReadRigParam$("RigParams", "drumVelocity2Voltage"));       'Drum velocity scaling converted to voltage
     drumVelocityOffsetInitial := Val(ReadRigParam$("RigParams", "drumVelocityOffsetInitial"));  'Drum velocity offset converted to voltage (initial)

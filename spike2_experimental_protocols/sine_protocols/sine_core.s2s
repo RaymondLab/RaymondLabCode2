@@ -15,18 +15,21 @@ FilePathSet(rootpath$, 0);
 ' Load rig-specific parameters from local-computer's registry
 LoadRigParams();
 
+'drumVelocity2Voltage := drumVelocity2Voltage / 2;
+'chairVelocity2Voltage := chairVelocity2Voltage / 2;
+
 ' Drum stimulus default sine parameters
-var drumAmp        := -10.0;                      'In deg/s
+var drumAmp        := -10.0;                     'In deg/s
 var drumFreq       := 1;                         'In Hz
 var drumPeriod     := 1/drumFreq;                'In seconds
-var drumPhase      := -90;                         'In degrees
+var drumPhase      := -90;                       'In degrees
 var drumSign       := drumAmp / Abs(drumAmp);    'Sign of given drum amplitude
 
 ' Chair stimulus default sine parameters
-var chairAmp       := 10.0;                     'In deg/s
+var chairAmp       := 10.0;                      'In deg/s
 var chairFreq      := 1;                         'In Hz
 var chairPeriod    := 1/chairFreq;               'In seconds
-var chairPhase     := -90;                         'In degrees
+var chairPhase     := -90;                       'In degrees
 var chairSign      := chairAmp / Abs(chairAmp);  'Sign of given chair amplitude
 var chairDirection := 1;                         '0 for ipsi, 1 for contra
 
@@ -42,10 +45,10 @@ var gapDur   := 5.0;  'Total duration (in seconds) of each gap block [default 5.
 var flashDur := 0.2;  'Duration of TTL flash (in seconds) halfway into each gap block [default 0.2]
 
 ' Test and Training block parameters
-var nTestBlocks%       := 1;       'Number of pre/post-training test blocks [default 1]
+var nTestBlocks%       := 3;       'Number of pre/post-training test blocks [default 3]
 var testBlockDuration  := 45.0;    'Total duration (s) of test blocks [default 45.0]
-var nTrainingBlocks%   := 1;       'Number of training blocks [default 1]
-var trainBlockDuration := 1800.0;  'Total duration (s) of training block(s) [default 1800.0]
+var nTrainingBlocks%   := 6;       'Number of training blocks [default 6]
+var trainBlockDuration := 300.0;  'Total duration (s) of training block(s) [default 300.0]
 var trainingType%      := 0;       'Defines the training type for the experiment [default 0]
 
 ' ToolbarIdle% variables
@@ -57,6 +60,7 @@ var runFlag%;  'Flag which denotes whether the experiment is activately running 
 var lowerSampleKey$, upperSampleKey$;
 var pretestBlockNum%, trainBlockNum%, posttestBlockNum%;
 var blockStartTime, blockEndTime;
+var fileComments$[5];
 
 
 '--------------------------------------------------------------------------------
@@ -118,7 +122,7 @@ Func ToolbarNewFile%()
     WindowUpdate();  'Updates sampling window with protocol-specific configuration
     WindowVisible(3);  'Maximizes the new sampling window to fit the screen
     ToolbarEnable(-1, 1);  'Enables buttons that require a new sampling window
-    ToolbarEnable(3, 0); 
+    ToolbarEnable(2, 0); 
     SetSequencerValues(); Yield();
     ' Ensure that the position magnitude virtual channels are in the positive direction
     VirtualChan(HTPOScom_ch%, Str$(drumSign)+"*ch("+Str$(htpos_ch%)+")", 0, 1.0/sampleRate);
@@ -149,7 +153,7 @@ Func ToolbarIdle%()
                 blockMarkers$ := blockList$[blockNum%];
                 upperSampleKey$ := Left$(blockMarkers$, 1);
                 SampleKey(upperSampleKey$);  'Send SampleKey() command to the 1401 sequencer of the current block's letter marker
-                'AddTextMark(upperSampleKey$, blockNum%);
+                AddTextMark(upperSampleKey$, blockNum%);
                 blockNum% := blockNum% + 1;  'Increase the block number by one
                 PrintLog("Sample time: %.4f seconds | Block number: %d of %d | Block marker: %s\n", blockStartTime, blockNum%, nBlocks%, upperSampleKey$);
             else
@@ -157,7 +161,7 @@ Func ToolbarIdle%()
                 SampleKey("R");  'Reset 1401 sequencer to initial state
                 SampleText("END", -1, 0); 
                 SampleKey("a");  'Sends a lower-case keyboard command that defines the end of the experiment (useful only for analysis)
-                ToolbarSet(9, "Run Expmt", ToolbarRunExpmt%);
+                ToolbarSet(40, "Run Expmt", ToolbarRunExpmt%);
                 PrintLog("EXPERIMENT COMPLETE!\n\n");
                 Yield(2);
                 XRange();  'Zoom out to view entire experiement
@@ -172,7 +176,7 @@ Func ToolbarRunExpmt%()
     SampleKey("A");
     SetSequencerValues();
     SampleText("START", -1, 0); 
-    ToolbarSet(9, "Stop Expmt", ToolbarStopExpmt%);
+    ToolbarSet(40, "Stop Expmt", ToolbarStopExpmt%);
     Yield(2);
     runFlag% := 1;
     return 1;
@@ -184,7 +188,7 @@ Func ToolbarStopExpmt%()
     SampleKey("a");
     runFlag% := 0;
     SampleText("END", -1, 0); 
-    ToolbarSet(9, "Run Expmt", ToolbarRunExpmt%);
+    ToolbarSet(40, "Run Expmt", ToolbarRunExpmt%);
     return 1;
 End
 

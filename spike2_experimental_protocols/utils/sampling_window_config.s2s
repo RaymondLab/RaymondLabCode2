@@ -4,7 +4,6 @@
 
 ' Sampling configuration parameters
 const sampleRate := 1000;  'Sequencer sample rate in Hz, MUST be the same value given in the sequencer file
-var voltageMax := 5.0;  'Ensure this is the same value found in Edit -> Edit Preferences -> Sampling
 var sampleStepsize := 1/sampleRate;  'Sequencer sample rate step size in seconds
 
 ' Define the standard channel layout for all protocols

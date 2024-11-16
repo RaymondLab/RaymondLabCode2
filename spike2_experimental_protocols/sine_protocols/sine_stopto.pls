@@ -41,6 +41,8 @@
             VAR    V28,OptoDel1=-99
             VAR    V29,OptoDel2=-99
 
+            VAR    V30,NumTest=3
+
             TABSZ  10001
 
 
@@ -64,6 +66,7 @@ TTL1OFF: 'l DIGOUT [.......0]      ;Turn TTL 1 off     >=
 ;-----------------------------------------------------------------------------
 TTL1ON: 'L  DIGOUT [.......1]      ;Turn TTL 1 on      >=
             JUMP   IDLELOOP
+
 
 ;-----------------------------------------------------------------------------
 ; RESET: Resets sequencer to initial state
@@ -91,6 +94,7 @@ DSINE2:     OFFSET 0,DrumOff       ;Adjust cosine offset
             WAITC  0,DSINE2        ;Wait for end of cycle
             RATE   0,0,IDLELOOP    ;Stop drum cosine then idle
 
+
 ;-----------------------------------------------------------------------------
 ; CHAIR SINE: Turn sinusoidal chair stimulus on/off
 ;-----------------------------------------------------------------------------
@@ -107,6 +111,7 @@ CSINEOFF: 'c CLRC  1               ;Stop chair sine at phase 0
 CSINE2:     OFFSET 1,ChairOff      ;Adjust cosine offset
             WAITC  1,CSINE2        ;Wait for end of cycle
             RATE   1,0,IDLELOOP    ;Stop chair cosine
+
 
 ;-----------------------------------------------------------------------------
 ; SINE: Turn sinusoidal drum and chair stimulus on/off
@@ -135,53 +140,106 @@ SINE2:      OFFSET 0,DrumOff       ;Adjust cosine offsets
             RATE   1,0
             JUMP   IDLELOOP        ;Return to idle loop
 
+
 ;-----------------------------------------------------------------------------
-; OPTO SINE: Turn sinusoidal chair + opto stimulus on/off
+; OPTO SINE Training Block: Turn sinusoidal chair + opto stimulus on/off
 ;-----------------------------------------------------------------------------
-OPTOON: 'O  DIGOUT [.......0]      ;Start opto stim trials
-            SZ     1,ChairAmp      ;Set cosine amplitude
-            OFFSET 1,ChairOff      ;Set cosine offset
-            PHASE  1,ChairPhs      ;Set cosine relative phase
-            ANGLE  1,ChairAng      ;Set cosine angle
-            RATE   1,ChairFrq      ;Set cosine frequency
+OPTOON: 'T  MOVI   BlockFlg,1      ;Start opto stim trials >TRAINING
+            DIGOUT [.......0]      ;Start opto stim trials >"
+            SZ     1,ChairAmp      ;Set cosine amplitude >"
+            OFFSET 1,ChairOff      ;Set cosine offset >"
+            PHASE  1,ChairPhs      ;Set cosine relative phase >"
+            ANGLE  1,ChairAng      ;Set cosine angle >"
+            RATE   1,ChairFrq      ;Set cosine frequency >"
 
-OPTO0:      MOV    Counter1,CycleInt ;Set cycle interval between stims
+OPTO0:      MOV    Counter1,CycleInt ;Set cycle interval between stims >"
 
-OPTO1:      WAITC  1,OPTO1         ;Loop until phase == ChairPhs
-            OFFSET 1,ChairOff      ;Adjust cosine offset to prevent drift
-            DBNZ   Counter1,OPTO1  ;Repeat until cycle counter hits zero
-            BGE    Idx1,NDelays,OPTOOFF ;Branch if index exceeds number of trials
-            ADDI   Idx2,1          ;Increment Idx2 by 1
-            TABLD  OptoDel2,[Idx2] ;Get OptoDel2 from table at index Idx2
-            ADDI   Idx1,1          ;Increment Idx1 by 1
-            TABLD  OptoDel1,[Idx1] ;Get OptoDel1 from table at index Idx1
-            BLT    OptoDel1,0,OPTO2 ;Skip stim if OptoDel1 < 0 ms
-            MOV    TTLNum,TTLNum1  ;Otherwise, set TTLNum
-            DELAY  OptoDel1        ;Delay stim by OptoDel1 number of ms
-            CALL   OPTOEQ          ;Execute opto stim
+OPTO1:      WAITC  1,OPTO1         ;Loop until phase == ChairPhs >"
+            OFFSET 1,ChairOff      ;Adjust cosine offset to prevent drift >"
+            DBNZ   Counter1,OPTO1  ;Repeat until cycle counter hits zero >"
+            BGE    Idx1,NDelays,OPTOOFF ;Branch if index exceeds number of trials >"
+            ADDI   Idx2,1          ;Increment Idx2 by 1 >"
+            TABLD  OptoDel2,[Idx2] ;Get OptoDel2 from table at index Idx2 >"
+            ADDI   Idx1,1          ;Increment Idx1 by 1 >"
+            TABLD  OptoDel1,[Idx1] ;Get OptoDel1 from table at index Idx1 >"
+            BLT    OptoDel1,0,OPTO2 ;Skip stim if OptoDel1 < 0 ms >"
+            MOV    TTLNum,TTLNum1  ;Otherwise, set TTLNum >" 
+            DELAY  OptoDel1        ;Delay stim by OptoDel1 number of ms >"
+            CALL   OPTOEQ          ;Execute opto stim >"
 
-OPTO2:      BLT    OptoDel2,2,OPTO0 ;Skip stim if OptoDel2 < 2 ms
-            MOV    TTLNum,TTLNum2  ;Otherwise, set TTLNum
-            DELAY  OptoDel2        ;Delay by some number of ms
-            CALL   OPTOEQ          ;Execute opto stim
-            JUMP   OPTO0           ;Set opto-cosine loop > OPTO RUNNING
+OPTO2:      BLT    OptoDel2,2,OPTO0 ;Skip stim if OptoDel2 < 2 ms >"
+            MOV    TTLNum,TTLNum2  ;Otherwise, set TTLNum >"
+            DELAY  OptoDel2        ;Delay by some number of ms >"
+            CALL   OPTOEQ          ;Execute opto stim >"
+            JUMP   OPTO0           ;Set opto-cosine loop >"
 
 OPTOEQ:     BEQ    TTLNum,2,OPTOR
-OPTOL:      DIGPS  1,P,PulInt      ;Pulse every "PulInt" ms
-            DIGPS  1,D,PulDur      ;Pulse has duration of "PulDur" ms
-            DIGPS  1,C,PulNCycl    ;Set number of pulses in train
-            DIGPC  1,G             ;Start train
+OPTOL:      DIGPS  1,P,PulInt      ;Pulse every "PulInt" ms >"
+            DIGPS  1,D,PulDur      ;Pulse has duration of "PulDur" ms >"
+            DIGPS  1,C,PulNCycl    ;Set number of pulses in train >"
+            DIGPC  1,G             ;Start train >"
             RETURN 
-OPTOR:      DIGPS  2,P,PulInt      ;Pulse every "PulInt" ms
-            DIGPS  2,D,PulDur      ;Pulse has duration of "PulDur" ms
-            DIGPS  2,C,PulNCycl    ;Set number of pulses in train
-            DIGPC  2,G             ;Start train
+OPTOR:      DIGPS  2,P,PulInt      ;Pulse every "PulInt" ms >"
+            DIGPS  2,D,PulDur      ;Pulse has duration of "PulDur" ms >"
+            DIGPS  2,C,PulNCycl    ;Set number of pulses in train >"
+            DIGPC  2,G             ;Start train >"
             RETURN 
 
-OPTOOFF: 'o CLRC   1               ;Stop cosine DBNZ   Counter1,OPTOOFF ;Repeat until counter hits zero
-OPTO3:      WAITC  1,OPTO3         ;Wait for end of cycle
-            RATE   1,0,IDLELOOP    ;Stop chair cosine then idle
+OPTOOFF: 't CLRC   1               ;Stop cosine >"
+OPTO3:      WAITC  1,OPTO3         ;Wait for end of cycle >"
+            RATE   1,0             ;Stop chair cosine >"
+            MOVI   BlockFlg,0      ;Set block as inactive >"
+            JUMP   IDLELOOP
 
+
+;-----------------------------------------------------------------------------
+; GAP: No stimuli for Gap1Dur+Gap3Dur ms and FlashDur ms light pulse halfway
+;-----------------------------------------------------------------------------
+GAP:    'G  MOVI   BlockFlg,1      ;Start Gap block    >GAP BLOCK
+            DIGOUT [.......0]      ;Reset to initial state >"
+            RATE   0,0             ;Stop cosine on drum >"
+            RATE   1,0             ;Stop cosine on chair >"
+            DAC    0,DrumOff       ;Stop the drum      >"
+            DAC    1,ChairOff      ;Stop the chair     >"
+            MOV    Counter1,Gap1Dur ;Set duration of first half >"
+GAP1:       DAC    0,DrumOff       ;Apply drum and chair drift correction >"
+            DAC    1,ChairOff      ;                   >"
+            DBNZ   Counter1,GAP1   ;Repeat until counter hits zero >"
+            BEQ    FlashDur,0,GSKIP ;Skip to GAP2 if FlashDur is zero >"
+            DIGOUT [.......1]      ;Turn light on      >"
+            MOV    Counter1,FlashDur ;Set duration of light pulse >"
+GAP2:       DAC    0,DrumOff       ;Apply drum and chair drift correction >"
+            DAC    1,ChairOff      ;                   >"
+            DBNZ   Counter1,GAP2   ;Repeat until counter hits zero >"
+GSKIP:      DIGOUT [.......0]      ;Turn light off     >"
+            MOV    Counter1,Gap3Dur ;Set duration of second half >"
+GAP3:       DAC    0,DrumOff       ;Apply drum and chair drift correction >"
+            DAC    1,ChairOff      ;                   >"
+            DBNZ   Counter1,GAP3   ;Repeat until counter hits zero >"
+            MOVI   BlockFlg,0      ;Set block as inactive >"
+            JUMP   IDLELOOP
+
+
+;-----------------------------------------------------------------------------
+; TEST: pre/post test VORD (chair only) block
+;-----------------------------------------------------------------------------
+TEST:   'P  MOVI   BlockFlg,1      ;Start Test block   >TESTING
+            MOV    Counter2,NumTest ;Set number of step periods to run >"
+            DIGOUT [.......0]      ;Ensure light is off >"
+            SZ     1,ChairAmp      ;Start chair cosine >"
+            OFFSET 1,ChairOff      ;Set cosine offset  >"
+            PHASE  1,ChairPhs      ;Set cosine relative phase >"
+            ANGLE  1,0             ;Set cosine angle   >"
+            RATE   1,ChairFrq      ;Set cosine frequency >"
+TEST1:      OFFSET 1,ChairOff      ;Adjust cosine offset >"
+            WAITC  1,TEST1
+            DBNZ   Counter2,TEST1  ;Run steps until counter hits zero >"
+            CLRC   1               ;Stop chair sine at phase 0 >"
+TEST2:      OFFSET 1,ChairOff      ;Adjust cosine offset >"
+            WAITC  1,TEST2         ;Wait for end of cycle >"
+            RATE   1,0             ;Stop chair cosine  >"
+            MOVI   BlockFlg,0      ;Set block as inactive >"
+            JUMP   IDLELOOP
 
 ;-----------------------------------------------------------------------------
 ; WAVE: Custom waveform stimuli (if provided)
