@@ -78,13 +78,11 @@ Proc WindowSetup()
 
     ' Ch 1: HTVEL - Horizontal Target Velocity (Command from 1401 to drum)
     if HTVELcom_port% >= 0 then 
-        'AddWaveformChannel(HTVELcom_ch%, HTVELcom_port%, "deg/s", 1.0, 0.0, "HTVEL", "Velocity command signal sent from the 1401 to the drum");
         AddWaveformChannel(HTVELcom_ch%, HTVELcom_port%, "deg/s", HTVELcom_chScaling, HTVELcom_chOffset, "HTVEL", "Velocity command signal sent from the 1401 to the drum");
     endif
 
     ' Ch 2: HHVEL - Horizontal Head Velocity (Command from 1401 to chair)
     if HHVELcom_port% >= 0 then
-        'AddWaveformChannel(HHVELcom_ch%, HHVELcom_port%, "deg/s", 1.0, 0.0, "HHVEL", "Velocity command signal sent from the 1401 to the chair");
         AddWaveformChannel(HHVELcom_ch%, HHVELcom_port%, "deg/s", HHVELcom_chScaling, HHVELcom_chOffset, "HHVEL", "Velocity command signal sent from the 1401 to the chair");
     endif
 
@@ -259,39 +257,32 @@ Proc WindowSetup()
     ChanHide("12..15");  'Hide TTL channels 2-5 (not used for most protocols)
     
     ' Initial y-ranges for all channels
-    YRange(HTVELcom_ch%, -10.2, 10.2);
-    YRange(HHVELcom_ch%, -10.2, 10.2);
-    YRange(HTPOScom_ch%, -3.2, 3.2);
-    YRange(HHPOScom_ch%, -3.2, 3.2);
-    YRange(hepos1_ch%, -3.2, 3.2);
-    YRange(hepos2_ch%, -3.2, 3.2); 
-    YRange(htpos_ch%, -3.2, 3.2);
-    YRange(hhpos_ch%, -3.2, 3.2);
-    YRange(htvel_ch%, -10.2, 10.2);
-    YRange(hhvel_ch%, -10.2, 10.2); 
+    YRange(HTVELcom_ch%, -10.25, 10.25);
+    YRange(HHVELcom_ch%, -10.25, 10.25);
+    YRange(HTPOScom_ch%, -3.25, 3.25);
+    YRange(HHPOScom_ch%, -3.25, 3.25);
+    YRange(hepos1_ch%, -5, 5);
+    YRange(hepos2_ch%, -5, 5); 
+    YRange(htpos_ch%, -3.25, 3.25);
+    YRange(hhpos_ch%, -3.25, 3.25);
+    YRange(htvel_ch%, -10.25, 10.25);
+    YRange(hhvel_ch%, -10.25, 10.25); 
     
     ' Initial x-range for all channels
     XRange(0, 60);
-    
+
     ' Set channel colors
-    ChanColourSet("1..15", 1, 0.501961, 0, 0.501961);
-    ChanColourSet("1..4", 1, 0, 0, 0);
-    ChanColourSet("7..10", 1, 0.122, 0.239, 0.58);
-    ChanColourSet("v1..v6", 1, 0.501961, 0, 0.752941);
-    
-    ' Add channel horizontal cursors
-    'HCursorNew(HTVELcom_ch%, 0);
-    'HCursorNew(HHVELcom_ch%, 0);
-    'HCursorNew(HTPOScom_ch%, 0);
-    'HCursorNew(HHPOScom_ch%, 0);
-    'HCursorNew(htpos_ch%, 0);
-    'HCursorNew(hhpos_ch%, 0);
-    'HCursorNew(htvel_ch%, 0);
-    'HCursorNew(hhvel_ch%, 0);
-    
-    ' Decrease the height of channels (TODO: do we want this?)
-    'ChanWeight(HTVELcom_ch%, 0.5);
-    'ChanWeight(HHVELcom_ch%, 0.5);
+    var drumChannels$ := Str$(HTVELcom_ch%)+","+Str$(HTPOScom_ch%)+","+Str$(htpos_ch%)+","+Str$(htvel_ch%);
+    var chairChannels$ := Str$(HHVELcom_ch%)+","+Str$(HHPOScom_ch%)+","+Str$(hhpos_ch%)+","+Str$(hhvel_ch%);
+    ChanColourSet("1..15", 1, 0, 0, 0);
+    ChanColourSet(drumChannels$, 1, 0.15, 0.15, 0.6);
+    ChanColourSet(chairChannels$, 1, 0.6, 0.15, 0.15);
+
+    ' Old channel color scheme (kept here as a reference to previously used RGB color values)
+    'ChanColourSet("1..15", 1, 0.501961, 0, 0.501961);
+    'ChanColourSet("1..4", 1, 0, 0, 0);
+    'ChanColourSet("7..10", 1, 0.122, 0.239, 0.58);
+    'ChanColourSet("v1..v6", 1, 0.501961, 0, 0.752941);
 
     ' Displays TextMark channel as text labels rather than colored squares
     DrawMode(30, 14);

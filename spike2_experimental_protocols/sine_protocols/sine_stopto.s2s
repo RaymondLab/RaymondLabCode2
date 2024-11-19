@@ -11,31 +11,32 @@ const sequencerFile$ := "sine_protocols/sine_stopto.pls";
 ' This file is the same for all SINE protocols
 #include "sine_core.s2s"
 
-nTestBlocks%       := 1;       '[default 1]
-testBlockDuration  := 45; '45.0;    '[default 45.0]
-nTrainingBlocks%   := 1;       '[default 1]
-trainBlockDuration := 1800; '1800.0;  '[default 18000.0]
+' Re-define the default protocol-specific parameter values
+nTestBlocks%       := 1;     'Number of pretest/posttest blocks [default 1]
+testBlockDuration  := 45;    'Duration (s) of each pretest/posttest block [default 45.0]
+nTrainingBlocks%   := 1;     ' Number of training blocks [default 1]
+trainBlockDuration := 1800;  '1800.0;  'Duration (s) of each training block [default 1800.0]
 
-const shiftDelay2% := 12;
-const shift0p5Hz% := 500;
-const shift1Hz% := 250;
-const shift2Hz% := 125;
+' Define the shifts and timings for each experiment type
+const shiftDelay2%   := 12;
+const shift0p5Hz%    := 500;
+const shift1Hz%      := 250;
+const shift2Hz%      := 125;
 const delays0p5Hz%[] := {0, 125, 250, 375, 500, 625, 750, 875, 1000, 1125, 1250, 1375, 1500, 1625, 1750, 1875, -1};
-const delays1Hz%[] := {0, 125, 188, 250, 313, 375, 500, 625, 750, 875, -1};
-const delays2Hz%[] := {0, 63, 125, 188, 250, 313, 375, 438, -1};
+const delays1Hz%[]   := {0, 125, 188, 250, 313, 375, 500, 625, 750, 875, -1};
+const delays2Hz%[]   := {0, 63, 125, 188, 250, 313, 375, 438, -1};
 
 ' Opto training block parameters
-var optoDuration%;
+var optoDuration%, delayArrLen%, delayShift%;
 var optoTrainingType%  := 0;  'Defines the frequency of the training for opto experiments [default 0]
 var optoTimingOrder%   := 0;  'Defines whether timing order is sequential or random [default 0]
 var optoEveryNthCycle% := 4;  'Sets opto timing to occur every Nth cycle [default 4]
-var delayArrLen%, delayShift%;
-var prevIdx1% := -1;
+var prevIdx1%          := -1;
 
-var optoIpsiOrContra% := 0; '[default 0]
-var digpsCycleCount% := 4;  '1 or 4
-var digpsDuration% := 2;  '14 or 2
-var digpsInterval% := 4;  '15 or 4
+var optoIpsiOrContra% := 0;  '[default 0]
+var digpsCycleCount%  := 4;  '1 or 4
+var digpsDuration%    := 2;  '14 or 2
+var digpsInterval%    := 4;  '15 or 4
 
 var ttlNum1% := 1;
 var ttlNum2% := 2;
@@ -498,10 +499,11 @@ Proc SetOptoDelays()
             num% := num% + 1;
         next;
     next;
-
     PrintLog("delays per set: %d | sets of trials: %d\n", delayArrLen%, nrepeats%);
     PrintLog("delays1: ", fullDelays1%[]);
     PrintLog("delays2: ", fullDelays2%[], "\n");
+
+    delayArrLen% := Round(nrepeats%*delayArrLen%);
     SampleSeqTable(fullDelays1%[], 0);
     SampleSeqTable(fullDelays2%[], 5000);
 End
