@@ -39,6 +39,7 @@ var blockMarkers$;                                        'Provides the SampleKe
 var blockFlag%;                                           'Flag which defines whether a block is actively running
 var runFlag%;                                             'Flag which denotes whether the experiment is activately running
 var lowerSampleKey$, upperSampleKey$;                     'Stores start/end sampleykeys of current block
+var lastMarkerTime;
 
 var blockStartTime, blockEndTime, prevCommandTime, commandVelocity;
 var hepos_expression$;
@@ -51,6 +52,8 @@ var nullEyePos := 0.0;
 var nullEyePosType% := 0;
 var nullEyePosBlock% := 2;
 
+var nullExclusion := 0.2;
+var nullShift := 0.1;
 var trainingGain := -1.0;  '<0 trains to leak, >0 trains to instability
 var velocityGainMin := 2.0;  'Considered as a "low" velocity gain in Debowy paper
 var velocityGainMax := 40.0;  'Maximum velocity gain used in Major and Debowy papers
@@ -61,21 +64,47 @@ var velocityGainMax := 40.0;  'Maximum velocity gain used in Major and Debowy pa
 '--------------------------------------------------------------------------------
 ' Updates the window with additional protocol-specific modifications
 Proc WindowUpdate()
+    var bestScaleCh;
     hepos_vch% := VirtualChan(0, "", 0, 0.001);
     if bestChannel% = 0 then
         hepos_expression$ := Str$(scaleCh1)+"*ch("+Str$(hepos1_ch%)+")";
+        bestScaleCh := scaleCh1;
     else
         hepos_expression$ := Str$(scaleCh2)+"*ch("+Str$(hepos2_ch%)+")";
+        bestScaleCh := scaleCh2;
     endif;
     VirtualChan(hepos_vch%, hepos_expression$, 0, 1.0/sampleRate);
     ChanProcessAdd(hepos_vch%, 1, 0.05); 
-    ChanUnits$(hepos_vch%, "deg");
-    ChanTitle$(hepos_vch%, "hepos"); 
-    ChanComment$(hepos_vch%, "Scaled eye position used for velocity command");
+    if Abs(bestScaleCh) > 1 then
+        ChanUnits$(hepos_vch%, "deg");
+    else
+        ChanUnits$(hepos_vch%, "V");
+    endif;
+    ChanTitle$(hepos_vch%, "besthepos"); 
+    ChanComment$(hepos_vch%, "Smoothed eye position trace of chosen best hepos channel");
     nullCursorNum% := HCursorNew(hepos_vch%, 0);
+    HCursorNew(htvel_ch%, 0);
     'ChanHide(-1);
     ChanShow(-1);
     ChanHide("12..15", "v1", "v2");  'Hide channels not used
+End
+
+Proc UpdateHeposNull()
+    var bestScaleCh;
+    if bestChannel% = 0 then
+        hepos_expression$ := Str$(scaleCh1)+"*ch("+Str$(hepos1_ch%)+")";
+        bestScaleCh := scaleCh1;
+    else
+        hepos_expression$ := Str$(scaleCh2)+"*ch("+Str$(hepos2_ch%)+")";
+        bestScaleCh := scaleCh2;
+    endif;
+    VirtualChan(hepos_vch%, hepos_expression$, 0, 1.0/sampleRate);
+    if Abs(bestScaleCh) > 1 then
+        ChanUnits$(hepos_vch%, "deg");
+    else
+        ChanUnits$(hepos_vch%, "V");
+    endif;
+    HCursor(nullCursorNum%, nullEyePos);
 End
 
 ' Function that defines what happens during idle times (in computer cycles) while actively sampling
@@ -93,9 +122,15 @@ Func ToolbarIdle%()
                 lowerSampleKey$ := Right$(blockMarkers$, 1);
                 SampleKey(lowerSampleKey$);  'Sends a lower-case keyboard command that defines the end of a block (useful only for analysis)
                 PrintLog("Sample time: %.4f seconds | Block number: %d of %d | Block marker: %s\n", blockEndTime, blockNum%, nBlocks%, lowerSampleKey$);
-                if (blockNum% <= nullEyePosBlock%) and (lowerSampleKey$ = "p") then
-                    CalculateNullPosition();
-                endif;
+                docase
+                    case (blockNum% <= nullEyePosBlock%) and (lowerSampleKey$ = "p") then
+                        CalculateNullPosition();
+                        CalculateNullExclusionShift();
+                        UpdateHeposNull();
+                    case lowerSampleKey$ = "t" then
+                        CalculateFracPos();
+                        UpdateHeposNull();
+                endcase;
             endif; 
             if blockNum% < nBlocks% then  'Check whether current block number is not greater than or equal to maximum number of blocks
                 blockStartTime := MaxTime();
@@ -138,14 +173,112 @@ Proc CalculateNullPosition()
         'Use median
         nullEyePos := ChanMeasure(hepos_vch%, 21, blockStartTime, blockEndTime);
     endif;
-    ' Update "hepos" channel (v3) with provided scalings
-    if bestChannel% = 0 then
-        hepos_expression$ := Str$(scaleCh1)+"*ch("+Str$(hepos1_ch%)+")-"+Str$(nullEyePos);
+    PrintLog("\nCaculated Null Position: %.6f deg\n\n", nullEyePos);
+End
+
+Proc CalculateNullExclusionShift()
+    nullShift := ChanMeasure(hepos_vch%, 12, blockStartTime, blockEndTime);
+    nullExclusion := 0.5 * nullShift;
+    PrintLog("\nCaculated Null Exclusion Range: %.6f | Null Shift: %.6f\n\n", nullExclusion, nullShift);
+End
+
+Proc CalculateFracPos()
+    var npos, ii%, nsamples% := Round((blockEndTime - blockStartTime) * sampleRate);
+    var buffer[nsamples%];
+    ChanData(hepos_vch%, buffer, blockStartTime, blockEndTime);
+    for ii% := 0 to nsamples%-1 do
+        if buffer[ii%] > nullEyePos then
+            npos := npos + 1;
+        endif;
+    next;
+    var fracPos := npos / (1.0 * nsamples%);
+    var blockStd := ChanMeasure(hepos_vch%, 12, blockStartTime, blockEndTime);
+    PrintLog("\nFraction of positions above previous null (%.6f deg): %.3f | STD: %.6f\n\n", nullEyePos, fracPos, blockStd);
+    docase
+        case fracPos >= 0.66 then
+            nullEyePos := nullEyePos + nullShift;
+        case fracPos <= 0.33 then
+            nullEyePos := nullEyePos - nullShift;
+    endcase;
+End
+
+Func ToolbarCalcEyeSign%()
+    ' Get the sign (direction) of the VOR stimulus
+    var sinAmpSign := sinAmp / Abs(sinAmp);
+
+    ' Run a 1 Hz VOR for some pre-defined duration of time
+    SampleKey("S");
+    blockStartTime := MaxTime();
+    blockFlag% := 1;  'Get the current blockFlag% value from the 1401 sequencer variable
+    Yield(0.1);
+    while blockFlag% = 1 do
+        blockFlag% := SampleSeqVar(1);  'Get the current blockFlag% value from the 1401 sequencer variable
+        Yield(0.02);
+    wend;
+    Yield(1);
+    blockEndTime := MaxTime();
+
+    ' Clear any previous fits of eye position channels
+    var fitStatus1% := ChanFit(hepos1_ch%, 0, 0);
+    var fitStatus2% := ChanFit(hepos2_ch%, 0, 0);
+    ' Initialize new sinusoidal fit functions for eye position channels
+    fitStatus1% := ChanFit(hepos1_ch%, 4, 1);
+    fitStatus2% := ChanFit(hepos2_ch%, 4, 1);
+    ' Set initial value and lower/upper limits for frequency (1) and phase (2) coefficients
+    var fitholds%[] := {0, 1, 1, 0};
+    ChanFitCoef(hepos1_ch%, 1, 1.0*2*_pi, 0.99*2*_pi, 1.01*2*_pi);
+    ChanFitCoef(hepos2_ch%, 1, 1.0*2*_pi, 0.99*2*_pi, 1.01*2*_pi);
+    ChanFitCoef(hepos1_ch%, 2, 0.0, -0.01*2*_pi, 0.01*2*_pi);
+    ChanFitCoef(hepos2_ch%, 2, 0.0, -0.01*2*_pi, 0.01*2*_pi);
+    ChanFitCoef(hepos1_ch%, fitholds%[]);
+    ChanFitCoef(hepos2_ch%, fitholds%[]);
+    ' Perform sinusoidal fits set by previous lines 
+    fitStatus1% := ChanFit(hepos1_ch%, 3, blockStartTime, blockEndTime);
+    fitStatus2% := ChanFit(hepos2_ch%, 3, blockStartTime, blockEndTime);
+    ' Retrieve the zeroth fit coefficient (amplitude) from both fits
+    var fitCoef1 := ChanFitCoef(hepos1_ch%, 0);
+    var fitCoef2 := ChanFitCoef(hepos2_ch%, 0);
+
+    if sinAmpSign > 0 then
+        if fitCoef1 > 0 then
+            scaleCh1 := -1 * Abs(scaleCh1);
+        endif;
+        if fitCoef2 > 0 then
+            scaleCh2 := -1 * Abs(scaleCh2);
+        endif;
     else
-        hepos_expression$ := Str$(scaleCh2)+"*ch("+Str$(hepos2_ch%)+")-"+Str$(nullEyePos);
+        if fitCoef1 < 0 then
+            scaleCh1 := -1 * Abs(scaleCh1);
+        endif;
+        if fitCoef2 < 0 then
+            scaleCh2 := -1 * Abs(scaleCh2);
+        endif;
     endif;
-    VirtualChan(hepos_vch%, hepos_expression$, 0, 1.0/sampleRate);
-    PrintLog("\nCaculated Null Position: %.3f deg\n\n", nullEyePos);
+
+    ' Update "hepos" channel (v3) with provided scalings
+    UpdateHeposNull();
+
+    ' Display fit results
+    var txt$ := Print$("\nhepos1 fit: %.4f | recommended scaleCh1: %.4f\n", fitCoef1, scaleCh1);
+    txt$ := txt$ + Print$("\nhepos2 fit: %.4f | recommended scaleCh2: %.4f\n", fitCoef2, scaleCh2);
+    PrintLog(txt$);
+    return 1;
+End
+
+Func ToolbarFileComments%()
+    var ii%;
+    DlgCreate("FILE COMMENTS", 0, 0, 79, 7);  'Initialize new dialog window
+    DlgString(1, "Comment 1:", 2000, "", 17, 1);
+    DlgString(2, "Comment 2:", 2000, "", 17, 2);
+    DlgString(3, "Comment 3:", 2000, "", 17, 3);
+    DlgString(4, "Comment 4:", 2000, "", 17, 4);
+    DlgString(5, "Comment 5:", 2000, "", 17, 5);
+
+    DlgAllow(0x3ff, ToolbarIdle%);  'Allow all, no idle
+    DlgShow(fileComments$[0], fileComments$[1], fileComments$[2], fileComments$[3], fileComments$[4]);
+    
+    SetFileComments();
+    return 1;
 End
 
 ' Function that stops all stimuli, resets the sequencer to default, and quits out of the toolbar

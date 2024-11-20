@@ -13,15 +13,13 @@ const sequencerFile$ := "integrator_protocols/integrator_gaintesting.pls";
 ' This file is the same for all STEP protocols
 #include "integrator_core.s2s"
 
-'gapDur := 5.0;
+' Protocol-specific modifications to core parameters
 testBlockDuration := 300.0;
-trainBlockDuration := 300.0;
+trainBlockDuration := 600.0;
 
 var trainingSign := -1.0;  '<0 trains to leak, >0 trains to instability
-'var trainingGains%[] := {2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35, 38, 41, 44, 47, 50};
-var trainingGains%[] := {5, 14, 23, 32, 41, 50};
+var trainingGains%[] := {5.0, 10.0, 15.0};
 nTrainingBlocks% := Round(Len(trainingGains%[]));
-var nullExclusion := 1;
 
 ' Compute number of sequencer steps for GAP1, GAP2, and GAP3 in the sequencer file
 var gapSeqSteps%, halfgapSeqSteps, gap1SeqSteps, gap2SeqSteps, gap3SeqSteps;  'Initialize sequencer file variables
@@ -43,14 +41,15 @@ ToolbarStartup();
 '--------------------------------------------------------------------------------
 ' Initializes and enables our toolbar functions
 Proc ToolbarStartup()
-    const initialDisabled%[] := {4, 5, 40};
+    const initialDisabled%[] := {5, 6, 40};
     ToolbarClear();
     ToolbarSet(0, "Idle", ToolbarIdle%);
     ToolbarSet(1, "Quit", ToolbarQuit%);
     ToolbarSet(2, "New File", ToolbarNewFile%);
-    ToolbarSet(3, "Expmt Settings", ToolbarExpmtSettings%);
-    ToolbarSet(4, "Train Settings", ToolbarTrainingSettings%);
-    ToolbarSet(5, "Calc Eye Sign", ToolbarCalcEyeSign%);
+    ToolbarSet(3, "File Comments", ToolbarFileComments%);
+    ToolbarSet(4, "Expmt Settings", ToolbarExpmtSettings%);
+    ToolbarSet(5, "Train Settings", ToolbarTrainingSettings%);
+    ToolbarSet(6, "Calc Eye Sign", ToolbarCalcEyeSign%);
     ToolbarSet(40, "Run Expmt", ToolbarRunExpmt%);
     ToolbarEnable(initialDisabled%, 0); 
     Toolbar("", 231);
@@ -130,52 +129,10 @@ Func ToolbarTrainingSettings%()
     DlgShow(nullEyePosType%, nullExclusion, scaleCh1, scaleCh2, bestChannel%);
 
     ' Update "hepos" channel (v3) with provided scalings
-    if bestChannel% = 0 then
-        hepos_expression$ := Str$(scaleCh1)+"*ch("+Str$(hepos1_ch%)+")";
-    else
-        hepos_expression$ := Str$(scaleCh2)+"*ch("+Str$(hepos2_ch%)+")";
-    endif;
-    VirtualChan(hepos_vch%, hepos_expression$, 0, 1.0/sampleRate);
+    UpdateHeposNull();
 
     ' Send new variable values to the sequencer
     SetSequencerValues();
-    return 1;
-End
-
-Func ToolbarCalcEyeSign%()
-    SampleKey("S");
-    blockStartTime := MaxTime();
-    blockFlag% := 1;  'Get the current blockFlag% value from the 1401 sequencer variable
-    Yield(0.1);
-    while blockFlag% = 1 do
-        blockFlag% := SampleSeqVar(1);  'Get the current blockFlag% value from the 1401 sequencer variable
-        Yield(0.02);
-    wend;
-    Yield(1);
-    blockEndTime := MaxTime();
-
-    var area1 := ChanMeasure(hepos1_ch%, 6, blockStartTime, blockEndTime);
-    var std1 := 0.5*ChanMeasure(hepos1_ch%, 12, blockStartTime, blockEndTime);
-    if (Abs(area1) > 0.0) and (Abs(area1) > std1) then
-        scaleCh1 := -1 * Abs(scaleCh1) * area1 / Abs(area1);
-    endif;
-
-    var area2 := ChanMeasure(hepos2_ch%, 6, blockStartTime, blockEndTime);
-    var std2 := 0.5*ChanMeasure(hepos2_ch%, 12, blockStartTime, blockEndTime);
-    if (Abs(area2) > 0.0) and (Abs(area2) > std2) then
-        scaleCh2 := -1 * Abs(scaleCh2) * area2 / Abs(area2);
-    endif;
-
-    ' Update "hepos" channel (v3) with provided scalings
-    if bestChannel% = 0 then
-        hepos_expression$ := Str$(scaleCh1)+"*ch("+Str$(hepos1_ch%)+")";
-    else
-        hepos_expression$ := Str$(scaleCh2)+"*ch("+Str$(hepos2_ch%)+")";
-    endif;
-    VirtualChan(hepos_vch%, hepos_expression$, 0, 1.0/sampleRate);
-
-    PrintLog("\nCurveArea2: %.3f | STD2: %.3f | sign: %.1f\n", area2, std2, scaleCh2);
-    PrintLog("CurveArea1: %.3f | STD1: %.3f | sign: %.1f\n", area1, std1, scaleCh1);
     return 1;
 End
 
@@ -202,7 +159,7 @@ End
 
 Proc SendDrumCommand()
     prevCommandTime := MaxTime() - sampleStepsize;
-    commandVelocity := trainingGain * ChanValue(hepos_vch%, prevCommandTime); 
+    commandVelocity := trainingGain * (ChanValue(hepos_vch%, prevCommandTime) - nullEyePos); 
     var absComVel := Abs(commandVelocity);
     docase
         case absComVel >= velocityGainMax then
@@ -242,17 +199,10 @@ Func AddTextMark(samplekey$, blocknumber%)
             endif;
         case samplekey$ = "T" then
             trainBlockNum% := trainBlockNum% + 1;
-            text$ := "TRAIN#"+Str$(trainBlockNum%)+" (g="+Str$(trainingGain)+")";
+            text$ := "TRAIN#"+Str$(trainBlockNum%)+" (g="+Str$(trainingGain)+", "+"null="+Str$(nullEyePos)+", "+"excl="+Str$(nullExclusion)+")";
             code% := 4;
     endcase;
     return SampleText(text$, -1, code%); 
-End
-
-Proc SetFileComments()
-    var i%;
-    for i% := 1 to 5 do
-        FileComment$(i%, "Test, comment: "+Str$(i%));
-    next;
 End
 
 
@@ -308,8 +258,14 @@ Proc GenerateBlockList(m%, n%)
 
     ' Update nBlocks% with current number of total blocks
     nBlocks% := Len(blockList$[]);
-    PrintLog("\nBlock list generated:  ", blockList$[], "\n");
+    PrintLog("\nBlock list generated:  ", blockList$[]);
     'PrintLog("\n nullEyePosBlock:  %d | postGapBlockNum: %d\n", nullEyePosBlock%, postGapBlockNum%);
+    
+    ' Provide estimate of experiment run time
+    var totalTestDuration := (2 * m% * (gapDur + testBlockDuration)) / 60;
+    var totalTrainDuration := (n% * (gapDur + trainBlockDuration)) / 60;
+    var totalExpmtDuration := totalTestDuration + totalTrainDuration;
+    PrintLog("Total Estimated Experiment Duration: %.3f minutes\n", totalExpmtDuration);
 
 
     ' Do a final check to make sure there are no consecutive duplicates

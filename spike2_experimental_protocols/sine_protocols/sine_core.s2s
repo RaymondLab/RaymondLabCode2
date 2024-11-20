@@ -60,7 +60,6 @@ var runFlag%;  'Flag which denotes whether the experiment is activately running 
 var lowerSampleKey$, upperSampleKey$;
 var pretestBlockNum%, trainBlockNum%, posttestBlockNum%;
 var blockStartTime, blockEndTime;
-var fileComments$[5];
 
 
 '--------------------------------------------------------------------------------
@@ -199,12 +198,4 @@ Func ToolbarQuit%()
     SampleStop();
     PrintLog("MANUALLY QUIT!\n\n");
     return 0;
-End
-
-' Sets the file comments in the .smrx/.smr file (not yet used)
-Proc SetFileComments()
-    var i%;
-    for i% := 1 to 5 do
-        FileComment$(i%, "Test, comment: "+Str$(i%));
-    next;
 End

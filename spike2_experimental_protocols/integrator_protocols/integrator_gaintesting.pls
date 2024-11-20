@@ -41,14 +41,14 @@ IDLELOOP: 'I DAC   0,0             ;Idling loop        >IDLING
 ; TTL1OFF: Turns off TTL channel 1 (digital output bit 8)
 ;-----------------------------------------------------------------------------
 TTL1OFF: 'l DIGOUT [.......0]      ;Turn TTL 1 off     >=
-            JUMP   IDLELOOP
+                JUMP   IDLELOOP
 
 
 ;-----------------------------------------------------------------------------
 ; TTL1ON: Turns on TTL channel 1 (digital output bit 8)
 ;-----------------------------------------------------------------------------
 TTL1ON: 'L  DIGOUT [.......1]      ;Turn TTL 1 on      >=
-            JUMP   IDLELOOP
+JUMP   IDLELOOP
 
 
 ;-----------------------------------------------------------------------------

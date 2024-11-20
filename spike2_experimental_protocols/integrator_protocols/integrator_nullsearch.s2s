@@ -14,12 +14,10 @@ const sequencerFile$ := "integrator_protocols/integrator_nullsearch.pls";
 #include "integrator_core.s2s"
 
 ' Protocol-specific modifications to core parameters
-gapDur := 5.0;
 testBlockDuration := 300.0;
 trainBlockDuration := 300.0;
 trainingGain := -1.0;
 
-var nullExclusion := 1;
 var nullExclusionRanges[] := {1, 3, 5, 7, 9, 11};
 nTrainingBlocks% := Round(Len(nullExclusionRanges[]));
 
@@ -140,43 +138,6 @@ Func ToolbarTrainingSettings%()
 
     ' Send new variable values to the sequencer
     SetSequencerValues();
-    return 1;
-End
-
-Func ToolbarCalcEyeSign%()
-    SampleKey("S");
-    blockStartTime := MaxTime();
-    blockFlag% := 1;  'Get the current blockFlag% value from the 1401 sequencer variable
-    Yield(0.1);
-    while blockFlag% = 1 do
-        blockFlag% := SampleSeqVar(1);  'Get the current blockFlag% value from the 1401 sequencer variable
-        Yield(0.02);
-    wend;
-    Yield(1);
-    blockEndTime := MaxTime();
-
-    var area1 := ChanMeasure(hepos1_ch%, 6, blockStartTime, blockEndTime);
-    var std1 := 0.5*ChanMeasure(hepos1_ch%, 12, blockStartTime, blockEndTime);
-    if (Abs(area1) > 0.0) and (Abs(area1) > std1) then
-        scaleCh1 := -1 * Abs(scaleCh1) * area1 / Abs(area1);
-    endif;
-
-    var area2 := ChanMeasure(hepos2_ch%, 6, blockStartTime, blockEndTime);
-    var std2 := 0.5*ChanMeasure(hepos2_ch%, 12, blockStartTime, blockEndTime);
-    if (Abs(area2) > 0.0) and (Abs(area2) > std2) then
-        scaleCh2 := -1 * Abs(scaleCh2) * area2 / Abs(area2);
-    endif;
-
-    ' Update "hepos" channel (v3) with provided scalings
-    if bestChannel% = 0 then
-        hepos_expression$ := Str$(scaleCh1)+"*ch("+Str$(hepos1_ch%)+")";
-    else
-        hepos_expression$ := Str$(scaleCh2)+"*ch("+Str$(hepos2_ch%)+")";
-    endif;
-    VirtualChan(hepos_vch%, hepos_expression$, 0, 1.0/sampleRate);
-
-    PrintLog("\nCurveArea2: %.3f | STD2: %.3f | sign: %.1f\n", area2, std2, scaleCh2);
-    PrintLog("CurveArea1: %.3f | STD1: %.3f | sign: %.1f\n", area1, std1, scaleCh1);
     return 1;
 End
 

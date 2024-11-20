@@ -31,6 +31,19 @@ var sampling_window%;
 var waveFilePath$;
 var wavefile_error%;
 
+' Initialize array to hold file comments
+var fileComments$[5];
+
+
+' Sets the file comments into the .smrx/.smr file
+Proc SetFileComments()
+    var ii%;
+    for ii% := 1 to 5 do
+        FileComment$(ii%, fileComments$[ii%-1]);
+        PrintLog("Added file comment %d: %s\n\n", ii%, fileComments$[ii%-1]);
+    next;
+End
+
 ' Gets the file path of a selected waveform file to add online
 Proc LoadWaveform()
     wavefile_error% := FileOpen("", 0, 8, "Select waveform file to use");
