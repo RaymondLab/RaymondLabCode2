@@ -14,6 +14,7 @@ const sequencerFile$ := "integrator_protocols/integrator_gaintesting.pls";
 #include "integrator_core.s2s"
 
 ' Protocol-specific modifications to core parameters
+gapDur := 5.0;
 testBlockDuration := 300.0;
 trainBlockDuration := 600.0;
 
@@ -30,7 +31,7 @@ CalculateTestSeqSteps();
 CalculateTrainSeqSteps();
 
 ' Initial block list generated from default parameter values
-var postGapBlockNum%;
+var trainLastBlockNum%;
 GenerateBlockList(nTestingBlocks%, nTrainingBlocks%);
 
 ToolbarStartup();
@@ -39,6 +40,32 @@ ToolbarStartup();
 '--------------------------------------------------------------------------------
 ' PROTOCOL-SPECIFIC TOOLBAR FUNCTIONS
 '--------------------------------------------------------------------------------
+' Updates the window with additional protocol-specific modifications
+Proc WindowUpdate()
+    var bestScaleCh;
+    hepos_vch% := VirtualChan(0, "", 0, 0.001);
+    if bestChannel% = 0 then
+        hepos_expression$ := Str$(scaleCh1)+"*ch("+Str$(hepos1_ch%)+")";
+        bestScaleCh := scaleCh1;
+    else
+        hepos_expression$ := Str$(scaleCh2)+"*ch("+Str$(hepos2_ch%)+")";
+        bestScaleCh := scaleCh2;
+    endif;
+    VirtualChan(hepos_vch%, hepos_expression$, 0, 1.0/sampleRate);
+    ChanProcessAdd(hepos_vch%, 1, 0.05); 
+    if Abs(bestScaleCh) > 1 then
+        ChanUnits$(hepos_vch%, "deg");
+    else
+        ChanUnits$(hepos_vch%, "V");
+    endif;
+    ChanTitle$(hepos_vch%, "hepos"); 
+    ChanComment$(hepos_vch%, "Smoothed eye position trace of chosen best hepos channel");
+    nullCursorNum% := HCursorNew(hepos_vch%, 0);
+    HCursorNew(htvel_ch%, 0);
+    ChanShow(-1);
+    ChanHide("12..15", "v1", "v2");  'Hide channels not used
+End
+
 ' Initializes and enables our toolbar functions
 Proc ToolbarStartup()
     const initialDisabled%[] := {5, 6, 40};
@@ -55,78 +82,34 @@ Proc ToolbarStartup()
     Toolbar("", 231);
 End
 
-
-
-' Function that opens a new sampling window
-Func ToolbarNewFile%()
-    WindowSetup();  'Sets up channels in the new sampling configuration window
-    WindowUpdate();  'Modifies window with protocol-specific modifications
-    WindowVisible(3);  'Maximizes the new sampling window to fit the screen
-    ToolbarEnable(-1, 1);  'Enables buttons that require a new sampling window
-    ToolbarEnable(2, 0); 
-    SetSequencerValues(); 
-    Yield();
-    SampleKey("R");  'Ensures that sequencer is set to its default configuration prior to sampling
-    SetFileComments();
-    return 1;
-End
-
-' Settings window for modifying general experimental parameters
-Func ToolbarExpmtSettings%()
-    var width% := 45;
-    DlgCreate("EXPERIMENT SETTINGS", 0, 0, width%, 9);  'Initialize new dialog window
-
-    var col1box% := 31;
-    DlgText("Number of Testing blocks:", 3, 1);
-    DlgInteger(1, 11, 1, 99999, col1box%, 1, 0);
-    DlgText("Test block duration (s):", 3, 2);
-    DlgReal(2, 11, 0.001, 99999.0, col1box%, 2, 0);
-
-    DlgText("Number of Training blocks:", 3, 4);
-    DlgInteger(3, 11, 1, 99999, col1box%, 4, 0);
-    DlgText("Train block duration (s):", 3, 5);
-    DlgReal(4, 11, 0.001, 99999.0, col1box%, 5, 0);
-
-    DlgText("Gap block duration (s):|Total duration of gap blocks", 3, 7);
-    DlgReal(5, 11, 0.001, 100.0, col1box%, 7, 0);
-
-    DlgAllow(0x3ff, ToolbarIdle%);  'Allow all, no idle, update settings function
-    DlgShow(nTestingBlocks%, testBlockDuration, nTrainingBlocks%, trainBlockDuration, gapDur);
-
-    ' Re-compute number of cycle steps for GAP1, GAP2, and GAP3 in sequencer file
-    CalculateGapSeqSteps();
-    CalculateTestSeqSteps();
-    CalculateTrainSeqSteps();
-
-    ' Re-generate the block list
-    GenerateBlockList(nTestingBlocks%, nTrainingBlocks%);
-
-    ' Send new variable values to the sequencer
-    SetSequencerValues();
-    return 1;
-End
-
 ' Settings window for modifying general experimental parameters
 Func ToolbarTrainingSettings%()
-    var width% := 52;
-    DlgCreate("TRAINING SETTINGS", 0, 0, width%, 7);  'Initialize new dialog window
+    var width% := 48;
+    DlgCreate("TRAINING SETTINGS", 0, 0, width%, 8);  'Initialize new dialog window
 
-    var col1box% := 32;
-    DlgText("Null Position type:", 3, 1);
-    DlgList(1, 20, "Median|Quantile Mean", 9, col1box%-3, 1);
-    DlgText("Null Exclusion Range (deg):", 3, 2);
-    DlgReal(2, 11, 0.001, 10000.0, col1box%-3, 2, 0);
-    DlgText("ScaleCh1:", 3, 3);
-    DlgReal(3, 11, -10000.0, 10000.0, col1box%-3, 3, 0);
-    DlgText("ScaleCh2:", 3, 4);
-    DlgReal(4, 11, -10000.0, 10000.0, col1box%-3, 4, 0);
-    DlgText("Best channel:", 3, 5);
-    DlgList(5, 20, "hepos1|hepos2", 9, col1box%-3, 5);
-    'DlgText("Training gain (g):|Values <0 trains to leak, >0 trains to instability", 3, 3);
-    'DlgReal(2, 11, -100.0, 100.0, col1box%-3, 3, 0);
+    var col1box% := 33;
+    DlgText("Training type:", 3, 1);
+    DlgList(1, 15, "Leak|Instability", 9, col1box%-3, 1);
+    DlgText("Null Position type:", 3, 2);
+    DlgList(2, 15, "Median|Quantile Mean", 9, col1box%-3, 2);
+    DlgText("Null Exclusion Range (deg):", 3, 3);
+    DlgReal(3, 12, 0.001, 10000.0, col1box%-3, 3, 0);
+    DlgText("ScaleCh1:", 3, 4);
+    DlgReal(4, 12, -10000.0, 10000.0, col1box%-3, 4, 0);
+    DlgText("ScaleCh2:", 3, 5);
+    DlgReal(5, 12, -10000.0, 10000.0, col1box%-3, 5, 0);
+    DlgText("Best channel:", 3, 6);
+    DlgList(6, 15, "hepos1|hepos2", 9, col1box%-3, 6);
 
     DlgAllow(0x3ff, ToolbarIdle%);  'Allow all, no idle, update settings function
-    DlgShow(nullEyePosType%, nullExclusion, scaleCh1, scaleCh2, bestChannel%);
+    DlgShow(trainingType%, nullEyePosType%, nullExclusion, scaleCh1, scaleCh2, bestChannel%);
+
+    ' Update gain sign
+    if trainingType% = 1 then
+        trainingSign := 1.0;
+    else
+        trainingSign := -1.0;
+    endif;
 
     ' Update "hepos" channel (v3) with provided scalings
     UpdateHeposNull();
@@ -136,45 +119,10 @@ Func ToolbarTrainingSettings%()
     return 1;
 End
 
-' Function that runs experiment based on parameters provided in experimental configuration window
-Func ToolbarRunExpmt%()
-    SampleKey("A");
-    SetSequencerValues();
-    SampleText("START", -1, 0); 
-    ToolbarSet(40, "Stop Expmt", ToolbarStopExpmt%);
-    Yield(2);
-    runFlag% := 1;
-    return 1;
-End
 
-' Function that runs experiment based on parameters provided in experimental configuration window
-Func ToolbarStopExpmt%()
-    SampleKey("R");
-    SampleKey("a");
-    runFlag% := 0;
-    SampleText("END", -1, 0); 
-    ToolbarSet(40, "Run Expmt", ToolbarRunExpmt%);
-    return 1;
-End
-
-Proc SendDrumCommand()
-    prevCommandTime := MaxTime() - sampleStepsize;
-    commandVelocity := trainingGain * (ChanValue(hepos_vch%, prevCommandTime) - nullEyePos); 
-    var absComVel := Abs(commandVelocity);
-    docase
-        case absComVel >= velocityGainMax then
-            ' If absComVel exceeds velocityGainMax, then do not update velocity
-            if (blockNum% >= nullEyePosBlock%) and (blockNum% < postGapBlockNum%) then blockNum% := postGapBlockNum%; endif;
-            PrintLog("Maximum command velocity (%.1f deg/s) exceeded: %.3f deg/s\n", velocityGainMax, commandVelocity);
-        case absComVel <= nullExclusion then
-            ' If absComVel exceeds nullExclusion, then send a 0 velocity command
-            SampleSeqVar(9, Amp2Int32%(0, drumVelocity2Voltage));
-        else
-            ' Otherwise, update drum velocity command
-            SampleSeqVar(9, Amp2Int32%(commandVelocity, drumVelocity2Voltage));
-    endcase;
-End
-
+'--------------------------------------------------------------------------------
+' PROTOCOL-SPECIFIC NON-TOOLBAR FUNCTIONS
+'--------------------------------------------------------------------------------
 Func AddTextMark(samplekey$, blocknumber%)
     ' Search Index "Marker codes, Colour for" for more info on marker code colors
     var text$, code%;
@@ -186,29 +134,29 @@ Func AddTextMark(samplekey$, blocknumber%)
             text$ := "GAP";
             code% := 1;
         case samplekey$ = "P" then
-            if blockNum% <= nullEyePosBlock% then
+            if blockNum% <= preLastBlockNum% then
                 pretestBlockNum% := pretestBlockNum% + 1;
                 text$ := "PRE#"+Str$(pretestBlockNum%);
                 code% := 2;
-                
+                fileComments$[2] := fileComments$[2] + "PRE,";
             else
                 posttestBlockNum% := posttestBlockNum% + 1;
                 text$ := "POST#"+Str$(posttestBlockNum%);
                 code% := 8;
-                
+                fileComments$[2] := fileComments$[2] + "POST,";
             endif;
+            fileComments$[4] := fileComments$[4] + "(nan,nan),";
         case samplekey$ = "T" then
             trainBlockNum% := trainBlockNum% + 1;
             text$ := "TRAIN#"+Str$(trainBlockNum%)+" (g="+Str$(trainingGain)+", "+"null="+Str$(nullEyePos)+", "+"excl="+Str$(nullExclusion)+")";
             code% := 4;
+            fileComments$[2] := fileComments$[2] + "TRAIN,";
+            fileComments$[4] := fileComments$[4] + Print$("(%.6f,%.6f),",nullEyePos,nullExclusion);
     endcase;
     return SampleText(text$, -1, code%); 
 End
 
-
-'--------------------------------------------------------------------------------
 ' COMPUTE NUMBER OF SEQUENCER STEPS FOR GAP1, GAP2, GAP3 IN SEQUENCER FILE
-'--------------------------------------------------------------------------------
 Proc CalculateGapSeqSteps()
     gapSeqSteps% := Round(gapDur * sampleRate - 2);
 End
@@ -221,52 +169,61 @@ Proc CalculateTrainSeqSteps()
     trainSeqSteps% := Round((trainBlockDuration * sampleRate / 2.0) - 4);
 End
 
-'--------------------------------------------------------------------------------
-' GENERATE/UPDATE BLOCK LIST FOR A GIVEN NUMBER OF TRAINING BLOCKS
-'--------------------------------------------------------------------------------
+'Generates list of SampleKey pairs for each block of the protocol
+'m%  Number of pre/post test blocks.
+'n%  Number of training blocks.
 Proc GenerateBlockList(m%, n%)
-    var i%;
-    var pretestList$[] := {"Gg", "Pp"};
-    var trainingList$[] := {"Gg", "Tt"};
-    var posttestList$[] := {"Gg", "Pp"};
-    var pretestListLen% := Round(m%*Len(pretestList$[]));
-    var trainingListLen% := Round(n%*Len(trainingList$[]));
-    var posttestListLen% := Round(m%*Len(posttestList$[]));
+    var i%, trainArrLen%;
+    var preSampleKeys$[]   := {"Gg", "Pp"};
+    var trainSampleKeys$[] := {"Gg", "Tt"};
+    var postSampleKeys$[]  := {"Gg", "Pp"};
+    var preArrLen%         := Round(m% * Len(preSampleKeys$[]));
+    var postArrLen%        := Round(m% * Len(postSampleKeys$[]));
+    if testAfterEveryTrain% = 1 then
+        trainArrLen% := Round(n% * (Len(trainSampleKeys$[])+2)) - 2;
+    else
+        trainArrLen% := Round(n% * Len(trainSampleKeys$[]));
+    endif;
 
     ' Compute total number of blocks for during training section and for the entire experiment
-    'var trainingTotalListLen% := Round(num% * trainingListLen%);
-    var experimentTotalListLen% := Round(pretestListLen% + posttestListLen% + trainingListLen%);
-    nullEyePosBlock% := Round(pretestListLen%);
-    postGapBlockNum% := Round(pretestListLen% + trainingListLen%);
+    var experimentTotalListLen% := Round(preArrLen% + trainArrLen% + postArrLen%);
+    preLastBlockNum% := Round(preArrLen%);
+    trainLastBlockNum% := Round(preArrLen% + trainArrLen%);
     
+    ' Resize blockList$[] array to the required size
+    resize blockList$[experimentTotalListLen%]; 
 
-    resize blockList$[experimentTotalListLen%];  'Resize blockList$[] array to the required size
     ' Reset all elements of the block list to empty string values
     for i% := 0 to experimentTotalListLen%-1 do
         blockList$[i%] := "";
     next;
 
-    ' Populate array with blocks
+    ' Populate array with SampleKey pairs corresponding to each block
     for i% := 0 to experimentTotalListLen%-1 step 2 do
         blockList$[i%] := "Gg";
-        if (i% < pretestListLen%-1) or (i% > pretestListLen%+trainingListLen%-1) then
+        if (i% < preLastBlockNum%-1) or (i% > trainLastBlockNum%-1) then
             blockList$[i%+1] := "Pp";
         else
-            blockList$[i%+1] := "Tt";
+            if (testAfterEveryTrain% = 1) and ((i%-preArrLen%-2) mod 4 = 0) then
+                blockList$[i%+1] := "Pp";
+            else
+                blockList$[i%+1] := "Tt";
+            endif;
         endif;
     next;
 
     ' Update nBlocks% with current number of total blocks
     nBlocks% := Len(blockList$[]);
     PrintLog("\nBlock list generated:  ", blockList$[]);
-    'PrintLog("\n nullEyePosBlock:  %d | postGapBlockNum: %d\n", nullEyePosBlock%, postGapBlockNum%);
     
     ' Provide estimate of experiment run time
-    var totalTestDuration := (2 * m% * (gapDur + testBlockDuration)) / 60;
-    var totalTrainDuration := (n% * (gapDur + trainBlockDuration)) / 60;
+    var totalTestDuration := (2.0 * m% * (gapDur+testBlockDuration)) / 60.0;
+    var totalTrainDuration := (1.0 * n% * (gapDur+trainBlockDuration)) / 60.0;
+    if testAfterEveryTrain% = 1 then
+        totalTrainDuration := totalTrainDuration + (1.0 * n% * (gapDur+testBlockDuration) / 60.0);
+    endif;
     var totalExpmtDuration := totalTestDuration + totalTrainDuration;
-    PrintLog("Total Estimated Experiment Duration: %.3f minutes\n", totalExpmtDuration);
-
+    PrintLog("Total Estimated Experiment Duration: %.3f min\n", totalExpmtDuration);
 
     ' Do a final check to make sure there are no consecutive duplicates
     for i% := 0 to experimentTotalListLen%-2 do
@@ -277,10 +234,25 @@ Proc GenerateBlockList(m%, n%)
     next;
 End
 
+Proc SendDrumCommand()
+    prevCommandTime := MaxTime() - sampleStepsize;
+    commandVelocity := trainingGain * (ChanValue(hepos_vch%, prevCommandTime) - nullEyePos); 
+    var absComVel := Abs(commandVelocity);
+    docase
+        case absComVel >= velocityGainMax then
+            ' If absComVel exceeds velocityGainMax, then do not update velocity
+            if (blockNum% >= preLastBlockNum%) and (blockNum% < trainLastBlockNum%) then blockNum% := trainLastBlockNum%; endif;
+            PrintLog("Maximum command velocity (%.1f deg/s) exceeded: %.3f deg/s\n", velocityGainMax, commandVelocity);
+        case absComVel <= nullExclusion then
+            ' If absComVel exceeds nullExclusion, then send a 0 velocity command
+            SampleSeqVar(9, Amp2Int32%(0, drumVelocity2Voltage));
+        else
+            ' Otherwise, update drum velocity command
+            SampleSeqVar(9, Amp2Int32%(commandVelocity, drumVelocity2Voltage));
+    endcase;
+End
 
-'--------------------------------------------------------------------------------
 ' SEND CURRENT SPIKE2 VARIABLE VALUES TO SEQUENCER
-'--------------------------------------------------------------------------------
 Proc SetSequencerValues()
     var degPerMS% := (sinFreq * 360) / sampleRate;
     var shiftPhaseAngle := 2.0 * degPerMS%;

@@ -40,7 +40,12 @@ Proc SetFileComments()
     var ii%;
     for ii% := 1 to 5 do
         FileComment$(ii%, fileComments$[ii%-1]);
-        PrintLog("Added file comment %d: %s\n\n", ii%, fileComments$[ii%-1]);
+        if ii% = 5 then
+            PrintLog("\nAdded file comment %d: %s\n", ii%, fileComments$[ii%-1]);
+        else
+            PrintLog("\nAdded file comment %d: %s", ii%, fileComments$[ii%-1]);
+        endif;
+        
     next;
 End
 

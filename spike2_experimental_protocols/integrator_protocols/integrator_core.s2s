@@ -20,11 +20,12 @@ LoadRigParams();
 var gapDur := 5.0;  'Total duration (in seconds) of each gap block [default 5.0]
 
 ' Testing and Training block parameters
-var nTestingBlocks%    := 1;       'Number of training blocks [default 1]
-var testBlockDuration  := 300.0;   'Total duration (s) of test blocks (not including Gap blocks) [default 300.0]
-var nTrainingBlocks%   := 1;       'Number of training blocks [default 1]
-var trainBlockDuration := 600.0;  'Total duration (s) of training blocks (not including Gap blocks) [default 2700.0]
-var trainingType%      := 0;       'Defines the training type for the experiment [default 0]
+var nTestingBlocks%      := 1;      'Number of pre/post test blocks [default 1]
+var testBlockDuration    := 300.0;  'Total duration (s) of test blocks (not including Gap blocks) [default 300.0]
+var nTrainingBlocks%     := 1;      'Number of training blocks [default 1]
+var trainBlockDuration   := 600.0;  'Total duration (s) of training blocks (not including Gap blocks) [default 2700.0]
+var testAfterEveryTrain% := 1;      'Determines whether a test block should be performed after each training block [default 1]
+var trainingType%        := 0;      'Defines the training type for the experiment [default 0]
 
 ' Sinusoidal test stimulus parameters
 var sinAmp   := 20.0;  'In deg/s
@@ -50,7 +51,7 @@ var bestChannel% := 0;
 var nullCursorNum%;
 var nullEyePos := 0.0;
 var nullEyePosType% := 0;
-var nullEyePosBlock% := 2;
+var preLastBlockNum% := 2;
 
 var nullExclusion := 0.2;
 var nullShift := 0.1;
@@ -62,51 +63,6 @@ var velocityGainMax := 40.0;  'Maximum velocity gain used in Major and Debowy pa
 '--------------------------------------------------------------------------------
 ' GENERAL TOOLBAR FUNCTIONS
 '--------------------------------------------------------------------------------
-' Updates the window with additional protocol-specific modifications
-Proc WindowUpdate()
-    var bestScaleCh;
-    hepos_vch% := VirtualChan(0, "", 0, 0.001);
-    if bestChannel% = 0 then
-        hepos_expression$ := Str$(scaleCh1)+"*ch("+Str$(hepos1_ch%)+")";
-        bestScaleCh := scaleCh1;
-    else
-        hepos_expression$ := Str$(scaleCh2)+"*ch("+Str$(hepos2_ch%)+")";
-        bestScaleCh := scaleCh2;
-    endif;
-    VirtualChan(hepos_vch%, hepos_expression$, 0, 1.0/sampleRate);
-    ChanProcessAdd(hepos_vch%, 1, 0.05); 
-    if Abs(bestScaleCh) > 1 then
-        ChanUnits$(hepos_vch%, "deg");
-    else
-        ChanUnits$(hepos_vch%, "V");
-    endif;
-    ChanTitle$(hepos_vch%, "besthepos"); 
-    ChanComment$(hepos_vch%, "Smoothed eye position trace of chosen best hepos channel");
-    nullCursorNum% := HCursorNew(hepos_vch%, 0);
-    HCursorNew(htvel_ch%, 0);
-    'ChanHide(-1);
-    ChanShow(-1);
-    ChanHide("12..15", "v1", "v2");  'Hide channels not used
-End
-
-Proc UpdateHeposNull()
-    var bestScaleCh;
-    if bestChannel% = 0 then
-        hepos_expression$ := Str$(scaleCh1)+"*ch("+Str$(hepos1_ch%)+")";
-        bestScaleCh := scaleCh1;
-    else
-        hepos_expression$ := Str$(scaleCh2)+"*ch("+Str$(hepos2_ch%)+")";
-        bestScaleCh := scaleCh2;
-    endif;
-    VirtualChan(hepos_vch%, hepos_expression$, 0, 1.0/sampleRate);
-    if Abs(bestScaleCh) > 1 then
-        ChanUnits$(hepos_vch%, "deg");
-    else
-        ChanUnits$(hepos_vch%, "V");
-    endif;
-    HCursor(nullCursorNum%, nullEyePos);
-End
-
 ' Function that defines what happens during idle times (in computer cycles) while actively sampling
 Func ToolbarIdle%()
     ' Check whether a valid sampling view is currently running before continuing
@@ -123,13 +79,15 @@ Func ToolbarIdle%()
                 SampleKey(lowerSampleKey$);  'Sends a lower-case keyboard command that defines the end of a block (useful only for analysis)
                 PrintLog("Sample time: %.4f seconds | Block number: %d of %d | Block marker: %s\n", blockEndTime, blockNum%, nBlocks%, lowerSampleKey$);
                 docase
-                    case (blockNum% <= nullEyePosBlock%) and (lowerSampleKey$ = "p") then
+                    case (blockNum% <= preLastBlockNum%) and (lowerSampleKey$ = "p") then
                         CalculateNullPosition();
                         CalculateNullExclusionShift();
                         UpdateHeposNull();
+                        fileComments$[3] := fileComments$[3] + Print$("(%.3f,%.3f),", blockStartTime, blockEndTime);
                     case lowerSampleKey$ = "t" then
                         CalculateFracPos();
                         UpdateHeposNull();
+                        fileComments$[3] := fileComments$[3] + Print$("(%.3f,%.3f),", blockStartTime, blockEndTime);
                 endcase;
             endif; 
             if blockNum% < nBlocks% then  'Check whether current block number is not greater than or equal to maximum number of blocks
@@ -155,51 +113,78 @@ Func ToolbarIdle%()
     return 1;
 End
 
-Proc CalculateNullPosition()
-    var nullEyeDuration := Min(blockEndTime-blockStartTime, 100000);  'Max array size in Spike2
-    if nullEyePosType% = 1 then
-        'Use quantile mean
-        var lowerQ := 0.05;
-        var upperQ := 0.95;
-        var buffer[nullEyeDuration * 1000];
-        var n% := ChanData(hepos_vch%, buffer, blockStartTime, blockEndTime);
-        ArrSort(buffer[:n%]);
-        var lowerIdx% := Round(n% * lowerQ);
-        var upperIdx% := Round(n% * upperQ);
-        lowerQ := buffer[lowerIdx%];
-        upperQ := buffer[upperIdx%];
-        nullEyePos := (lowerQ + upperQ) / 2.0;
-    else
-        'Use median
-        nullEyePos := ChanMeasure(hepos_vch%, 21, blockStartTime, blockEndTime);
-    endif;
-    PrintLog("\nCaculated Null Position: %.6f deg\n\n", nullEyePos);
+' Function that stops all stimuli, resets the sequencer to default, and quits out of the toolbar
+Func ToolbarQuit%()
+    SampleKey("R");
+    SampleKey("a");
+    SampleStop();
+    SetFileComments();
+    return 0;
 End
 
-Proc CalculateNullExclusionShift()
-    nullShift := ChanMeasure(hepos_vch%, 12, blockStartTime, blockEndTime);
-    nullExclusion := 0.5 * nullShift;
-    PrintLog("\nCaculated Null Exclusion Range: %.6f | Null Shift: %.6f\n\n", nullExclusion, nullShift);
+' Function that opens a new sampling window
+Func ToolbarNewFile%()
+    WindowSetup();  'Sets up channels in the new sampling configuration window
+    WindowUpdate();  'Modifies window with protocol-specific modifications
+    WindowVisible(3);  'Maximizes the new sampling window to fit the screen
+    ToolbarEnable(-1, 1);  'Enables buttons that require a new sampling window
+    ToolbarEnable(2, 0); 'Disables New File button
+    SetSequencerValues(); 
+    Yield();
+    SampleKey("R");  'Ensures that sequencer is set to its default configuration prior to sampling
+    return 1;
 End
 
-Proc CalculateFracPos()
-    var npos, ii%, nsamples% := Round((blockEndTime - blockStartTime) * sampleRate);
-    var buffer[nsamples%];
-    ChanData(hepos_vch%, buffer, blockStartTime, blockEndTime);
-    for ii% := 0 to nsamples%-1 do
-        if buffer[ii%] > nullEyePos then
-            npos := npos + 1;
-        endif;
-    next;
-    var fracPos := npos / (1.0 * nsamples%);
-    var blockStd := ChanMeasure(hepos_vch%, 12, blockStartTime, blockEndTime);
-    PrintLog("\nFraction of positions above previous null (%.6f deg): %.3f | STD: %.6f\n\n", nullEyePos, fracPos, blockStd);
-    docase
-        case fracPos >= 0.66 then
-            nullEyePos := nullEyePos + nullShift;
-        case fracPos <= 0.33 then
-            nullEyePos := nullEyePos - nullShift;
-    endcase;
+Func ToolbarFileComments%()
+    var ii%;
+    DlgCreate("FILE COMMENTS", 0, 0, 85, 7);  'Initialize new dialog window
+    DlgString(1, "Comment 1:", 2000, "", 20, 1);
+    DlgString(2, "Comment 2:", 2000, "", 20, 2);
+    DlgString(3, "Block Labels:", 2000, "", 20, 3);
+    DlgString(4, "Start/End Times:", 2000, "", 20, 4);
+    DlgString(5, "Null Pos/Excls:", 2000, "", 20, 5);
+
+    DlgAllow(0x3ff, ToolbarIdle%);  'Allow all, no idle
+    DlgShow(fileComments$[0], fileComments$[1], fileComments$[2], fileComments$[3], fileComments$[4]);
+    
+    SetFileComments();
+    return 1;
+End
+
+' Settings window for modifying general experimental parameters
+Func ToolbarExpmtSettings%()
+    var width% := 45;
+    DlgCreate("EXPERIMENT SETTINGS", 0, 0, width%, 10);  'Initialize new dialog window
+
+    var col1box% := 31;
+    DlgText("Number of Pre/Post blocks:", 3, 1);
+    DlgInteger(1, 11, 1, 99999, col1box%, 1, 0);
+    DlgText("Pre/Post block duration (s):", 3, 2);
+    DlgReal(2, 11, 0.001, 99999.0, col1box%, 2, 0);
+
+    DlgText("Number of Training blocks:", 3, 4);
+    DlgInteger(3, 11, 1, 99999, col1box%, 4, 0);
+    DlgText("Train block duration (s):", 3, 5);
+    DlgReal(4, 11, 0.001, 99999.0, col1box%, 5, 0);
+    DlgCheck(5, "Perform Test block after each Training block:", 3, 6);
+
+    DlgText("Gap block duration (s):|Total duration of gap blocks", 3, 8);
+    DlgReal(6, 11, 0.001, 100.0, col1box%, 8, 0);    
+
+    DlgAllow(0x3ff, ToolbarIdle%);  'Allow all, no idle, update settings function
+    DlgShow(nTestingBlocks%, testBlockDuration, nTrainingBlocks%, trainBlockDuration, testAfterEveryTrain%, gapDur);
+
+    ' Re-compute number of cycle steps for GAP1, GAP2, and GAP3 in sequencer file
+    CalculateGapSeqSteps();
+    CalculateTestSeqSteps();
+    CalculateTrainSeqSteps();
+
+    ' Re-generate the block list
+    GenerateBlockList(nTestingBlocks%, nTrainingBlocks%);
+
+    ' Send new variable values to the sequencer
+    SetSequencerValues();
+    return 1;
 End
 
 Func ToolbarCalcEyeSign%()
@@ -259,33 +244,98 @@ Func ToolbarCalcEyeSign%()
     UpdateHeposNull();
 
     ' Display fit results
-    var txt$ := Print$("\nhepos1 fit: %.4f | recommended scaleCh1: %.4f\n", fitCoef1, scaleCh1);
-    txt$ := txt$ + Print$("\nhepos2 fit: %.4f | recommended scaleCh2: %.4f\n", fitCoef2, scaleCh2);
+    var txt$ := Print$("\nhepos1 fit: %.4f | recommended scaleCh1: %.4f", fitCoef1, scaleCh1);
+    txt$ := txt$ + Print$("\nhepos2 fit: %.4f | recommended scaleCh2: %.4f\n\n", fitCoef2, scaleCh2);
     PrintLog(txt$);
     return 1;
 End
 
-Func ToolbarFileComments%()
-    var ii%;
-    DlgCreate("FILE COMMENTS", 0, 0, 79, 7);  'Initialize new dialog window
-    DlgString(1, "Comment 1:", 2000, "", 17, 1);
-    DlgString(2, "Comment 2:", 2000, "", 17, 2);
-    DlgString(3, "Comment 3:", 2000, "", 17, 3);
-    DlgString(4, "Comment 4:", 2000, "", 17, 4);
-    DlgString(5, "Comment 5:", 2000, "", 17, 5);
-
-    DlgAllow(0x3ff, ToolbarIdle%);  'Allow all, no idle
-    DlgShow(fileComments$[0], fileComments$[1], fileComments$[2], fileComments$[3], fileComments$[4]);
-    
-    SetFileComments();
+' Function that runs experiment based on parameters provided in experimental configuration window
+Func ToolbarRunExpmt%()
+    SampleKey("A");
+    SetSequencerValues();
+    SampleText("START", -1, 0); 
+    ToolbarSet(40, "Stop Expmt", ToolbarStopExpmt%);
+    Yield(2);
+    runFlag% := 1;
     return 1;
 End
 
-' Function that stops all stimuli, resets the sequencer to default, and quits out of the toolbar
-Func ToolbarQuit%()
+' Function that runs experiment based on parameters provided in experimental configuration window
+Func ToolbarStopExpmt%()
     SampleKey("R");
     SampleKey("a");
-    SampleStop();
-    PrintLog("MANUALLY QUIT!\n\n");
-    return 0;
+    runFlag% := 0;
+    SampleText("END", -1, 0); 
+    ToolbarSet(40, "Run Expmt", ToolbarRunExpmt%);
+    PrintLog("EXPERIMENT MANUALLY STOPPED!\n\n");
+    return 1;
+End
+
+'--------------------------------------------------------------------------------
+' GENERAL NON-TOOLBAR FUNCTIONS
+'--------------------------------------------------------------------------------
+Proc CalculateFracPos()
+    var npos, ii%, nsamples% := Round((blockEndTime - blockStartTime) * sampleRate);
+    var buffer[nsamples%];
+    ChanData(hepos_vch%, buffer, blockStartTime, blockEndTime);
+    for ii% := 0 to nsamples%-1 do
+        if buffer[ii%] > nullEyePos then
+            npos := npos + 1;
+        endif;
+    next;
+    var fracPos := npos / (1.0 * nsamples%);
+    var blockStd := ChanMeasure(hepos_vch%, 12, blockStartTime, blockEndTime);
+    PrintLog("\nFraction of positions above previous null (%.6f deg): %.3f | STD: %.6f\n\n", nullEyePos, fracPos, blockStd);
+    docase
+        case fracPos >= 0.66 then
+            nullEyePos := nullEyePos + nullShift;
+        case fracPos <= 0.33 then
+            nullEyePos := nullEyePos - nullShift;
+    endcase;
+End
+
+Proc CalculateNullExclusionShift()
+    nullShift := ChanMeasure(hepos_vch%, 12, blockStartTime, blockEndTime);
+    nullExclusion := 0.5 * nullShift;
+    PrintLog("\nCaculated Null Exclusion Range: %.6f | Null Shift: %.6f\n\n", nullExclusion, nullShift);
+End
+
+Proc CalculateNullPosition()
+    var nullEyeDuration := Min(blockEndTime-blockStartTime, 100000);  'Max array size in Spike2
+    if nullEyePosType% = 1 then
+        'Use quantile mean
+        var lowerQ := 0.05;
+        var upperQ := 0.95;
+        var buffer[nullEyeDuration * 1000];
+        var n% := ChanData(hepos_vch%, buffer, blockStartTime, blockEndTime);
+        ArrSort(buffer[:n%]);
+        var lowerIdx% := Round(n% * lowerQ);
+        var upperIdx% := Round(n% * upperQ);
+        lowerQ := buffer[lowerIdx%];
+        upperQ := buffer[upperIdx%];
+        nullEyePos := (lowerQ + upperQ) / 2.0;
+    else
+        'Use median
+        nullEyePos := ChanMeasure(hepos_vch%, 21, blockStartTime, blockEndTime);
+    endif;
+    PrintLog("\nCaculated Null Position: %.6f deg\n\n", nullEyePos);
+End
+
+Proc UpdateHeposNull()
+    var bestScaleCh;
+    if bestChannel% = 0 then
+        hepos_expression$ := Str$(scaleCh1)+"*ch("+Str$(hepos1_ch%)+")";
+        bestScaleCh := scaleCh1;
+    else
+        hepos_expression$ := Str$(scaleCh2)+"*ch("+Str$(hepos2_ch%)+")";
+        bestScaleCh := scaleCh2;
+    endif;
+    VirtualChan(hepos_vch%, hepos_expression$, 0, 1.0/sampleRate);
+    if Abs(bestScaleCh) > 1 then
+        ChanUnits$(hepos_vch%, "deg");
+    else
+        ChanUnits$(hepos_vch%, "V");
+    endif;
+    HCursor(nullCursorNum%, nullEyePos);
 End
