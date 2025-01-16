@@ -47,13 +47,13 @@ set(fig1, 'Units','Inches');
 pos = get(fig1, 'Position');
 set(fig1,'PaperPositionMode','Auto', 'PaperUnits','Inches', 'PaperSize',[pos(3),pos(4)]);
 print(fig1, fullfile(cd,'MagnetVideoAlignment_Traces.pdf'), '-vector', '-dpdf');
-savefig('MagnetVideoAlignment_Traces.fig');
+savefig(fig1, 'MagnetVideoAlignment_Traces.fig');
 
 set(fig2, 'Units','Inches');
 pos = get(fig2, 'Position');
 set(fig2,'PaperPositionMode','Auto', 'PaperUnits','Inches', 'PaperSize',[pos(3),pos(4)]);
 print(fig2, fullfile(cd,'MagnetVideoAlignment_Cycle.pdf'), '-vector', '-dpdf');
-savefig('MagnetVideoAlignment_Cycle.fig');
+savefig(fig2, 'MagnetVideoAlignment_Cycle.fig');
 
 close(fig1);
 close(fig2);
