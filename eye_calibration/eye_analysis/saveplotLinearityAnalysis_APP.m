@@ -46,7 +46,7 @@ end
 
 
 %% Figure: Linearity of Each Magnet Channel
-fig1 = figure('units','normalized', 'outerposition',[0 0 1 1], 'WindowState','maximized'); clf
+fig1 = figure('units','normalized', 'outerposition',[0 0 1 1]); clf
 h1 = tiledlayout(fig1, 2, 3, 'TileSpacing','tight', 'Padding','compact');
 
 %% Magnet Channel 1, Fit Coefficients
@@ -84,7 +84,7 @@ for i = 1:length(mag1GoodStarts)
 end
 
 coefficients = polyfit(mag1_aligned(~mag1.saccades_all), vid1_aligned(~mag1.saccades_all), 1);
-xFit = linspace(min(xlim), max(xlim), 1000);
+xFit = linspace(-xylimit, xylimit, 1000);
 yFit = polyval(coefficients , xFit);
 plot(ax1, xFit, yFit, '-r', 'LineWidth',3, 'DisplayName',sprintf(' m = %.5f', coefficients(1)));
 xline(ax1, 0, ':r', 'HandleVisibility','off');
@@ -157,13 +157,13 @@ for i = 1:length(mag2GoodStarts)
     vidChunk = vid2_aligned(chunk);
     vidChunk = vidChunk - nanmean(vidChunk);
     coefficients = polyfit(magPoints, vidChunk, 1);
-    xFit = linspace(min(xlim), max(xlim), 1000);
+    xFit = linspace(-xylimit, xylimit, 1000);
     yFit = polyval(coefficients , xFit);
     plot(ax4, xFit, yFit, '-k', 'LineWidth', .1, 'HandleVisibility','off');
 end
 
 coefficients = polyfit(mag2_aligned(~mag2.saccades_all), vid2_aligned(~mag2.saccades_all), 1);
-xFit = linspace(min(xlim), max(xlim), 1000);
+xFit = linspace(-xylimit, xylimit, 1000);
 yFit = polyval(coefficients , xFit);
 plot(ax4, xFit, yFit, '-r', 'LineWidth', 3, 'DisplayName',sprintf(' m = %.5f', coefficients(1)));
 xline(ax4, 0, ':r', 'HandleVisibility','off');
