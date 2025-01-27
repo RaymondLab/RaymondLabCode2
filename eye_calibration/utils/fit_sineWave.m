@@ -7,7 +7,6 @@ segTime = (1:segLength)/samplerate;
 
 % if no frequency given, estimate
 if ~exist('freq', 'var')
-    
     Y = fft(data(~isnan(data)));
     P2 = abs(Y/segLength);
     powerTrace = P2(1:segLength/2+1);

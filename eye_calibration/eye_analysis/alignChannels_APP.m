@@ -19,7 +19,6 @@ if lag < 0
     vid.pos_data_upsampled_aligned = vid.pos_data_upsampled(1:end+lag);
     vid.vel_data_upsampled_aligned = vid.vel_data_upsampled(1:end+lag);
 else
-
     % Magnet channel 1
     mag1.pos_data_aligned = mag1.pos_data(1:end-lag);
     mag1.vel_data_aligned = mag1.vel_data(1:end-lag);

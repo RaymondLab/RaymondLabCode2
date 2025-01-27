@@ -29,15 +29,15 @@ else
 end
 
 % Create the field "saccades_manual" if it does not already exist
-if ~isfield(mag1, 'saccades_manual')
+if ~isfield(mag1, 'saccades_manual') || length(mag1.saccades_manual) ~= length(mag1.saccades)
     mag1.saccades_manual = false(length(mag1.saccades), 1);
 end
 
-if ~isfield(mag2, 'saccades_manual')
+if ~isfield(mag2, 'saccades_manual') || length(mag2.saccades_manual) ~= length(mag2.saccades)
     mag2.saccades_manual = false(length(mag2.saccades), 1);
 end
 
-if ~isfield(vid, 'saccades_manual')
+if ~isfield(vid, 'saccades_manual') || length(vid.saccades_manual) ~= length(vid.saccades)
     vid.saccades_manual = false(length(vid.saccades), 1);
 end
 

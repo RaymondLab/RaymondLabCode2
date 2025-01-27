@@ -1,5 +1,13 @@
-function saveplotMagnetVideoAlignment_APP(app)
+function vars = saveplotMagnetVideoAlignment_APP(app, vars)
 %SAVEPLOTMAGNETVIDEOALIGNMENT_APP
+
+%% Load data and set chosen shift value
+loadAnalysisInfo_APP;
+vars.vid.chosenShiftVal = vars.chosenShiftVal;
+vid.chosenShiftVal = vars.chosenShiftVal;
+
+% Save data
+saveAnalysisInfo_APP;
 
 %% Figure 1: Aligned Position and Velocity Traces
 fig1 = figure('units','normalized', 'outerposition',[0 0 1 1]); clf
@@ -11,7 +19,7 @@ ax1.XLim = app.UIAxesAlignedPositions.XLim;
 ax1.YLim = app.UIAxesAlignedPositions.YLim;
 ax1.XLabel.String = app.UIAxesAlignedPositions.XLabel.String;
 ax1.YLabel.String = app.UIAxesAlignedPositions.YLabel.String;
-title(ax1, 'Alignment of Position Traces', 'FontSize',16);
+title(ax1, sprintf('Alignment of Position Traces (shift = %d)', vars.chosenShiftVal), 'FontSize',16);
 grid(ax1, 'on');
 box(ax1, 'on');
 

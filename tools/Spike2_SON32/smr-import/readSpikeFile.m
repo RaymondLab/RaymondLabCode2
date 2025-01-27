@@ -1,4 +1,4 @@
-function d = readSpikeFile(filename,chans)
+function d = readSpikeFile(filename, chans)
 
 %% readSpikeFile.m imports Cambridge Electronic Design Spike2 files
 %
@@ -10,23 +10,23 @@ function d = readSpikeFile(filename,chans)
 % -------------------------------------------------------------------------
 %
 % Revisions:
-% Modified by Brian Angeles 04/2024 for Raymond lab
+% Modified by Brian Angeles 01/2025 for Raymond lab
 % Modified by Hannah Payne 07/2012 for Raymond lab
 % If no channels specified, output is structure c with channel list
 
 
-if SONVersion('nodisplay')<2.31
+if SONVersion('nodisplay') < 2.31
     errordlg('ImportSMR: An old version of the SON library is on the MATLAB path.\nDelete this and use the version in sigTOOL');
     which('SONVersion');
     return;
 end
 
-[pathname, filename2, extension]=fileparts(filename);
+[~, ~, extension] = fileparts(filename);
 
 %fprintf('Reading Spike2 file: %s\n',fullfile(pathname, filename2));
 warning('off','backtrace')
 
-if strcmpi(extension,'.smr')==1 || strcmpi(extension,'.smrx')==1 || strcmpi(extension,'.srf')==1
+if strcmpi(extension,'.smr')==1 || strcmpi(extension,'.srf')==1
     % Spike2 for Windows source file so little-endian
     fid=fopen(filename,'r','l');
 elseif strcmpi(extension,'.son')==1
@@ -63,6 +63,7 @@ else
         
         
         chan=c(i).number;
+        label=c(i).title;
         
         if ismember(chan, chans)
             
@@ -72,13 +73,13 @@ else
                 
                 if isempty(data)
                     % Empty channel
-                    warning('Empty channel %i',chan)
+                    warning('Empty channel %d (%s)',chan,label)
                     continue
                 end
                 
             catch msgid
                 % Failed, go to next channel
-                warning('Channel %g failed.\n',chan);
+                warning('Channel %d (%s) failed',chan,label);
                 continue;
             end
             
@@ -161,7 +162,7 @@ else
                         data(end+1) = NaN;                        
                     end
                     imp.tim(:,1)=data(1:2:end);% rising edges
-                    %             imp.tim(:,1)=data(1:2:end-1);% rising edges
+                    % imp.tim(:,1)=data(1:2:end-1);% rising edges
                     imp.tim(:,2)=data(2:2:end);% falling edges
                     imp.adc=[];
                     imp.mrk=zeros(size(imp.tim,1),4,'uint8');
