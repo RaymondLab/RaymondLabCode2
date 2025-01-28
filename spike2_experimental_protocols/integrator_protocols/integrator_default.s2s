@@ -8,24 +8,16 @@
 ' 
 ' ------------------------------------------------------------------------------
 'Set the sequencer file to use for the protocol
-const sequencerFile$ := "integrator_protocols/integrator_gaintesting.pls";
+const sequencerFile$ := "integrator_protocols/integrator_default.pls";
 
 ' This file is the same for all STEP protocols
 #include "integrator_core.s2s"
-
-' Protocol-specific modifications to core parameters
-gapDur := 5.0;
-testBlockDuration := 300.0;
-trainBlockDuration := 600.0;
-
-var trainingSign := -1.0;  '<0 trains to leak, >0 trains to instability
-var trainingGains%[] := {5.0, 7.0, 10.0, 12.0};
-nTrainingBlocks% := Round(Len(trainingGains%[]));
 
 ' Compute number of sequencer steps for GAP1, GAP2, and GAP3 in the sequencer file
 var gapSeqSteps%, halfgapSeqSteps, gap1SeqSteps, gap2SeqSteps, gap3SeqSteps;  'Initialize sequencer file variables
 CalculateGapSeqSteps();
 
+' Compute number of sequencer steps for TEST and TRAIN blocks in sequencer file
 var testSeqSteps%, trainSeqSteps%;
 CalculateTestSeqSteps();
 CalculateTrainSeqSteps();
@@ -52,8 +44,8 @@ Proc WindowUpdate()
         bestScaleCh := scaleCh2;
     endif;
     VirtualChan(hepos_vch%, hepos_expression$, 0, 1.0/sampleRate);
-    ChanProcessAdd(hepos_vch%, 1, 0.07); 
-    if Abs(bestScaleCh) > 1 then
+    ChanProcessAdd(hepos_vch%, 1, 0.065); 
+    if Abs(bestScaleCh) <> 1.0 then
         ChanUnits$(hepos_vch%, "deg");
     else
         ChanUnits$(hepos_vch%, "V");
@@ -84,35 +76,57 @@ End
 
 ' Settings window for modifying general experimental parameters
 Func ToolbarTrainingSettings%()
-    var width% := 48;
-    DlgCreate("TRAINING SETTINGS", 0, 0, width%, 8);  'Initialize new dialog window
+    var width% := 66;
+    DlgCreate("TRAINING SETTINGS", 0, 0, width%, 12);  'Initialize new dialog window
 
-    var col1box% := 33;
-    DlgText("Training type:", 3, 1);
+    var col1box% := 30;
+    DlgText("Training Type:", 3, 1);
     DlgList(1, 15, "Leak|Instability", 9, col1box%-3, 1);
-    DlgText("Null Position type:", 3, 2);
-    DlgList(2, 15, "Median|Quantile Mean", 9, col1box%-3, 2);
-    DlgText("Null Exclusion Range (deg):", 3, 3);
-    DlgReal(3, 12, 0.001, 10000.0, col1box%-3, 3, 0);
-    DlgText("ScaleCh1:", 3, 4);
-    DlgReal(4, 12, -10000.0, 10000.0, col1box%-3, 4, 0);
-    DlgText("ScaleCh2:", 3, 5);
-    DlgReal(5, 12, -10000.0, 10000.0, col1box%-3, 5, 0);
-    DlgText("Best channel:", 3, 6);
-    DlgList(6, 15, "hepos1|hepos2", 9, col1box%-3, 6);
+    DlgText("Training Gains (Abs):", 3, 2);
+    DlgString(2, 24, 9999, "", col1box%-3, 2);
+    DlgText("Null Position Type:", 3, 4);
+    DlgList(3, 15, "Median|Quantile Mean", 9, col1box%-3, 4);
+    DlgText("Null Position Shift:", 3, 5);
+    DlgString(4, 24, 9999, "", col1box%-3, 5);
+    DlgList(5, 8, "STD|Value", 9, col1box%+24, 5);
+    DlgText("Null Exclusion Range:", 3, 6);
+    DlgString(6, 24, 9999, "", col1box%-3, 6);
+    DlgList(7, 8, "STD|Value", 9, col1box%+24, 6);
+    DlgText("Best Channel:", 3, 8);
+    DlgList(8, 15, "hepos1|hepos2", 9, col1box%-3, 8);
+    DlgText("ScaleCh1:", 3, 9);
+    DlgReal(9, 12, -10000.0, 10000.0, col1box%-3, 9, 0);
+    DlgText("ScaleCh2:", 3, 10);
+    DlgReal(10, 12, -10000.0, 10000.0, col1box%-3, 10, 0);
 
     DlgAllow(0x3ff, ToolbarIdle%);  'Allow all, no idle, update settings function
-    DlgShow(trainingType%, nullEyePosType%, nullExclusion, scaleCh1, scaleCh2, bestChannel%);
+    DlgShow(trainingType%, trainingGains$, nullEyePosType%, nullShifts$, nullShiftType%, nullExclusions$, nullExclusionType%, bestChannel%, scaleCh1, scaleCh2);
 
-    ' Update gain sign
+    ' Update training gain sign
     if trainingType% = 1 then
         trainingSign := 1.0;
     else
         trainingSign := -1.0;
     endif;
 
+    ' Update training gain values
+    resize trainingGains[99];
+    nTrainingBlocks% := ReadStr(trainingGains$, trainingGains[]);
+    resize trainingGains[nTrainingBlocks%];
+
+    ' Ensure training gains are all positive valued
+    Abs(trainingGains[]);
+    trainingGains$ := Print$(trainingGains[]);
+
+    ' Update null shift and exclusions range values
+    UpdateNullShifts();
+    UpdateNullExclusions();    
+
     ' Update "hepos" channel (v3) with provided scalings
     UpdateHeposNull();
+
+    ' Re-generate the block list
+    GenerateBlockList(nTestingBlocks%, nTrainingBlocks%);
 
     ' Send new variable values to the sequencer
     SetSequencerValues();
@@ -126,8 +140,8 @@ End
 Func AddTextMark(samplekey$, blocknumber%)
     ' Search Index "Marker codes, Colour for" for more info on marker code colors
     var text$, code%;
-    if trainBlockNum% < Len(trainingGains%[]) then
-        trainingGain := trainingSign * trainingGains%[trainBlockNum%];
+    if trainBlockNum% < Len(trainingGains[]) then
+        trainingGain := trainingSign * trainingGains[trainBlockNum%];
     endif;
     docase
         case samplekey$ = "G" then
@@ -151,7 +165,7 @@ Func AddTextMark(samplekey$, blocknumber%)
             text$ := "TRAIN#"+Str$(trainBlockNum%)+" (g="+Str$(trainingGain)+", "+"null="+Str$(nullEyePos)+", "+"excl="+Str$(nullExclusion)+")";
             code% := 4;
             fileComments$[2] := fileComments$[2] + "TRAIN,";
-            fileComments$[4] := fileComments$[4] + Print$("(%.6f,%.6f),",nullEyePos,nullExclusion);
+            fileComments$[4] := fileComments$[4] + Print$("(%.3f,%.6f,%.6f),", trainingGain, nullEyePos, nullExclusion);
     endcase;
     return SampleText(text$, -1, code%); 
 End
@@ -217,7 +231,9 @@ Proc GenerateBlockList(m%, n%)
     PrintLog("\nBlock list generated:  ", blockList$[]);
 
     ' Display list of training gains
-    PrintLog("List of training gains:  %.2f\n", trainingGains%[]);
+    PrintLog("List of training gains:  %g\n", trainingGains[]);
+    PrintLog("List of null shifts:  %g\n", nullShifts[]);
+    PrintLog("List of null exclusion ranges:  %g\n", nullExclusions[]);
     
     ' Provide estimate of experiment run time
     var totalTestDuration := (2.0 * m% * (gapDur+testBlockDuration)) / 60.0;

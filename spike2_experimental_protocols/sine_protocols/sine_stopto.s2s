@@ -134,9 +134,9 @@ Func UpdateExpmtSettings%(item%)
     DlgEnable(0, 9, 10, 12, 13);
 
     ' Ensure drumAmp and chairAmp are valid values for the training type
-    if (trainingType_value% = 0) or (trainingType_value% = 3) then
+    if (trainingType_value% = 0) or (trainingType_value% = 1) then
         if (drumAmp_value = 0) or (chairAmp_value = 0) then
-            Message("Zero deg/s is not a valid value for `x2 gain up` or `opto stim` experiments.\nVelocities wil be reset to default values.");
+            Message("Zero deg/s is not a valid value for `opto stim` or `pretest only` experiments.\nVelocities wil be reset to default values.");
             drumAmp_value := -10.0;
             chairAmp_value := 10.0;
             DlgValue(8, drumAmp_value);
@@ -147,13 +147,18 @@ Func UpdateExpmtSettings%(item%)
     docase
         case item% = 1 then
             docase
-                case (trainingType_value% = 0) or (trainingType_value% = 3) then
+                case (trainingType_value% = 0) then
+                    DlgValue(4, 1);
                     DlgValue(8, -10.0);
                     DlgValue(11, 10.0);
-                case trainingType_value% = 1 then
-                    DlgValue(8, 10.0);
+                case (trainingType_value% = 1) then
+                    DlgValue(4, 3);
+                    DlgValue(8, -10.0);
                     DlgValue(11, 10.0);
                 case trainingType_value% = 2 then
+                    DlgValue(8, 10.0);
+                    DlgValue(11, 10.0);
+                case trainingType_value% = 3 then
                     DlgValue(8, 0.0);
                     DlgValue(11, 10.0);
             endcase;
@@ -164,20 +169,20 @@ Func UpdateExpmtSettings%(item%)
             endif;
         case item% = 8 then
             docase
-                case (trainingType_value% = 0) or (trainingType_value% = 3) then
+                case (trainingType_value% = 0) or (trainingType_value% = 1) then
                     DlgValue(11, (-1) * (drumAmp_value / Abs(drumAmp_value)) * Abs(drumAmp_value));
-                case trainingType_value% = 1 then
-                    DlgValue(11, (drumAmp_value / Abs(drumAmp_value)) * Abs(drumAmp_value));
                 case trainingType_value% = 2 then
+                    DlgValue(11, (drumAmp_value / Abs(drumAmp_value)) * Abs(drumAmp_value));
+                case trainingType_value% = 3 then
                     DlgValue(8, 0.0);
             endcase;
         case item% = 11 then
             docase
-                case (trainingType_value% = 0) or (trainingType_value% = 3) then
+                case (trainingType_value% = 0) or (trainingType_value% = 1) then
                     DlgValue(8, (-1) * (chairAmp_value / Abs(chairAmp_value)) * Abs(chairAmp_value));
-                case trainingType_value% = 1 then
-                    DlgValue(8, (chairAmp_value / Abs(chairAmp_value)) * Abs(chairAmp_value));
                 case trainingType_value% = 2 then
+                    DlgValue(8, (chairAmp_value / Abs(chairAmp_value)) * Abs(chairAmp_value));
+                case trainingType_value% = 3 then
                     DlgValue(8, 0.0);
             endcase;
     endcase;
@@ -193,7 +198,7 @@ Func ToolbarExpmtSettings%()
     var col1box% := 31;
     var col1width% := col1box% + 12;
     DlgText("Training type:", 4, 2);
-    DlgList(1, 20, "opto stim", 9, col1box%-9, 2);
+    DlgList(1, 20, "opto stim|pretest only", 9, col1box%-9, 2);
     DlgText("Number of train blocks:", 4, 3);
     DlgInteger(2, 11, 1, 99999, col1box%, 3, 0);
     DlgText("Train block duration (s):", 4, 4);
@@ -353,7 +358,7 @@ End
 ' GENERATE/UPDATE BLOCK LIST FOR A GIVEN NUMBER OF TRAINING BLOCKS
 '--------------------------------------------------------------------------------
 Proc GenerateBlockList(m%, n%)
-    var i%;
+    var i%, experimentTotalListLen%;
     var pretestList$[] := {"Gg", "Pp"};
     var trainingList$[] := {"Gg", "Tt"};
     var posttestList$[] := {"Gg", "Pp"};
@@ -361,8 +366,12 @@ Proc GenerateBlockList(m%, n%)
     var trainingListLen% := Round(n%*Len(trainingList$[]));
     var posttestListLen% := Round(m%*Len(posttestList$[]));
 
-    ' Compute total number of blocks for during training section and for the entire experiment
-    var experimentTotalListLen% := Round(pretestListLen% + posttestListLen% + trainingListLen%);    
+    if trainingType% = 1 then
+        experimentTotalListLen% := Round(pretestListLen%);
+    else
+        ' Compute total number of blocks for during training section and for the entire experiment
+        experimentTotalListLen% := Round(pretestListLen% + posttestListLen% + trainingListLen%);
+    endif;
 
     resize blockList$[experimentTotalListLen%];  'Resize blockList$[] array to the required size
     ' Reset all elements of the block list to empty string values
@@ -380,10 +389,6 @@ Proc GenerateBlockList(m%, n%)
         endif;
     next;
 
-    ' Update nBlocks% with current number of total blocks
-    nBlocks% := Len(blockList$[]);
-    PrintLog("\nBlock list generated:  ", blockList$[], "\n");
-
     ' Do a final check to make sure there are no consecutive duplicates
     for i% := 0 to experimentTotalListLen%-2 do
         if blockList$[i%] = blockList$[i%+1] then
@@ -391,6 +396,10 @@ Proc GenerateBlockList(m%, n%)
             halt
         endif;
     next;
+
+    ' Update nBlocks% with current number of total blocks
+    nBlocks% := Len(blockList$[]);
+    PrintLog("\nBlock list generated:  ", blockList$[], "\n");
 End
 
 

@@ -133,16 +133,16 @@ ylim(ax1, [-xylimit, xylimit]);
 xlim(ax1, [-xylimit, xylimit]);
 ax1.XLabel.String = 'Magnet Channel 1 Position';
 ax1.YLabel.String = 'Video Channel Position';
-title(ax1, sprintf('Magnet Channel 1: (%d) Non-Saccade Segments',length(slopes)), 'FontSize',14);
+title(ax1, sprintf('Magnet Channel 1: (%d) Non-Saccade Segments',length(slopes)), 'FontSize',12);
 grid(ax1, 'on');
 box(ax1, 'on');
 hold(ax1, 'off');
-legend(ax1, 'Location','northwest', 'FontSize',12);
+legend(ax1, 'Location','northwest', 'FontSize',11);
 
 Rsq = linearityScatterPlot(ax2, mag1.pos_data_aligned_scaledInVel, vid.pos_data_upsampled_aligned, allData, c);
 [magmin, magmax] = bounds(mag1.pos_data_aligned_scaledInVel(allData));
 [vidmin, vidmax] = bounds(vid.pos_data_upsampled_aligned(allData));
-title(ax2, sprintf('Magnet Channel 1 (with saccades): r^2 = %.5f', Rsq), 'FontSize',14);
+title(ax2, sprintf('Magnet Channel 1 (with saccades): r^2 = %.5f', Rsq), 'FontSize',12);
 xlabel(ax2, sprintf('Magnet Channel 1 Position | minmax = (%.1f, %.1f)', magmin, magmax));
 ylabel(ax2, sprintf('Video Position | minmax = (%.1f, %.1f)', vidmin, vidmax));
 grid(ax2, 'on');
@@ -155,7 +155,7 @@ llimits = min(magmin, vidmin);
 ulimits = max(magmax, vidmax);
 plot(ax3, mag1.pos_lin_all.range, mag1.pos_lin_all.yfit, 'k', 'lineWidth', 2);
 colormap(ax3, hsv);
-title(ax3, sprintf('Magnet Channel 1 (saccades removed): r^2 = %.5f', mag1.pos_lin_all.Rsq), 'FontSize',14)
+title(ax3, sprintf('Magnet Channel 1 (saccades removed): r^2 = %.5f', mag1.pos_lin_all.Rsq), 'FontSize',12)
 xlabel(ax3, sprintf('Magnet Channel 1 Position | minmax = (%.1f, %.1f)', magmin, magmax));
 ylabel(ax3, sprintf('Video Position | minmax = (%.1f, %.1f)', vidmin, vidmax));
 grid(ax3, 'on');
@@ -164,9 +164,9 @@ ylim(ax3, [llimits, ulimits]);
 xlim(ax3, [llimits, ulimits]);
 hold(ax3, 'off');
 
-yline(ax8, p1.b, '--k', sprintf('bias = %.4f',p1.b), 'LineWidth',1.5, 'FontSize',14, 'HandleVisibility','off');
-yline(ax8, p1.UB, '--k', sprintf('UB = %.4f',p1.UB), 'LineWidth',1.5, 'FontSize',14, 'HandleVisibility','off');
-yline(ax8, p1.LB, '--k', sprintf('LB = %.4f',p1.LB), 'LineWidth',1.5, 'FontSize',14, 'HandleVisibility','off');
+yline(ax8, p1.b, '--k', sprintf('bias = %.4f',p1.b), 'LineWidth',1.25, 'FontSize',12, 'HandleVisibility','off');
+yline(ax8, p1.UB, '--k', sprintf('UB = %.4f',p1.UB), 'LineWidth',1.25, 'FontSize',12, 'HandleVisibility','off');
+yline(ax8, p1.LB, '--k', sprintf('LB = %.4f',p1.LB), 'LineWidth',1.25, 'FontSize',12, 'HandleVisibility','off');
 plot(ax8, p1.xfit, p1.yfit1, '-k', 'LineWidth',3, 'DisplayName',p1.txt1);
 plot(ax8, p1.xfit, p1.yfit3, '-r', 'LineWidth',2.5, 'DisplayName',p1.txt3);
 xlabel(ax8, 'Mean of VIDEO and MAG1 positions ');
@@ -176,8 +176,8 @@ ylim(ax8, p1.ylims);
 hold(ax8, 'off');
 grid(ax8, 'on');
 box(ax8, 'on');
-title(ax8, 'Magnet Channel 1 Bland-Altman (saccades removed)', 'FontSize',14);
-legend(ax8, 'Location','northwest', 'FontSize',12);
+title(ax8, 'Magnet Channel 1 (saccades removed)', 'FontSize',12);
+legend(ax8, 'Location','northwest', 'FontSize',10);
 
 
 %% Magnet Channel 2 subplots
@@ -222,16 +222,16 @@ ylim(ax4, [-xylimit, xylimit]);
 xlim(ax4, [-xylimit, xylimit]);
 ax4.XLabel.String = 'Magnet Channel 2 Position';
 ax4.YLabel.String = 'Video Channel Position';
-title(ax4, sprintf('Magnet Channel 2: (%d) Non-Saccade Segments',length(slopes)), 'FontSize',14);
+title(ax4, sprintf('Magnet Channel 2: (%d) Non-Saccade Segments',length(slopes)), 'FontSize',12);
 grid(ax4, 'on');
 box(ax4, 'on');
 hold(ax4, 'off');
-legend(ax4, 'Location','northwest', 'FontSize',12);
+legend(ax4, 'Location','northwest', 'FontSize',11);
 
 Rsq = linearityScatterPlot(ax5, mag2.pos_data_aligned_scaledInVel, vid.pos_data_upsampled_aligned, allData, c);
 [magmin, magmax] = bounds(mag2.pos_data_aligned_scaledInVel(allData));
 [vidmin, vidmax] = bounds(vid.pos_data_upsampled_aligned(allData));
-title(ax5, sprintf('Magnet Channel 2 (with saccades): r^2 = %.5f', Rsq), 'FontSize',14);
+title(ax5, sprintf('Magnet Channel 2 (with saccades): r^2 = %.5f', Rsq), 'FontSize',12);
 xlabel(ax5, sprintf('Magnet Channel 2 Position | minmax = (%.1f, %.1f)', magmin, magmax));
 ylabel(ax5, sprintf('Video Position | minmax = (%.1f, %.1f)', vidmin, vidmax));
 grid(ax5, 'on');
@@ -244,7 +244,7 @@ llimits = min(magmin, vidmin);
 ulimits = max(magmax, vidmax);
 plot(ax6, mag2.pos_lin_all.range, mag2.pos_lin_all.yfit, 'k', 'lineWidth', 2);
 colormap(ax6, hsv);
-title(ax6, sprintf('Magnet Channel 2 (saccades removed): r^2 = %.5f', mag2.pos_lin_all.Rsq), 'FontSize',14)
+title(ax6, sprintf('Magnet Channel 2 (saccades removed): r^2 = %.5f', mag2.pos_lin_all.Rsq), 'FontSize',12)
 xlabel(ax6, sprintf('Magnet Channel 2 Position | minmax = (%.1f, %.1f)', magmin, magmax));
 ylabel(ax6, sprintf('Video Position | minmax = (%.1f, %.1f)', vidmin, vidmax));
 grid(ax6, 'on');
@@ -253,9 +253,9 @@ ylim(ax6, [llimits, ulimits]);
 xlim(ax6, [llimits, ulimits]);
 hold(ax6, 'off');
 
-yline(ax10, p2.b, '--k', sprintf('bias = %.4f',p2.b), 'LineWidth',1.5, 'FontSize',14, 'HandleVisibility','off');
-yline(ax10, p2.UB, '--k', sprintf('UB = %.4f',p2.UB), 'LineWidth',1.5, 'FontSize',14, 'HandleVisibility','off');
-yline(ax10, p2.LB, '--k', sprintf('LB = %.4f',p2.LB), 'LineWidth',1.5, 'FontSize',14, 'HandleVisibility','off');
+yline(ax10, p2.b, '--k', sprintf('bias = %.4f',p2.b), 'LineWidth',1.25, 'FontSize',12, 'HandleVisibility','off');
+yline(ax10, p2.UB, '--k', sprintf('UB = %.4f',p2.UB), 'LineWidth',1.25, 'FontSize',12, 'HandleVisibility','off');
+yline(ax10, p2.LB, '--k', sprintf('LB = %.4f',p2.LB), 'LineWidth',1.25, 'FontSize',12, 'HandleVisibility','off');
 plot(ax10, p2.xfit, p2.yfit1, '-k', 'LineWidth',3, 'DisplayName',p2.txt1);
 plot(ax10, p2.xfit, p2.yfit3, '-r', 'LineWidth',2.5, 'DisplayName',p2.txt3);
 xlabel(ax10, 'Mean of VIDEO and MAG2 positions ');
@@ -265,8 +265,8 @@ ylim(ax10, p2.ylims);
 hold(ax10, 'off');
 grid(ax10, 'on');
 box(ax10, 'on');
-title(ax10, 'Magnet Channel 2 Bland-Altman (saccades removed)', 'FontSize',14);
-legend(ax10, 'Location','northwest', 'FontSize',12);
+title(ax10, 'Magnet Channel 2 (saccades removed)', 'FontSize',12);
+legend(ax10, 'Location','northwest', 'FontSize',10);
 
 linkaxes([ax1,ax4], 'xy');
 linkaxes([ax2,ax5], 'xy');

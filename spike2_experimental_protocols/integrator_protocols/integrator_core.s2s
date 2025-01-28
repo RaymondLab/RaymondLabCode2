@@ -19,12 +19,14 @@ LoadRigParams();
 ' Gap block parameters
 var gapDur := 5.0;  'Total duration (in seconds) of each gap block [default 5.0]
 
-' Testing and Training block parameters
+' Testing block parameters
 var nTestingBlocks%      := 1;      'Number of pre/post test blocks [default 1]
 var testBlockDuration    := 300.0;  'Total duration (s) of test blocks (not including Gap blocks) [default 300.0]
+
+' Training block parameters
 var nTrainingBlocks%     := 1;      'Number of training blocks [default 1]
 var trainBlockDuration   := 600.0;  'Total duration (s) of training blocks (not including Gap blocks) [default 2700.0]
-var testAfterEveryTrain% := 1;      'Determines whether a test block should be performed after each training block [default 1]
+var testAfterEveryTrain% := 0;      'Determines whether a test block should be performed after each training block [default 1]
 var trainingType%        := 0;      'Defines the training type for the experiment [default 0]
 
 ' Sinusoidal test stimulus parameters
@@ -53,11 +55,32 @@ var nullEyePos := 0.0;
 var nullEyePosType% := 0;
 var preLastBlockNum% := 2;
 
-var nullExclusion := 0.2;
-var nullShift := 0.1;
-var trainingGain := -1.0;  '<0 trains to leak, >0 trains to instability
-var velocityGainMin := 2.0;  'Considered as a "low" velocity gain in Debowy paper
-var velocityGainMax := 40.0;  'Maximum velocity gain used in Major and Debowy papers
+' Training block default settings
+' Gains correspond to deg/sec of drum velocity per V or deg of eye position
+var trainingGains[99];
+var trainingSign := -1.0;  '<0 trains to leak, >0 trains to instability
+var trainingGains$ := "0.25,0.5,0.75,1.0";
+nTrainingBlocks% := ReadStr(trainingGains$, trainingGains[]);
+resize trainingGains[nTrainingBlocks%];
+var trainingGain := trainingSign * trainingGains[0];
+
+' Null shift default value(s)
+var nullShifts[99], nShifts%;
+var nullShiftType% := 1;
+var nullShifts$    := "5.0";
+var nullShift      := Val(nullShifts$);
+UpdateNullShifts();
+
+' Null exclusion range default value(s)
+var nullExclusions[99], nExclusions%;
+var nullExclusionType% := 1;
+var nullExclusions$    := "5.0";
+var nullExclusion      := Val(nullExclusions$);
+UpdateNullExclusions();
+
+' Minumum/maximum allowed velocity command values
+var velocityGainMin := 2.0;  'Considered "low" velocity gain in Debowy paper was 2 deg/sec
+var velocityGainMax := 40.0;  'Maximum velocity gain used in Major and Debowy papers was 40 deg/sec
 
 
 '--------------------------------------------------------------------------------
@@ -85,8 +108,13 @@ Func ToolbarIdle%()
                         UpdateHeposNull();
                         fileComments$[3] := fileComments$[3] + Print$("(%.3f,%.3f),", blockStartTime, blockEndTime);
                     case lowerSampleKey$ = "t" then
+                        if trainBlockNum% < nTrainingBlocks% then
+                            CalculateNullExclusionShift();
+                        endif;
                         CalculateFracPos();
                         UpdateHeposNull();
+                        fileComments$[3] := fileComments$[3] + Print$("(%.3f,%.3f),", blockStartTime, blockEndTime);
+                    case (blockNum% > preLastBlockNum%) and (lowerSampleKey$ = "p") then
                         fileComments$[3] := fileComments$[3] + Print$("(%.3f,%.3f),", blockStartTime, blockEndTime);
                 endcase;
             endif; 
@@ -188,6 +216,7 @@ Func ToolbarExpmtSettings%()
 End
 
 Func ToolbarCalcEyeSign%()
+    var tempScale1, tempScale2;
     ' Get the sign (direction) of the VOR stimulus
     var sinAmpSign := sinAmp / Abs(sinAmp);
 
@@ -226,26 +255,23 @@ Func ToolbarCalcEyeSign%()
 
     if sinAmpSign > 0 then
         if fitCoef1 > 0 then
-            scaleCh1 := -1 * Abs(scaleCh1);
+            tempScale1 := -1 * Abs(scaleCh1);
         endif;
         if fitCoef2 > 0 then
-            scaleCh2 := -1 * Abs(scaleCh2);
+            tempScale2 := -1 * Abs(scaleCh2);
         endif;
     else
         if fitCoef1 < 0 then
-            scaleCh1 := -1 * Abs(scaleCh1);
+            tempScale1 := -1 * Abs(scaleCh1);
         endif;
         if fitCoef2 < 0 then
-            scaleCh2 := -1 * Abs(scaleCh2);
+            tempScale2 := -1 * Abs(scaleCh2);
         endif;
     endif;
 
-    ' Update "hepos" channel (v3) with provided scalings
-    UpdateHeposNull();
-
     ' Display fit results
-    var txt$ := Print$("\nhepos1 fit: %.4f | recommended scaleCh1: %.4f", fitCoef1, scaleCh1);
-    txt$ := txt$ + Print$("\nhepos2 fit: %.4f | recommended scaleCh2: %.4f\n\n", fitCoef2, scaleCh2);
+    var txt$ := Print$("\nhepos1 fit: %.4f | recommended scaleCh1: %.4f", fitCoef1, tempScale1);
+    txt$ := txt$ + Print$("\nhepos2 fit: %.4f | recommended scaleCh2: %.4f\n\n", fitCoef2, tempScale2);
     PrintLog(txt$);
     return 1;
 End
@@ -296,8 +322,14 @@ Proc CalculateFracPos()
 End
 
 Proc CalculateNullExclusionShift()
-    nullShift := ChanMeasure(hepos_vch%, 12, blockStartTime, blockEndTime);
-    nullExclusion := 0.5 * nullShift;
+    var heposStd;
+    if nullShiftType% = 0 then
+        heposStd := ChanMeasure(hepos_vch%, 12, blockStartTime, blockEndTime);
+    else
+        heposStd := 1.0;
+    endif;
+    nullShift := nullShifts[trainBlockNum%] * heposStd;
+    nullExclusion := nullExclusions[trainBlockNum%] * heposStd;
     PrintLog("\nCaculated Null Exclusion Range: %.6f | Null Shift: %.6f\n\n", nullExclusion, nullShift);
 End
 
@@ -332,10 +364,46 @@ Proc UpdateHeposNull()
         bestScaleCh := scaleCh2;
     endif;
     VirtualChan(hepos_vch%, hepos_expression$, 0, 1.0/sampleRate);
-    if Abs(bestScaleCh) > 1 then
+    if Abs(bestScaleCh) <> 1 then
         ChanUnits$(hepos_vch%, "deg");
     else
         ChanUnits$(hepos_vch%, "V");
     endif;
     HCursor(nullCursorNum%, nullEyePos);
+End
+
+Proc UpdateNullShifts()
+    var i%, tempShifts[99];
+    resize nullShifts[nTrainingBlocks%];
+    nShifts% := ReadStr(nullShifts$, tempShifts[]);
+    docase
+        case nShifts% < nTrainingBlocks% then
+            for i% := 0 to nTrainingBlocks%-1 do
+                nullShifts[i%] := tempShifts[0];
+            next;
+        case nShifts% = nTrainingBlocks% then
+            for i% := 0 to nTrainingBlocks%-1 do
+                nullShifts[i%] := tempShifts[i%];
+            next;
+    endcase;
+    Abs(nullShifts[]);
+    nullShifts$ := Print$(nullShifts[]);
+End
+
+Proc UpdateNullExclusions()
+    var i%, tempExclusions[99];
+    resize nullExclusions[nTrainingBlocks%];
+    nExclusions% := ReadStr(nullExclusions$, tempExclusions[]);
+    docase
+        case nExclusions% < nTrainingBlocks% then
+            for i% := 0 to nTrainingBlocks%-1 do
+                nullExclusions[i%] := tempExclusions[0];
+            next;
+        case nExclusions% = nTrainingBlocks% then
+            for i% := 0 to nTrainingBlocks%-1 do
+                nullExclusions[i%] := tempExclusions[i%];
+            next;
+    endcase;
+    Abs(nullExclusions[]);
+    nullExclusions$ := Print$(nullExclusions[]);
 End
