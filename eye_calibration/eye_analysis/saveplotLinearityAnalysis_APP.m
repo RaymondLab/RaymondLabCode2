@@ -276,13 +276,13 @@ linkaxes([ax8,ax10], 'xy');
 title(h1, 'Linearity (Rainbow) Plots', 'FontSize',18);
 
 %% Save Figure
-% set(fig1, 'Units','Inches');
-% pos = get(fig1, 'Position');
-% set(fig1,'PaperPositionMode','Auto', 'PaperUnits','Inches', 'PaperSize',[pos(3),pos(4)]);
-% print(fig1, fullfile(cd,'Summary_LinearityAnalysis_Position.pdf'), '-vector', '-dpdf');
-% savefig(fig1, 'Summary_LinearityAnalysis_Position.fig');
+set(fig1, 'Units','Inches');
+pos = get(fig1, 'Position');
+set(fig1,'PaperPositionMode','Auto', 'PaperUnits','Inches', 'PaperSize',[pos(3),pos(4)]);
+print(fig1, fullfile(cd,'Summary_LinearityAnalysis_Position.pdf'), '-vector', '-dpdf');
+savefig(fig1, 'Summary_LinearityAnalysis_Position.fig');
 
-% %% Save data
-% saveAnalysisInfo_APP; 
+%% Save data
+saveAnalysisInfo_APP; 
 
 end
