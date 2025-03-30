@@ -1,5 +1,0 @@
-% Replace path in cd() with path of eye calibration folder
-currentFolder = pwd;
-cd('C:\Users\Public\RaymondLabCode2\eye_calibration');
-eyeCalibration(currentFolder);
-clear;

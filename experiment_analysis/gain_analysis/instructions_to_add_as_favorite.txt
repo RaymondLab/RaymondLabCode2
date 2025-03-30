@@ -1,0 +1,5 @@
+% Replace codeFolderPath with path to RaymondLabCode2 folder
+codeFolderPath = 'C:\Users\Public\RaymondLabCode2';
+addpath(genpath(codeFolderPath));
+gainAnalysisApp();
+clear;

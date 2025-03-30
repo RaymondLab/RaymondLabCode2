@@ -11,7 +11,7 @@
 const sequencerFile$ := "integrator_protocols/integrator_default.pls";
 
 ' This file is the same for all STEP protocols
-#include "integrator_core.s2s"
+#include "integrator_core2.s2s"
 
 ' Compute number of sequencer steps for GAP1, GAP2, and GAP3 in the sequencer file
 var gapSeqSteps%, halfgapSeqSteps, gap1SeqSteps, gap2SeqSteps, gap3SeqSteps;  'Initialize sequencer file variables
@@ -86,21 +86,19 @@ Func ToolbarTrainingSettings%()
     DlgString(2, 24, 9999, "", col1box%-3, 2);
     DlgText("Null Position Type:", 3, 4);
     DlgList(3, 15, "Median|Quantile Mean", 9, col1box%-3, 4);
-    DlgText("Null Position Shift:", 3, 5);
-    DlgString(4, 24, 9999, "", col1box%-3, 5);
-    DlgList(5, 8, "STD|Value", 9, col1box%+24, 5);
+    DlgText("Null Position Interval (s):", 3, 5);
+    DlgReal(4, 12, 30.0, 3600.0, col1box%-3, 5, 0);
     DlgText("Null Exclusion Range:", 3, 6);
-    DlgString(6, 24, 9999, "", col1box%-3, 6);
-    DlgList(7, 8, "STD|Value", 9, col1box%+24, 6);
+    DlgString(5, 24, 9999, "", col1box%-3, 6);
     DlgText("Best Channel:", 3, 8);
-    DlgList(8, 15, "hepos1|hepos2", 9, col1box%-3, 8);
+    DlgList(6, 15, "hepos1|hepos2", 9, col1box%-3, 8);
     DlgText("ScaleCh1:", 3, 9);
-    DlgReal(9, 12, -10000.0, 10000.0, col1box%-3, 9, 0);
+    DlgReal(7, 12, -10000.0, 10000.0, col1box%-3, 9, 0);
     DlgText("ScaleCh2:", 3, 10);
-    DlgReal(10, 12, -10000.0, 10000.0, col1box%-3, 10, 0);
+    DlgReal(8, 12, -10000.0, 10000.0, col1box%-3, 10, 0);
 
     DlgAllow(0x3ff, ToolbarIdle%);  'Allow all, no idle, update settings function
-    DlgShow(trainingType%, trainingGains$, nullEyePosType%, nullShifts$, nullShiftType%, nullExclusions$, nullExclusionType%, bestChannel%, scaleCh1, scaleCh2);
+    DlgShow(trainingType%, trainingGains$, nullEyePosType%, nullCalcInt, nullExclusions$, bestChannel%, scaleCh1, scaleCh2);
 
     ' Update training gain sign
     if trainingType% = 1 then
@@ -118,8 +116,7 @@ Func ToolbarTrainingSettings%()
     Abs(trainingGains[]);
     trainingGains$ := Print$(trainingGains[]);
 
-    ' Update null shift and exclusions range values
-    UpdateNullShifts();
+    ' Update null exclusion range values
     UpdateNullExclusions();    
 
     ' Update "hepos" channel (v3) with provided scalings
@@ -145,27 +142,25 @@ Func AddTextMark(samplekey$, blocknumber%)
     endif;
     docase
         case samplekey$ = "G" then
-            text$ := "GAP";
+            text$ := "GAP#";
             code% := 1;
         case samplekey$ = "P" then
             if blockNum% <= preLastBlockNum% then
-                pretestBlockNum% := pretestBlockNum% + 1;
-                text$ := "PRE#"+Str$(pretestBlockNum%);
+                preBlockNum% := preBlockNum% + 1;
+                text$ := "PRE#"+Str$(preBlockNum%);
                 code% := 2;
                 fileComments$[2] := fileComments$[2] + "PRE,";
             else
-                posttestBlockNum% := posttestBlockNum% + 1;
-                text$ := "POST#"+Str$(posttestBlockNum%);
+                postBlockNum% := postBlockNum% + 1;
+                text$ := "POST#"+Str$(postBlockNum%);
                 code% := 8;
                 fileComments$[2] := fileComments$[2] + "POST,";
             endif;
-            fileComments$[4] := fileComments$[4] + "(nan,nan),";
         case samplekey$ = "T" then
+            nullCalcStartTime := MaxTime();
             trainBlockNum% := trainBlockNum% + 1;
             text$ := "TRAIN#"+Str$(trainBlockNum%)+" (g="+Str$(trainingGain)+", "+"null="+Str$(nullEyePos)+", "+"excl="+Str$(nullExclusion)+")";
             code% := 4;
-            fileComments$[2] := fileComments$[2] + "TRAIN,";
-            fileComments$[4] := fileComments$[4] + Print$("(%.3f,%.6f,%.6f),", trainingGain, nullEyePos, nullExclusion);
     endcase;
     return SampleText(text$, -1, code%); 
 End
@@ -232,7 +227,6 @@ Proc GenerateBlockList(m%, n%)
 
     ' Display list of training gains
     PrintLog("List of training gains:  %g\n", trainingGains[]);
-    PrintLog("List of null shifts:  %g\n", nullShifts[]);
     PrintLog("List of null exclusion ranges:  %g\n", nullExclusions[]);
     
     ' Provide estimate of experiment run time

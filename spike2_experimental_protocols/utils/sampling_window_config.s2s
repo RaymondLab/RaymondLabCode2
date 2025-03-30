@@ -178,7 +178,7 @@ Proc WindowSetup()
     ' TextMark: Event keyboard markers
     SampleTextMark(200);
     
-    SampleOptimise(1, 1, 0, 2, 50);  'Sets sample rate optimising settings
+    SampleOptimise(1, 1, 2, 1, 50);  'Sets sample rate optimising settings
     SampleMode(1);  'Sets sampling mode to Continuous recording mode
     sampling_window% := FileNew(0, 1);  'Create and display immediately a new Spike2 data file
     

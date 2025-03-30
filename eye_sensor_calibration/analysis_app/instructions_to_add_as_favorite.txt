@@ -1,0 +1,8 @@
+% Replace codeFolderPath with path to RaymondLabCode2 folder
+currentFolder = pwd;
+codeFolderPath = 'C:\Users\Public\RaymondLabCode2';
+addpath(genpath(codeFolderPath));
+appFolderPath = [codeFolderPath, '\eye_sensor_calibration\analysis_app'];
+cd(appFolderPath);
+eyeCalAnalysis(currentFolder);
+clear;

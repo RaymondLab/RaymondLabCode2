@@ -25,8 +25,8 @@ var testBlockDuration    := 300.0;  'Total duration (s) of test blocks (not incl
 
 ' Training block parameters
 var nTrainingBlocks%     := 1;      'Number of training blocks [default 1]
-var trainBlockDuration   := 600.0;  'Total duration (s) of training blocks (not including Gap blocks) [default 2700.0]
-var testAfterEveryTrain% := 0;      'Determines whether a test block should be performed after each training block [default 1]
+var trainBlockDuration   := 1200.0;  'Total duration (s) of training blocks (not including Gap blocks) [default 1200.0]
+var testAfterEveryTrain% := 1;      'Determines whether a test block should be performed after each training block [default 1]
 var trainingType%        := 0;      'Defines the training type for the experiment [default 0]
 
 ' Sinusoidal test stimulus parameters
@@ -37,44 +37,46 @@ var sinPhase := -90;   'In deg
 ' Initialize variables for ToolbarIdle% function
 var nBlocks%, blockList$[1];
 var blockNum%;                                            'Counter which defines which block number is currently active
-var pretestBlockNum%, trainBlockNum%, posttestBlockNum%;  'Stores current block numbers by type
+var preBlockNum%, trainBlockNum%, postBlockNum%;  'Stores current block numbers by type
+var preLastBlockNum% := 2;                                'Block number of last pretest block
 var blockMarkers$;                                        'Provides the SampleKey commands for the currently active block
 var blockFlag%;                                           'Flag which defines whether a block is actively running
 var runFlag%;                                             'Flag which denotes whether the experiment is activately running
 var lowerSampleKey$, upperSampleKey$;                     'Stores start/end sampleykeys of current block
-var lastMarkerTime;
+var lastMarkerTime;                                       'Time of the most recently added marker
+var blockStartTime, blockEndTime;                         'Time of the start and end of most recent block
+var prevCommandTime, commandVelocity;                     'Time of previous command and value of current velocity command
 
-var blockStartTime, blockEndTime, prevCommandTime, commandVelocity;
+' Initialize variables for "hepos" virtual channel
 var hepos_expression$;
 var hepos_vch% := 0;
 var scaleCh1 := 1.0; 
 var scaleCh2 := 1.0;
 var bestChannel% := 0;
+
+' Initialize variables for null eye position-related calculations
 var nullCursorNum%;
-var nullEyePos := 0.0;
+var nullCalcInt := 120.0;
+var nullCalcStartTime := 0.0;
 var nullEyePosType% := 0;
-var preLastBlockNum% := 2;
+var prevNullEyePos := 0.0;
+var nullEyePos := 0.0;
 
 ' Training block default settings
 ' Gains correspond to deg/sec of drum velocity per V or deg of eye position
 var trainingGains[99];
 var trainingSign := -1.0;  '<0 trains to leak, >0 trains to instability
-var trainingGains$ := "0.25,0.5,0.75,1.0";
+var trainingGains$ := "0.5,0.5";
 nTrainingBlocks% := ReadStr(trainingGains$, trainingGains[]);
 resize trainingGains[nTrainingBlocks%];
 var trainingGain := trainingSign * trainingGains[0];
 
-' Null shift default value(s)
-var nullShifts[99], nShifts%;
-var nullShiftType% := 1;
-var nullShifts$    := "5.0";
-var nullShift      := Val(nullShifts$);
-UpdateNullShifts();
+' Initial Null shift value
+var nullShift := 2.0;
 
 ' Null exclusion range default value(s)
 var nullExclusions[99], nExclusions%;
-var nullExclusionType% := 1;
-var nullExclusions$    := "5.0";
+var nullExclusions$    := "3.0";
 var nullExclusion      := Val(nullExclusions$);
 UpdateNullExclusions();
 
@@ -103,19 +105,13 @@ Func ToolbarIdle%()
                 PrintLog("Sample time: %.4f seconds | Block number: %d of %d | Block marker: %s\n", blockEndTime, blockNum%, nBlocks%, lowerSampleKey$);
                 docase
                     case (blockNum% <= preLastBlockNum%) and (lowerSampleKey$ = "p") then
-                        CalculateNullPosition();
-                        CalculateNullExclusionShift();
+                        CalculateNullPosition(blockStartTime, blockEndTime);
+                        nullExclusion := nullExclusions[trainBlockNum%];
                         UpdateHeposNull();
-                        fileComments$[3] := fileComments$[3] + Print$("(%.3f,%.3f),", blockStartTime, blockEndTime);
                     case lowerSampleKey$ = "t" then
                         if trainBlockNum% < nTrainingBlocks% then
-                            CalculateNullExclusionShift();
+                            nullExclusion := nullExclusions[trainBlockNum%];
                         endif;
-                        CalculateFracPos();
-                        UpdateHeposNull();
-                        fileComments$[3] := fileComments$[3] + Print$("(%.3f,%.3f),", blockStartTime, blockEndTime);
-                    case (blockNum% > preLastBlockNum%) and (lowerSampleKey$ = "p") then
-                        fileComments$[3] := fileComments$[3] + Print$("(%.3f,%.3f),", blockStartTime, blockEndTime);
                 endcase;
             endif; 
             if blockNum% < nBlocks% then  'Check whether current block number is not greater than or equal to maximum number of blocks
@@ -135,6 +131,12 @@ Func ToolbarIdle%()
                 PrintLog("EXPERIMENT COMPLETE!\n\n");
                 Yield(2);
                 XRange();  'Zoom out to view entire experiement
+            endif;
+        else
+            if (upperSampleKey$ = "T") and (MaxTime()-nullCalcStartTime >= nullCalcInt) then
+                CalculateNullPosition(nullCalcStartTime, MaxTime());
+                UpdateHeposNull();
+                nullCalcStartTime := MaxTime();
             endif;
         endif;
     endif;
@@ -168,9 +170,9 @@ Func ToolbarFileComments%()
     DlgCreate("FILE COMMENTS", 0, 0, 85, 7);  'Initialize new dialog window
     DlgString(1, "Comment 1:", 2000, "", 20, 1);
     DlgString(2, "Comment 2:", 2000, "", 20, 2);
-    DlgString(3, "Block Labels:", 2000, "", 20, 3);
-    DlgString(4, "Start/End Times:", 2000, "", 20, 4);
-    DlgString(5, "Null Pos/Excls:", 2000, "", 20, 5);
+    DlgString(3, "Comment 3:", 2000, "", 20, 3);
+    DlgString(4, "Comment 4:", 2000, "", 20, 4);
+    DlgString(5, "Comment 5:", 2000, "", 20, 5);
 
     DlgAllow(0x3ff, ToolbarIdle%);  'Allow all, no idle
     DlgShow(fileComments$[0], fileComments$[1], fileComments$[2], fileComments$[3], fileComments$[4]);
@@ -301,40 +303,15 @@ End
 '--------------------------------------------------------------------------------
 ' GENERAL NON-TOOLBAR FUNCTIONS
 '--------------------------------------------------------------------------------
-Proc CalculateFracPos()
-    var npos, ii%, nsamples% := Round((blockEndTime - blockStartTime) * sampleRate);
-    var buffer[nsamples%];
-    ChanData(hepos_vch%, buffer, blockStartTime, blockEndTime);
-    for ii% := 0 to nsamples%-1 do
-        if buffer[ii%] > nullEyePos then
-            npos := npos + 1;
-        endif;
-    next;
-    var fracPos := npos / (1.0 * nsamples%);
-    var blockStd := ChanMeasure(hepos_vch%, 12, blockStartTime, blockEndTime);
-    PrintLog("\nFraction of positions above previous null (%.6f deg): %.3f | STD: %.6f\n\n", nullEyePos, fracPos, blockStd);
-    docase
-        case fracPos >= 0.66 then
-            nullEyePos := nullEyePos + nullShift;
-        case fracPos <= 0.33 then
-            nullEyePos := nullEyePos - nullShift;
-    endcase;
-End
-
-Proc CalculateNullExclusionShift()
-    nullShift := nullShifts[trainBlockNum%];
-    nullExclusion := nullExclusions[trainBlockNum%];
-    PrintLog("\nCaculated Null Exclusion Range: %.6f | Null Shift: %.6f\n\n", nullExclusion, nullShift);
-End
-
-Proc CalculateNullPosition()
-    var nullEyeDuration := Min(blockEndTime-blockStartTime, 100000);  'Max array size in Spike2
+Proc CalculateNullPosition(startTime, endTime)
+    var nullEyeDuration := Min(endTime-startTime, 100000);  'Max array size in Spike2
+    prevNullEyePos := nullEyePos;
     if nullEyePosType% = 1 then
         'Use quantile mean
         var lowerQ := 0.05;
         var upperQ := 0.95;
         var buffer[nullEyeDuration * 1000];
-        var n% := ChanData(hepos_vch%, buffer, blockStartTime, blockEndTime);
+        var n% := ChanData(hepos_vch%, buffer, startTime, endTime);
         ArrSort(buffer[:n%]);
         var lowerIdx% := Round(n% * lowerQ);
         var upperIdx% := Round(n% * upperQ);
@@ -343,9 +320,12 @@ Proc CalculateNullPosition()
         nullEyePos := (lowerQ + upperQ) / 2.0;
     else
         'Use median
-        nullEyePos := ChanMeasure(hepos_vch%, 21, blockStartTime, blockEndTime);
+        nullEyePos := ChanMeasure(hepos_vch%, 21, startTime, endTime);
     endif;
-    PrintLog("\nCaculated Null Position: %.6f deg\n\n", nullEyePos);
+    if preBlockNum% > 1 then
+        nullShift := 0.5 * (nullEyePos - prevNullEyePos);
+        nullEyePos := nullEyePos + nullShift;
+    endif;
 End
 
 Proc UpdateHeposNull()
@@ -363,25 +343,10 @@ Proc UpdateHeposNull()
     else
         ChanUnits$(hepos_vch%, "V");
     endif;
+    var text$ := "[null="+Str$(nullEyePos)+"]";
     HCursor(nullCursorNum%, nullEyePos);
-End
-
-Proc UpdateNullShifts()
-    var i%, tempShifts[99];
-    resize nullShifts[nTrainingBlocks%];
-    nShifts% := ReadStr(nullShifts$, tempShifts[]);
-    docase
-        case nShifts% < nTrainingBlocks% then
-            for i% := 0 to nTrainingBlocks%-1 do
-                nullShifts[i%] := tempShifts[0];
-            next;
-        case nShifts% = nTrainingBlocks% then
-            for i% := 0 to nTrainingBlocks%-1 do
-                nullShifts[i%] := tempShifts[i%];
-            next;
-    endcase;
-    Abs(nullShifts[]);
-    nullShifts$ := Print$(nullShifts[]);
+    SampleText(text$, -1, 3);
+    PrintLog("Null Position updated to: %.6f deg\n", nullEyePos);
 End
 
 Proc UpdateNullExclusions()
