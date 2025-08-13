@@ -6,6 +6,7 @@ function axesCustomToolbarButtons(ax, interactions)
 %   Description of the provided buttons:
 %   "Restore View"    - This is a default button that restores the original 
 %       view of axes or tiled chart layouts.
+%   "Zoom In"         - This is a default button that enables zoom mode.
 %   "Horizontal Zoom" - Toggles horizontal-only zooming.
 %   "Vertical Zoom"   - Toggles vertical-only zooming.
 %
@@ -23,7 +24,7 @@ end
 ax.Interactions = interactions;
 
 % Replace axes toolbar with only the "restor view" button
-tb = axtoolbar(ax, {'restoreview'});
+tb = axtoolbar(ax, {'restoreview', 'zoomin'});
 
 % Add a "horizontal zoom" state button
 hBtn = axtoolbarbtn(tb, 'state', 'Icon','tool_zoom_x.gif');
