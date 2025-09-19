@@ -5,54 +5,49 @@
 ' HKEY_CURRENT_USER\Software\CED\Spike2\RigParams
 ' 
 ' ------------------------------------------------------------------------------
-'Set the sequencer file to use for the protocol
-const sequencerFile$ := "sine_protocols/sine_stopto.pls";
+
+' Set the sequencer file to use for the protocol
+const sequencerFile$ := "sine_protocols/sine_opto_st-unilateral-singles.pls";
 
 ' This file is the same for all SINE protocols
 #include "sine_core.s2s"
 
-' Re-define the default protocol-specific parameter values
-nTestBlocks%       := 1;     'Number of pretest/posttest blocks [default 1]
+' Overwrite the default parameter values with protocol-specific values
+nTestBlocks%       := 3;     'Number of pretest/posttest blocks [default 3]
 testBlockDuration  := 45;    'Duration (s) of each pretest/posttest block [default 45.0]
-nTrainingBlocks%   := 1;     ' Number of training blocks [default 1]
-trainBlockDuration := 1800;  '1800.0;  'Duration (s) of each training block [default 1800.0]
+nTrainingBlocks%   := 1;     'Number of training blocks [default 1]
+trainBlockDuration := 1800;  'Duration (s) of each training block [default 1800.0]
 
-' Define the shifts and timings for each experiment type
-const shiftDelay2%   := 12;
-const shift0p5Hz%    := 500;
-const shift1Hz%      := 250;
-const shift2Hz%      := 125;
+' Re-calculate number of test and train block cyles
+SetNumTestTrainCycles();
+
+' Define the base opto timing delays for each experiment type ("-1" corresponds to "no stim")
 const delays0p5Hz%[] := {0, 125, 250, 375, 500, 625, 750, 875, 1000, 1125, 1250, 1375, 1500, 1625, 1750, 1875, -1};
 const delays1Hz%[]   := {0, 125, 188, 250, 313, 375, 500, 625, 750, 875, -1};
 const delays2Hz%[]   := {0, 63, 125, 188, 250, 313, 375, 438, -1};
 
-' Opto training block parameters
-var optoDuration%, delayArrLen%, delayShift%;
+' "Opto Settings" default parameters
+var imageArr%[3], optoDuration%;
 var optoTrainingType%  := 0;  'Defines the frequency of the training for opto experiments [default 0]
 var optoTimingOrder%   := 0;  'Defines whether timing order is sequential or random [default 0]
 var optoEveryNthCycle% := 4;  'Sets opto timing to occur every Nth cycle [default 4]
-var prevIdx1%          := -1;
 
-var optoIpsiOrContra% := 0;  '[default 0]
-var digpsCycleCount%  := 4;  '1 or 4
-var digpsDuration%    := 2;  '14 or 2
-var digpsInterval%    := 4;  '15 or 4
+' Sets output sequencer "DIGPS" command parameters (see Spike2 help index for more info on "DIGPS")
+var digpsCycleCount%  := 4;  'Use 1 or 4 [default 4]
+var digpsDuration%    := 2;  'Use 14 or 2 [default 2]
+var digpsInterval%    := 4;  'Use 15 or 4 [default 4]
 
-var ttlNum1% := 1;
-var ttlNum2% := 2;
-var newChairPhase, newChairAngle;
-var currDelay1%, currDelay2%, txt1$, txt2$;
+' Initialize global variables used other opto-related functions
+var newChairPhase := chairPhase;
+var newChairAngle := 0;
+var delayLabels%[1], delayArrLen%, prevStimNum%, halfCycle%, delayVal2%;
 UpdateOptoParamsForSequencer();
 
 ' Compute number of sequencer steps for GAP1, GAP2, and GAP3 in the sequencer file
 var halfgapSeqSteps, gap1SeqSteps, gap2SeqSteps, gap3SeqSteps;  'Initialize sequencer file variables
 CalculateGapSeqSteps();
-
-var testSeqSteps%;
-CalculateTestSeqSteps();
   
 ' Compute total experiment duration for settings window text information
-var imageArr%[4];
 var textStepPeriod%, textMinutes%;
 var blockdurationTestGap      := gapDur + testBlockDuration;
 var blockdurationTestTrainGap := gapDur + testBlockDuration + gapDur + trainBlockDuration;
@@ -72,9 +67,8 @@ ToolbarStartup();
 Proc WindowUpdate()
     ChanShow("12..15");
     ChanHide("v1", "v2");
-    'HCursorNew(HHVELcom_ch%, -0.3750415);
-    'HCursorNew(HHVELcom_ch%, -9.0);
-    'HCursorNew(HHVELcom_ch%, 9.0);
+    HCursorNew(HTVELcom_ch%, 0.0);
+    HCursorNew(HHVELcom_ch%, 0.0);
     'ChanHide("1,5,6,7,10", "v1", "v2", "14,15");
     SetOptoDelays();
 End
@@ -94,7 +88,7 @@ Proc ToolbarStartup()
     ToolbarSet(3, "File Comments", ToolbarFileComments%);
     ToolbarSet(4, "Opto Settings", ToolbarOptoSettings%);
     ToolbarSet(5, "Expmt Settings", ToolbarExpmtSettings%);
-    'ToolbarSet(9, "Sine On", ToolbarSineOn%);
+    'TODO: ToolbarSet(9, "Sine On", ToolbarSineOn%);
     ToolbarSet(40, "Run Expmt", ToolbarRunExpmt%);
     ToolbarEnable(initialDisabled%, 0); 
     Toolbar("", 231);
@@ -239,9 +233,11 @@ Func ToolbarExpmtSettings%()
     DlgShow(trainingType%, nTrainingBlocks%, trainBlockDuration, nTestBlocks%, testBlockDuration, 
             gapDur, flashDur, drumAmp, drumFreq, drumPhase, chairAmp, chairFreq, chairPhase);
 
+    ' Re-calculate number of test and train block cyles
+    SetNumTestTrainCycles();
+
     ' Re-compute number of cycle steps for GAP1, GAP2, and GAP3 in sequencer file
     CalculateGapSeqSteps();
-    CalculateTestSeqSteps();
 
     ' Update opto stim parameters
     UpdateOptoParamsForSequencer();
@@ -259,20 +255,19 @@ End
 Func UpdateOptoSettings%(item%)
     var temp_optoTrainingType% := DlgValue(1);
     var temp_optoTimingOrder% := DlgValue(2);
-    var temp_optoIpsiOrContra% := DlgValue(3);
+    var temp_optoEveryNthCycle% := DlgValue(3);
     var temp_digpsCycleCount% := DlgValue(4);
     var temp_digpsDuration% := DlgValue(5);
     var temp_digpsInterval% := DlgValue(6);
-    var temp_optoEveryNthCycle% := DlgValue(7);
 
     docase
         case item% = 1 then
             DlgEnable(0, imageArr%);
             DlgEnable(1, imageArr%[temp_optoTrainingType%]);
-            if temp_optoTrainingType% = 3 then
-                DlgValue(7, 8);
+            if temp_optoTrainingType% = 2 then
+                DlgValue(3, 8);
             else
-                DlgValue(7, 4);
+                DlgValue(3, 4);
             endif;
     endcase;
 
@@ -284,36 +279,29 @@ Func ToolbarOptoSettings%()
     var width% := 121;
     DlgCreate("OPTO SETTINGS", 0, 0, width%, 21);  'Initialize new dialog window
 
-    var col1box% := 31;
-    var col1width% := col1box% + 10;
-    DlgList(1, "Training type: ", "1Hz Singles|1Hz Pairs|0.5Hz Singles|2Hz Singles", 10, 20, 1);
-    DlgList(2, "Timing order: ", "Random|Sequential", 7, 20, 2); 
-    DlgList(3, "Stimulus type: ", "Ipsi|Contra", 10, 20, 3);
+    var col1box% := 23;
+    var col1width% := col1box% + 23;
+    DlgList(1, "Training type: ", "1Hz Singles|0.5Hz Singles|2Hz Singles", 10, col1box%, 1);
+    DlgList(2, "Timing order: ", "Random|Sequential", 7, col1box%, 2); 
+    DlgText("Every Nth sine cycle:", 2, 3);
+    DlgInteger(3, 5, 1, 16, col1box%, 3, 0);
 
     var col2txt% := col1width% + 8; 
-    var col2box% := col2txt% + 20;
+    var col2box% := col2txt% + 19;
     DlgText("DIGPS cycle count:", col2txt%, 1);
     DlgInteger(4, 5, 1, 4, col2box%, 1, 0);
     DlgText("DIGPS duration:", col2txt%, 2);
     DlgInteger(5, 5, 2, 1000, col2box%, 2, 0);
     DlgText("DIGPS interval:", col2txt%, 3);
     DlgInteger(6, 5, 4, 1000, col2box%, 3, 0);
-
-    var col3txt% := col2txt% + 35;
-    var col3box% := col3txt% + 21;
-    var col3width% := 36;
-    DlgText("Every Nth sine cycle:", col3txt%, 1);
-    DlgInteger(7, 5, 1, 16, col3box%, 1, 0);
-
-    imageArr%[3] := DlgImage(rootpath$+"/images/sine_2_hz_singles.jpg", 3, 5, -3, 15);
-    imageArr%[2] := DlgImage(rootpath$+"/images/sine_0-5_hz_singles.jpg", 3, 5, -3, 15);
-    imageArr%[1] := DlgImage(rootpath$+"/images/sine_1_hz_pairs.jpg", 3, 5, -3, 15);
+    
+    imageArr%[2] := DlgImage(rootpath$+"/images/sine_2_hz_singles.jpg", 3, 5, -3, 15);
+    imageArr%[1] := DlgImage(rootpath$+"/images/sine_0-5_hz_singles.jpg", 3, 5, -3, 15);
     imageArr%[0] := DlgImage(rootpath$+"/images/sine_1_hz_singles.jpg", 3, 5, -3, 15);
 
     DlgAllow(0x3ff, ToolbarIdle%, UpdateOptoSettings%);  'Allow all, no idle, update settings function
 
-    DlgShow(optoTrainingType%, optoTimingOrder%, optoIpsiOrContra%, 
-            digpsCycleCount%, digpsDuration%, digpsInterval%, optoEveryNthCycle%);
+    DlgShow(optoTrainingType%, optoTimingOrder%, optoEveryNthCycle%, digpsCycleCount%, digpsDuration%, digpsInterval%);
 
     docase
         case (optoTrainingType% = 0) or (optoTrainingType% = 1) then
@@ -327,9 +315,11 @@ Func ToolbarOptoSettings%()
             chairFreq := 2;
     endcase;
 
+    ' Re-calculate number of test and train block cyles
+    SetNumTestTrainCycles();
+
     ' Re-compute number of cycle steps for GAP1, GAP2, and GAP3 in sequencer file
     CalculateGapSeqSteps();
-    CalculateTestSeqSteps();
 
     UpdateOptoParamsForSequencer();
     SetOptoDelays();
@@ -347,10 +337,6 @@ Proc CalculateGapSeqSteps()
     gap1SeqSteps := Round((halfgapSeqSteps * sampleRate / 3.0) - 2.0);
     gap2SeqSteps := Round((flashDur * sampleRate / 3.0));
     gap3SeqSteps := Round((halfgapSeqSteps * sampleRate / 3.0) - 1.0);
-End
-
-Proc CalculateTestSeqSteps()
-    testSeqSteps% := Round(testBlockDuration * chairFreq - 1);
 End
 
 
@@ -407,150 +393,123 @@ End
 ' SEND CURRENT SPIKE2 VARIABLE VALUES TO SEQUENCER
 '--------------------------------------------------------------------------------
 Proc SetSequencerValues()
-    ' Gap block parameters
-    SampleSeqVar(6, gap1SeqSteps);  'Gap1Dur
-    SampleSeqVar(7, gap2SeqSteps);  'FlashDur
-    SampleSeqVar(8, gap3SeqSteps);  'Gap3Dur
-
     ' Drum parameters
-    SampleSeqVar(9, Amp2Int32%(drumVelocityOffset, drumVelocity2Voltage));  'DrumOff
-    SampleSeqVar(10, Amp2Int16%(drumAmp, drumVelocity2Voltage));            'DrumAmp
-    SampleSeqVar(11, Hz2Int32%(drumFreq));                                  'DrumFrq
-    SampleSeqVar(12, Angle2Int32%(drumPhase));                              'DrumPhs
+    SampleSeqVar(2, Amp2Int32%(drumVelocityOffset, drumVelocity2Voltage));  'DrumOff
+    SampleSeqVar(3, Amp2Int16%(drumAmp, drumVelocity2Voltage));             'DrumAmp
+    SampleSeqVar(4, Hz2Int32%(drumFreq));                                   'DrumFrq
+    SampleSeqVar(5, Angle2Int32%(drumPhase));                               'DrumPhs
+    SampleSeqVar(7, nDrumTestCycles%);                                      'NdrumP
+    SampleSeqVar(8, nDrumTrainCycles%);                                     'NdrumT
 
     ' Chair parameters
-    SampleSeqVar(13, Amp2Int32%(chairVelocityOffset, chairVelocity2Voltage));  'ChairOff
-    SampleSeqVar(14, Amp2Int16%(chairAmp, chairVelocity2Voltage));             'ChairAmp
-    SampleSeqVar(15, Hz2Int32%(chairFreq));                                    'ChairFrq
-    SampleSeqVar(16, Angle2Int32%(newChairPhase));                             'ChairPhs
-    SampleSeqVar(17, Angle2Int32%(newChairAngle));                             'ChairAng
+    SampleSeqVar(10, Amp2Int32%(chairVelocityOffset, chairVelocity2Voltage));  'ChairOff
+    SampleSeqVar(11, Amp2Int16%(chairAmp, chairVelocity2Voltage));             'ChairAmp
+    SampleSeqVar(12, Hz2Int32%(chairFreq));                                    'ChairFrq
+    SampleSeqVar(13, Angle2Int32%(newChairPhase));                             'ChairPhs
+    SampleSeqVar(14, Angle2Int32%(newChairAngle));                             'ChairAng
+    SampleSeqVar(15, nChairTestCycles%);                                       'NchairP
+    SampleSeqVar(16, nChairTrainCycles%+1);                                    'NchairT
+
+    ' Gap block parameters
+    SampleSeqVar(18, gap1SeqSteps);  'Gap1Dur
+    SampleSeqVar(19, gap2SeqSteps);  'FlashDur
+    SampleSeqVar(20, gap3SeqSteps);  'Gap3Dur
 
     ' Opto stim parameters
-    SampleSeqVar(18, delayArrLen%-1);      'NDelays
-    SampleSeqVar(19, digpsDuration%);      'PulDur
-    SampleSeqVar(20, digpsInterval%);      'PulInt
-    SampleSeqVar(21, digpsCycleCount%);    'PulNCycl
-    SampleSeqVar(22, optoEveryNthCycle%);  'CycleInt
-    SampleSeqVar(23, ttlNum1%);            'TTLNum1
-    SampleSeqVar(24, ttlNum2%);            'TTLNum2
-
-    SampleSeqVar(30, testSeqSteps%);       'NumTest
+    SampleSeqVar(22, delayArrLen%-1);      'NDelays
+    SampleSeqVar(23, digpsDuration%);      'PulDur
+    SampleSeqVar(24, digpsInterval%);      'PulInt
+    SampleSeqVar(25, digpsCycleCount%);    'PulNCycl
+    SampleSeqVar(26, optoEveryNthCycle%);  'EveryNth
 
     CheckDelayChange(); 
 End
 
+'--------------------------------------------------------------------------------
+' CALCULATE LEFT AND RIGHT OPTO TIMING DELAYS TO SEND TO SEQUENCER
+'--------------------------------------------------------------------------------
 Proc SetOptoDelays()
-    var tempArrLen%, delayArr%[1];
+    var tempArrLen%, tempDelayArr%[1];
+    ' Get the base array of delay timings and its length
     docase
-        case optoTrainingType% = 0 then
-            delayShift% := shift1Hz%;
-            delayArrLen% := Len(delays1Hz%[]);
-            resize delayArr%[delayArrLen%];
-            ArrConst(delayArr%[], delays1Hz%[]);
-        case optoTrainingType% = 1 then
-            delayShift% := shift1Hz%;
-            delayArrLen% := Len(delays1Hz%[]);
-            resize delayArr%[delayArrLen%];
-            ArrConst(delayArr%[], delays1Hz%[]);
-            tempArrLen% := delayArrLen%;
-            delayArrLen% := Round(BinomialC(delayArrLen%,2) + 1);
-        case optoTrainingType% = 2 then
-            delayShift% := shift0p5Hz%;
-            delayArrLen% := Len(delays0p5Hz%[]);
-            resize delayArr%[delayArrLen%];
-            ArrConst(delayArr%[], delays0p5Hz%[]);
-        case optoTrainingType% = 3 then
-            delayShift% := shift2Hz%;
-            delayArrLen% := Len(delays2Hz%[]);
-            resize delayArr%[delayArrLen%];
-            ArrConst(delayArr%[], delays2Hz%[]);
+        case optoTrainingType% = 0 then  'For 1 hz singles
+            tempArrLen% := Len(delays1Hz%[]);
+            resize tempDelayArr%[tempArrLen%];
+            ArrConst(tempDelayArr%[], delays1Hz%[]);
+        case optoTrainingType% = 1 then  'For 0.5 hz singles
+            tempArrLen% := Len(delays0p5Hz%[]);
+            resize tempDelayArr%[tempArrLen%];
+            ArrConst(tempDelayArr%[], delays0p5Hz%[]);
+        case optoTrainingType% = 2 then  'For 2 hz singles
+            tempArrLen% := Len(delays2Hz%[]);
+            resize tempDelayArr%[tempArrLen%];
+            ArrConst(tempDelayArr%[], delays2Hz%[]);
     endcase;
 
-    var delays1%[delayArrLen%];
-    var delays2%[delayArrLen%];
+    ' Duration (s) per repeat of the set of array delay timing values
+    var durationPerArrRepeat := tempArrLen% * optoEveryNthCycle% * chairFreq; 
+    
+    ' Number of times base array can be repeated within approx. desired training block duration
+    var nrepeats% := Round(trainBlockDuration / durationPerArrRepeat);
+    
+    ' Actual resulting duration of the training block
+    var trainBlockDurationActual := durationPerArrRepeat * nrepeats%;
 
-    var ii%, jj%, num%;
-    if optoTrainingType% = 1 then
-        for ii% := 0 to tempArrLen%-1 do
-            for jj% := (ii%+1) to tempArrLen%-1 do
-                delays1%[num%] := delayArr%[ii%];
-                delays2%[num%] := delayArr%[jj%];
-                if delays2%[num%] > (shiftDelay2% + 5) then
-                    delays2%[num%] := delays2%[num%] - delays1%[num%] - shiftDelay2%;
-                endif;
-                num% := num% + 1;
-            next;
-        next;
-        delays1%[num%] := -1;
-        delays2%[num%] := -1;
-    else
-        for ii% := 0 to delayArrLen%-1 do
-            delays1%[ii%] := delayArr%[ii%];
-            delays2%[ii%] := -1;
-        next;
-    endif;
+    ' Initialize arrays to store delay timing values over an entire training block
+    delayArrLen% := Round(tempArrLen%*nrepeats%);
+    resize delayLabels%[delayArrLen%];
+    var delayValues%[delayArrLen%];
 
-    'var nrepeats% := 2;
-    var nrepeats% := Round((trainBlockDuration * chairFreq) / (delayArrLen% * optoEveryNthCycle%));
-    var fullDelays1%[Round(nrepeats%*delayArrLen%)];
-    var fullDelays2%[Round(nrepeats%*delayArrLen%)];
-    num% := 0;
-    for ii% := 1 to nrepeats% do
+    ' Populate the arrays
+    var ii%, jj%, kk%, delay_jj%;
+    var halfCycle := (chairFreq*sampleRate) / 2;
+    var quarterCycle := halfCycle / 2;
+    for ii% := 0 to nrepeats%-1 do
+        ' Shuffle array if random timing order is selected in settings
         if optoTimingOrder% = 0 then
-            ArrSort(delays1%[], -1, delays2%[]);
+            ArrSort(tempDelayArr%[], -1);
         endif;
-        for jj% := 0 to delayArrLen%-1 do
-            fullDelays1%[num%] := delays1%[jj%];
-            fullDelays2%[num%] := delays2%[jj%];
-            num% := num% + 1;
+        for jj% := 0 to tempArrLen%-1 do 
+            delay_jj% := tempDelayArr%[jj%];
+            delayValues%[kk%] := delay_jj%;
+            if delay_jj% = -1 then
+                ' No stim case
+                delayLabels%[kk%] := -1;
+                delayValues%[kk%] := -1;
+            else
+                delayLabels%[kk%] := Round(delay_jj% - quarterCycle);
+                delayValues%[kk%] := delay_jj% + 11;
+            endif;
+            kk% := kk% + 1;
         next;
     next;
-    PrintLog("delays per set: %d | sets of trials: %d\n", delayArrLen%, nrepeats%);
-    PrintLog("delays1: ", fullDelays1%[]);
-    PrintLog("delays2: ", fullDelays2%[], "\n");
 
-    delayArrLen% := Round(nrepeats%*delayArrLen%);
-    SampleSeqTable(fullDelays1%[], 0);
-    SampleSeqTable(fullDelays2%[], 5000);
+    PrintLog("Actual training block duration: %g s\n", trainBlockDurationActual);
+    PrintLog("Delay timings per set: %d\n", tempArrLen%);
+    PrintLog("Number of repeats of array set: %d\n", nrepeats%);
+    PrintLog("\nBase delays: ", tempDelayArr%[]);
+    PrintLog("Labels: ", delayLabels%[]);
+    PrintLog("delayValues: ", delayValues%[], "\n");
+
+    SampleSeqTable(delayValues%[], 0);
 End
 
 Proc CheckDelayChange()
-    var currIdx1% := SampleSeqVar(26);
-    var currIdx2% := SampleSeqVar(27);
-    if (currIdx1% + currIdx2% > 0) then
-        if  (currIdx1% <> prevIdx1%) then
-            currDelay1% := SampleSeqVar(28);
-            currDelay2% := SampleSeqVar(29);
-            if currDelay1% = -1 then
-                txt1$ := "NoStim";
-            else
-                txt1$ := Str$(currDelay1%-delayShift%)+"ms";
-            endif;
-            if currDelay2% = -1 then
-                txt2$ := "NoStim";
-            else
-                txt2$ := Str$(currDelay1%-delayShift%+currDelay2%+shiftDelay2%)+"ms"; 
-            endif;
-            if optoTrainingType% = 1 then
-                SampleText("("+txt1$+", "+txt2$+")", -1, 1);
-            else
-                SampleText("("+txt1$+")", -1, 1);
-            endif;
-            prevIdx1% := currIdx1%;
-            PrintLog("optoDelay1 (%d): %s | optoDelay2 (%d): %s\n", SampleSeqVar(26), txt1$, SampleSeqVar(27), txt2$);
+    var currStimNum% := SampleSeqVar(29); 'Current StimNum from sequencer
+    var currDelayLabel%, smpltxt$;
+    if (currStimNum% > 0) and (currStimNum% <> prevStimNum%) then
+        currDelayLabel% := delayLabels%[currStimNum%-1];
+        if currDelayLabel% = -1 then
+            smpltxt$ := "NoStim";
+        else
+            smpltxt$ := Str$(currDelayLabel%)+"ms";
         endif;
+        SampleText("("+smpltxt$+")", -1, 1);
+        prevStimNum% := currStimNum%;
     endif;
 End
 
 Proc UpdateOptoParamsForSequencer()
-    if optoIpsiOrContra% = 1 then
-        ttlNum1% := 2;
-        ttlNum2% := 1;
-    else
-        ttlNum1% := 1;
-        ttlNum2% := 2;
-    endif;
-
     if digpsInterval% <= digpsDuration% then
         digpsInterval% := digpsDuration% + 1;
     endif;
@@ -563,6 +522,7 @@ Proc UpdateOptoParamsForSequencer()
     endif;
 
     optoDuration% := Round((digpsInterval% * digpsCycleCount%) - pulseGap%);
+    ' The added value can be adjusted to fine-tune the timing of 1st stim
     var offsetPhaseAngle% := Round(((optoDuration%/2) + 22) * 360 / sampleRate);
     newChairPhase := chairPhase - offsetPhaseAngle%;
     newChairAngle := 1.0 * offsetPhaseAngle%;

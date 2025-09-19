@@ -15,15 +15,26 @@ FilePathSet(rootpath$, 0);
 ' Load rig-specific parameters from local-computer's registry
 LoadRigParams();
 
-'drumVelocity2Voltage := drumVelocity2Voltage / 2;
-'chairVelocity2Voltage := chairVelocity2Voltage / 2;
+' Test and Training block parameters
+var nTestBlocks%       := 3;       'Number of pre/post-training test blocks [default 3]
+var testBlockDuration  := 45.0;    'Total duration (s) of test blocks [default 45.0]
+var nTrainingBlocks%   := 6;       'Number of training blocks [default 6]
+var trainBlockDuration := 300.0;  'Total duration (s) of training block(s) [default 300.0]
+var trainingType%      := 0;       'Defines the training type for the experiment [default 0]
+
+' Gap block parameters
+var gapDur   := 5.0;  'Total duration (in seconds) of each gap block [default 5.0]
+var flashDur := 0.2;  'Duration of TTL flash (in seconds) halfway into each gap block [default 0.2]
 
 ' Drum stimulus default sine parameters
-var drumAmp        := -10.0;                     'In deg/s
-var drumFreq       := 1;                         'In Hz
-var drumPeriod     := 1/drumFreq;                'In seconds
-var drumPhase      := -90;                       'In degrees
-var drumSign       := drumAmp / Abs(drumAmp);    'Sign of given drum amplitude
+var drumAmp           := -10.0;                     'Drum amplitude in deg/s
+var drumFreq          := 1;                         'Drum frequency in Hz
+var drumPeriod        := 1/drumFreq;                'Drum period in seconds
+var drumPhase         := -90;                       'Drum phase in degrees
+var drumSign          := drumAmp / Abs(drumAmp);    'Sign of given drum amplitude
+var nDrumTestCycles%, nDrumTrainCycles%;            'Number of drum TEST and TRAIN block cyles
+'drumVelocity2Voltage  := drumVelocity2Voltage / 2;
+'chairVelocity2Voltage := chairVelocity2Voltage / 2;
 
 ' Chair stimulus default sine parameters
 var chairAmp       := 10.0;                      'In deg/s
@@ -32,6 +43,7 @@ var chairPeriod    := 1/chairFreq;               'In seconds
 var chairPhase     := -90;                       'In degrees
 var chairSign      := chairAmp / Abs(chairAmp);  'Sign of given chair amplitude
 var chairDirection := 1;                         '0 for ipsi, 1 for contra
+var nChairTestCycles%, nChairTrainCycles%;        'Number of chair TEST and TRAIN block cyles
 
 ' driftFix parameters
 var Kp         := 0.5;  'Proportional correction gain (default 0.5)
@@ -40,18 +52,7 @@ var numErrors% := 3;    'Number of error values to collect in an array
 var htposErrors[numErrors%], hhposErrors[numErrors%];  'Array of errors
 var htposPrevError, hhposPrevError;  'Previous mean error
 
-' Gap block parameters
-var gapDur   := 5.0;  'Total duration (in seconds) of each gap block [default 5.0]
-var flashDur := 0.2;  'Duration of TTL flash (in seconds) halfway into each gap block [default 0.2]
-
-' Test and Training block parameters
-var nTestBlocks%       := 3;       'Number of pre/post-training test blocks [default 3]
-var testBlockDuration  := 45.0;    'Total duration (s) of test blocks [default 45.0]
-var nTrainingBlocks%   := 6;       'Number of training blocks [default 6]
-var trainBlockDuration := 300.0;  'Total duration (s) of training block(s) [default 300.0]
-var trainingType%      := 0;       'Defines the training type for the experiment [default 0]
-
-' ToolbarIdle% variables
+' ToolbarIdle% global variables
 var nBlocks%, blockList$[1];
 var blockNum%;  'Counter which defines which block number is currently active
 var blockFlag%;  'Flag which defines whether a block is actively running or not
@@ -60,6 +61,9 @@ var runFlag%;  'Flag which denotes whether the experiment is activately running 
 var lowerSampleKey$, upperSampleKey$;
 var pretestBlockNum%, trainBlockNum%, posttestBlockNum%;
 var blockStartTime, blockEndTime;
+
+' Set initial number of test and train block cyles
+SetNumTestTrainCycles();
 
 
 '--------------------------------------------------------------------------------
@@ -115,21 +119,6 @@ End
 ' GENERAL TOOLBAR FUNCTIONS
 '--------------------------------------------------------------------------------
 
-' Function that opens a new sampling window
-Func ToolbarNewFile%()
-    WindowSetup();  'Sets up channels in the new sampling configuration window
-    WindowUpdate();  'Updates sampling window with protocol-specific configuration
-    WindowVisible(3);  'Maximizes the new sampling window to fit the screen
-    ToolbarEnable(-1, 1);  'Enables buttons that require a new sampling window
-    ToolbarEnable(2, 0); 
-    SetSequencerValues(); Yield();
-    ' Ensure that the position magnitude virtual channels are in the positive direction
-    VirtualChan(HTPOScom_ch%, Str$(drumSign)+"*ch("+Str$(htpos_ch%)+")", 0, 1.0/sampleRate);
-    VirtualChan(HHPOScom_ch%, Str$(chairSign)+"*ch("+Str$(hhpos_ch%)+")", 0, 1.0/sampleRate);
-    SampleKey("R");  'Ensures that sequencer is set to its default configuration prior to sampling
-    return 1;
-End
-
 ' Function that defines what happens during idle times (in computer cycles) while actively sampling
 Func ToolbarIdle%()
     ' Check whether a valid sampling view is currently running before continuing
@@ -170,6 +159,21 @@ Func ToolbarIdle%()
     return 1;
 End
 
+' Function that opens a new sampling window
+Func ToolbarNewFile%()
+    WindowSetup();  'Sets up channels in the new sampling configuration window
+    WindowUpdate();  'Updates sampling window with protocol-specific configuration
+    WindowVisible(3);  'Maximizes the new sampling window to fit the screen
+    ToolbarEnable(-1, 1);  'Enables buttons that require a new sampling window
+    ToolbarEnable(2, 0); 
+    SetSequencerValues(); Yield();
+    ' Ensure that the position magnitude virtual channels are in the positive direction
+    VirtualChan(HTPOScom_ch%, Str$(drumSign)+"*ch("+Str$(htpos_ch%)+")", 0, 1.0/sampleRate);
+    VirtualChan(HHPOScom_ch%, Str$(chairSign)+"*ch("+Str$(hhpos_ch%)+")", 0, 1.0/sampleRate);
+    SampleKey("R");  'Ensures that sequencer is set to its default configuration prior to sampling
+    return 1;
+End
+
 ' Function that runs experiment based on parameters provided in experimental configuration window
 Func ToolbarRunExpmt%()
     SampleKey("A");
@@ -198,4 +202,12 @@ Func ToolbarQuit%()
     SampleStop();
     PrintLog("MANUALLY QUIT!\n\n");
     return 0;
+End
+
+' Set number of test and train block cyles based on block duration and stim frequency
+Proc SetNumTestTrainCycles()
+    nDrumTestCycles%   := Round(testBlockDuration / drumFreq)-1;    'Number of drum TEST block cycles
+    nDrumTrainCycles%  := Round(trainBlockDuration / drumFreq)-1;   'Number of drum TRAIN block cycles
+    nChairTestCycles%  := Round(testBlockDuration / chairFreq)-1;   'Number of drum TEST block cycles
+    nChairTrainCycles% := Round(trainBlockDuration / chairFreq)-1;  'Number of drum TRAIN block cycles
 End
