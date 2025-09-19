@@ -1,47 +1,53 @@
 ;-----------------------------------------------------------------------------
 ; Initial Parameters
 ;-----------------------------------------------------------------------------
-            ; Set rate to 1 ms/step, 1 scaling, and 0 offset            
+            ; Set rate to 1 ms/sequencer step, 1 scaling, and 0 offset
             SET    1.000,1,0
 
-            ; Flags (1=running, 0=stopped)
-            VAR    V1,BlockFlg=0   ;General block flag
-            VAR    V2,Counter1     ;Main counter
-            VAR    V3,Counter2     ;Sub-counter 1
-            VAR    V4,Counter3     ;Sub-counter 2
-            VAR    V5,Counter4     ;Sub-counter 3
-            VAR    V6,Gap1Dur=478  ;(Gap1Dur*rate/5)-2
-            VAR    V7,FlashDur=39  ;(FlashDur*rate/5)-1
-            VAR    V8,Gap3Dur=479  ;(Gap3Dur*rate/5)-1
+            ; --- Core Sequencer Variables ---
+            ; These variables should be the same across ALL protocols
+            ; Note V1-V256 is available, but DO NOT use V56-V64, V255, V256
 
-            ; Drum parameters
-            VAR    V9,DrumOff=0
-            VAR    V10,DrumAmp=0
-            VAR    V11,DrumFrq=0
-            VAR    V12,DrumPhs=0
+            ; Block Flag V1 (tells Spike2 if a block is actively running)
+            VAR    V1,BlockFlg=0   ;1 = running, 0 = not running
 
-            ; Chair parameters
-            VAR    V13,ChairOff=0
-            VAR    V14,ChairAmp=0
-            VAR    V15,ChairFrq=0
-            VAR    V16,ChairPhs=0
-            VAR    V17,ChairAng=0
+            ; Drum/Target parameters (V2 - V9)
+            VAR    V2,DrumOff=0    ;Drum offset
+            VAR    V3,DrumAmp=0    ;Drum amplitude
+            VAR    V4,DrumFrq=0    ;Drum frequency
+            VAR    V5,DrumPhs=0    ;Drum phase
+            VAR    V6,DrumAng=0    ;Drum angle
+            VAR    V7,NdrumP=0     ;Number of drum TEST block cycles
+            VAR    V8,NdrumT=0     ;Number of drum TRAIN block cycles
+            VAR    V9,DrumCtr=0    ;Cycle counter for drum
 
-            VAR    V18,NDelays=0
-            VAR    V19,PulDur=0
-            VAR    V20,PulInt=0
-            VAR    V21,PulNCycl=0
-            VAR    V22,CycleInt=0
-            VAR    V23,TTLNum1=0
-            VAR    V24,TTLNum2=0
+            ; Chair/Head parameters (V10 - V17)
+            VAR    V10,ChairOff=0  ;Chair offset
+            VAR    V11,ChairAmp=0  ;Chair amplitude
+            VAR    V12,ChairFrq=0  ;Chair frequency
+            VAR    V13,ChairPhs=0  ;Chair phase
+            VAR    V14,ChairAng=0  ;Chair angle
+            VAR    V15,NchairP=0   ;Number of chair TEST block cycles
+            VAR    V16,NchairT=0   ;Number of chair TRAIN block cycles
+            VAR    V17,ChairCtr=0  ;Cycle counter for chair
 
-            VAR    V25,TTLNum=0
-            VAR    V26,Idx1=-1
-            VAR    V27,Idx2=4999
-            VAR    V28,OptoDel1=-99
-            VAR    V29,OptoDel2=-99
+            ; Gap block timing parameters (V18 - V21)
+            VAR    V18,Gap1Dur=478 ;(Gap1Dur*rate/5)-2
+            VAR    V19,FlashDur=39 ;(FlashDur*rate/5)-1
+            VAR    V20,Gap3Dur=479 ;(Gap3Dur*rate/5)-1
+            VAR    V21,GapCtr=0    ;Counter for gap block
 
-            VAR    V30,NumTest=3
+            ; --- Protocol-specific Sequencer Variables ---
+
+            VAR    V22,NDelays=0
+            VAR    V23,PulDur=0
+            VAR    V24,PulInt=0
+            VAR    V25,PulNCycl=0
+            VAR    V26,EveryNth=0
+            VAR    V27,DelIdx=0
+            VAR    V28,DelVal=-99
+            VAR    V29,StimNum=0
+            VAR    V30,CyclCtr=0
 
             TABSZ  10001
 
@@ -78,16 +84,16 @@ RESET:  'R  DIGOUT [.......0]      ;Reset to initial state >=
 
 
 ;-----------------------------------------------------------------------------
-; DRUM SINE: Turn sinusoidal drum stimulus on/off
+; DRUM SINE: Turn sinusoidal drum only stimulus on/off
 ;-----------------------------------------------------------------------------
 DSINEON: 'D SZ     0,DrumAmp       ;Start drum cosine
             OFFSET 0,DrumOff       ;Set cosine offset
-            PHASE  0,DrumPhs       ;Set cosine relative phase
+            PHASE  0,-90           ;Set cosine relative phase
             ANGLE  0,0             ;Set cosine angle
             RATE   0,DrumFrq       ;Set cosine frequency
-DSINE1:     WAITC  0,DSINE1
-            OFFSET 0,DrumOff
-            JUMP   DSINE1          ;Set cosine loop    > Sine running
+DSINE1:     WAITC  0,DSINE1        ;                   >"
+            OFFSET 0,DrumOff       ;                   >"
+            JUMP   DSINE1          ;Set cosine loop    > Drum running
 
 DSINEOFF: 'd CLRC  0               ;Stop drum sine at phase 0
 DSINE2:     OFFSET 0,DrumOff       ;Adjust cosine offset
@@ -96,16 +102,16 @@ DSINE2:     OFFSET 0,DrumOff       ;Adjust cosine offset
 
 
 ;-----------------------------------------------------------------------------
-; CHAIR SINE: Turn sinusoidal chair stimulus on/off
+; CHAIR SINE: Turn sinusoidal chair only stimulus on/off
 ;-----------------------------------------------------------------------------
 CSINEON: 'C SZ     1,ChairAmp      ;Start chair cosine
             OFFSET 1,ChairOff      ;Set cosine offset
-            PHASE  1,ChairPhs      ;Set cosine relative phase
+            PHASE  1,-90           ;Set cosine relative phase
             ANGLE  1,0             ;Set cosine angle
             RATE   1,ChairFrq      ;Set cosine frequency
-CSINE1:     WAITC  1,CSINE1
-            OFFSET 1,ChairOff
-            JUMP   CSINE1          ;Set cosine loop    > Sine running
+CSINE1:     WAITC  1,CSINE1        ;                   >"
+            OFFSET 1,ChairOff      ;                   >"
+            JUMP   CSINE1          ;Set cosine loop    > Chair running
 
 CSINEOFF: 'c CLRC  1               ;Stop chair sine at phase 0
 CSINE2:     OFFSET 1,ChairOff      ;Adjust cosine offset
@@ -120,8 +126,8 @@ SINEON: 'S  SZ     0,DrumAmp       ;Start cosine
             SZ     1,ChairAmp      ;Set cosine amplitude
             OFFSET 0,DrumOff       ;Set cosine offset
             OFFSET 1,ChairOff
-            PHASE  0,DrumPhs       ;Set cosine relative phase
-            PHASE  1,ChairPhs
+            PHASE  0,-90           ;Set cosine relative phase
+            PHASE  1,-90
             ANGLE  0,0             ;Set cosine angle
             ANGLE  1,0
             RATE   0,DrumFrq       ;Set cosine frequency
@@ -131,65 +137,13 @@ SINE1:      WAITC  1,SINE1
             OFFSET 1,ChairOff
             JUMP   SINE1           ;Set cosine loop    > Sine running
 
-SINEOFF: 's CLRC   0               ;Stop sines at phase 0
-            CLRC   1
+SINEOFF: 's CLRC   0               ;Stop sines at phase 0 of drum
 SINE2:      OFFSET 0,DrumOff       ;Adjust cosine offsets
             OFFSET 1,ChairOff
             WAITC  1,SINEOFF       ;Wait for end of chair cycle
             RATE   0,0             ;Stop both cosines
             RATE   1,0
             JUMP   IDLELOOP        ;Return to idle loop
-
-
-;-----------------------------------------------------------------------------
-; OPTO SINE Training Block: Turn sinusoidal chair + opto stimulus on/off
-;-----------------------------------------------------------------------------
-OPTOON: 'T  MOVI   BlockFlg,1      ;Start opto stim trials >TRAINING
-            DIGOUT [.......0]      ;Start opto stim trials >"
-            SZ     1,ChairAmp      ;Set cosine amplitude >"
-            OFFSET 1,ChairOff      ;Set cosine offset >"
-            PHASE  1,ChairPhs      ;Set cosine relative phase >"
-            ANGLE  1,ChairAng      ;Set cosine angle >"
-            RATE   1,ChairFrq      ;Set cosine frequency >"
-
-OPTO0:      MOV    Counter1,CycleInt ;Set cycle interval between stims >"
-
-OPTO1:      WAITC  1,OPTO1         ;Loop until phase == ChairPhs >"
-            OFFSET 1,ChairOff      ;Adjust cosine offset to prevent drift >"
-            DBNZ   Counter1,OPTO1  ;Repeat until cycle counter hits zero >"
-            BGE    Idx1,NDelays,OPTOOFF ;Branch if index exceeds number of trials >"
-            ADDI   Idx2,1          ;Increment Idx2 by 1 >"
-            TABLD  OptoDel2,[Idx2] ;Get OptoDel2 from table at index Idx2 >"
-            ADDI   Idx1,1          ;Increment Idx1 by 1 >"
-            TABLD  OptoDel1,[Idx1] ;Get OptoDel1 from table at index Idx1 >"
-            BLT    OptoDel1,0,OPTO2 ;Skip stim if OptoDel1 < 0 ms >"
-            MOV    TTLNum,TTLNum1  ;Otherwise, set TTLNum >" 
-            DELAY  OptoDel1        ;Delay stim by OptoDel1 number of ms >"
-            CALL   OPTOEQ          ;Execute opto stim >"
-
-OPTO2:      BLT    OptoDel2,2,OPTO0 ;Skip stim if OptoDel2 < 2 ms >"
-            MOV    TTLNum,TTLNum2  ;Otherwise, set TTLNum >"
-            DELAY  OptoDel2        ;Delay by some number of ms >"
-            CALL   OPTOEQ          ;Execute opto stim >"
-            JUMP   OPTO0           ;Set opto-cosine loop >"
-
-OPTOEQ:     BEQ    TTLNum,2,OPTOR
-OPTOL:      DIGPS  1,P,PulInt      ;Pulse every "PulInt" ms >"
-            DIGPS  1,D,PulDur      ;Pulse has duration of "PulDur" ms >"
-            DIGPS  1,C,PulNCycl    ;Set number of pulses in train >"
-            DIGPC  1,G             ;Start train >"
-            RETURN 
-OPTOR:      DIGPS  2,P,PulInt      ;Pulse every "PulInt" ms >"
-            DIGPS  2,D,PulDur      ;Pulse has duration of "PulDur" ms >"
-            DIGPS  2,C,PulNCycl    ;Set number of pulses in train >"
-            DIGPC  2,G             ;Start train >"
-            RETURN 
-
-OPTOOFF: 't CLRC   1               ;Stop cosine >"
-OPTO3:      WAITC  1,OPTO3         ;Wait for end of cycle >"
-            RATE   1,0             ;Stop chair cosine >"
-            MOVI   BlockFlg,0      ;Set block as inactive >"
-            JUMP   IDLELOOP
 
 
 ;-----------------------------------------------------------------------------
@@ -201,21 +155,21 @@ GAP:    'G  MOVI   BlockFlg,1      ;Start Gap block    >GAP BLOCK
             RATE   1,0             ;Stop cosine on chair >"
             DAC    0,DrumOff       ;Stop the drum      >"
             DAC    1,ChairOff      ;Stop the chair     >"
-            MOV    Counter1,Gap1Dur ;Set duration of first half >"
+            MOV    GapCtr,Gap1Dur  ;Set duration of first half >"
 GAP1:       DAC    0,DrumOff       ;Apply drum and chair drift correction >"
             DAC    1,ChairOff      ;                   >"
-            DBNZ   Counter1,GAP1   ;Repeat until counter hits zero >"
+            DBNZ   GapCtr,GAP1     ;Repeat until counter hits zero >"
             BEQ    FlashDur,0,GSKIP ;Skip to GAP2 if FlashDur is zero >"
             DIGOUT [.......1]      ;Turn light on      >"
-            MOV    Counter1,FlashDur ;Set duration of light pulse >"
+            MOV    GapCtr,FlashDur ;Set duration of light pulse >"
 GAP2:       DAC    0,DrumOff       ;Apply drum and chair drift correction >"
             DAC    1,ChairOff      ;                   >"
-            DBNZ   Counter1,GAP2   ;Repeat until counter hits zero >"
+            DBNZ   GapCtr,GAP2     ;Repeat until counter hits zero >"
 GSKIP:      DIGOUT [.......0]      ;Turn light off     >"
-            MOV    Counter1,Gap3Dur ;Set duration of second half >"
+            MOV    GapCtr,Gap3Dur  ;Set duration of second half >"
 GAP3:       DAC    0,DrumOff       ;Apply drum and chair drift correction >"
             DAC    1,ChairOff      ;                   >"
-            DBNZ   Counter1,GAP3   ;Repeat until counter hits zero >"
+            DBNZ   GapCtr,GAP3     ;Repeat until counter hits zero >"
             MOVI   BlockFlg,0      ;Set block as inactive >"
             JUMP   IDLELOOP
 
@@ -223,23 +177,61 @@ GAP3:       DAC    0,DrumOff       ;Apply drum and chair drift correction >"
 ;-----------------------------------------------------------------------------
 ; TEST: pre/post test VORD (chair only) block
 ;-----------------------------------------------------------------------------
-TEST:   'P  MOVI   BlockFlg,1      ;Start Test block   >TESTING
-            MOV    Counter2,NumTest ;Set number of step periods to run >"
+TEST:   'P  MOVI   BlockFlg,1      ;Start TEST block   >TESTING
+            MOV    ChairCtr,NchairP ;Set number of cycles to run >"
             DIGOUT [.......0]      ;Ensure light is off >"
             SZ     1,ChairAmp      ;Start chair cosine >"
             OFFSET 1,ChairOff      ;Set cosine offset  >"
-            PHASE  1,ChairPhs      ;Set cosine relative phase >"
+            PHASE  1,-90           ;Set cosine relative phase >"
             ANGLE  1,0             ;Set cosine angle   >"
             RATE   1,ChairFrq      ;Set cosine frequency >"
 TEST1:      OFFSET 1,ChairOff      ;Adjust cosine offset >"
-            WAITC  1,TEST1
-            DBNZ   Counter2,TEST1  ;Run steps until counter hits zero >"
-            CLRC   1               ;Stop chair sine at phase 0 >"
+            WAITC  1,TEST1         ;Wait for 0 phase   >"
+            DBNZ   ChairCtr,TEST1  ;Run cycles until counter hits zero >"
+            CLRC   1               ;Stop chair sine at 0 phase >"
 TEST2:      OFFSET 1,ChairOff      ;Adjust cosine offset >"
             WAITC  1,TEST2         ;Wait for end of cycle >"
             RATE   1,0             ;Stop chair cosine  >"
             MOVI   BlockFlg,0      ;Set block as inactive >"
             JUMP   IDLELOOP
+
+
+;-----------------------------------------------------------------------------
+; OPTO SINE Training Block: Turn sinusoidal chair + opto stimulus on/off
+;-----------------------------------------------------------------------------
+OPTOON: 'T  MOVI   BlockFlg,1      ;Start opto stim trials >TRAINING
+            DIGOUT [.......0]      ;Start opto stim trials >"
+            SZ     1,ChairAmp      ;Set cosine amplitude >"
+            OFFSET 1,ChairOff      ;Set cosine offset  >"
+            PHASE  1,ChairPhs      ;Set cosine relative phase >"
+            ANGLE  1,ChairAng      ;Set cosine angle   >"
+            RATE   1,ChairFrq      ;Set cosine frequency >"
+
+OPTO0:      MOV    CyclCtr,EveryNth ;Set cycle interval between stims >"
+            TABLD  DelVal,[DelIdx] ;Get DelVal from table at DelIdx >"
+
+OPTO1:      OFFSET 1,ChairOff      ;Adjust cosine offset >"
+            WAITC  1,OPTO1         ;Wait for 0 phase   >"
+            DBNZ   CyclCtr,OPTO1   ;Repeat until cycle counter hits zero >"
+            BGE    DelIdx,NDelays,OPTOOFF ;Branch if index exceeds number of trials >"
+            ADDI   StimNum,1       ;Increment StimNum by 1 >"
+
+            BEQ    DelVal,-1,OPTO2 ;Skip stim (i.e. NoStim) if DelVal = -1 >"
+            DELAY  DelVal
+            DIGPS  2,P,PulInt      ;Pulse every "PulInt" ms >"
+            DIGPS  2,D,PulDur      ;Pulse has duration of "PulDur" ms >"
+            DIGPS  2,C,PulNCycl    ;Set number of pulses in train >"
+            DIGPC  2,G             ;Start train on TTL3       >"
+OPTO2:      ADDI   DelIdx,1        ;Increment DelIdx by 1 >"
+            JUMP   OPTO0
+
+OPTOOFF: 't CLRC   1               ;Stop chair sine at 0 phase >"
+OPTO3:      OFFSET 1,ChairOff      ;Adjust cosine offset >"
+            WAITC  1,OPTO3         ;Wait for end of cycle >"
+            RATE   1,0             ;Stop chair cosine  >"
+            MOVI   BlockFlg,0      ;Set block as inactive >"
+            JUMP   IDLELOOP
+
 
 ;-----------------------------------------------------------------------------
 ; WAVE: Custom waveform stimuli (if provided)

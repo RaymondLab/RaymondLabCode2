@@ -7,7 +7,7 @@
 ' ------------------------------------------------------------------------------
 
 ' Set the sequencer file to use for the protocol
-const sequencerFile$ := "sine_protocols/sine_opto_st-bilateral-singles.pls";
+const sequencerFile$ := "sine_protocols/sine_opto_st-bilateral-doubles.pls";
 
 ' This file is the same for all SINE protocols
 #include "sine_core.s2s"
@@ -29,7 +29,7 @@ const delays2Hz%[]   := {0, 63, 125, 188, 250, 313, 375, 438, -1};
 ' "Opto Settings" default parameters
 var imageArr%[3], optoDuration%;
 var optoTrainingType%  := 0;  'Defines the frequency of the training for opto experiments [default 0]
-var optoTimingOrder%   := 0;  'Defines whether timing order is sequential or random [default 0]
+var optoTimingOrder%   := 0;  'Defines whether timing order is sequential (1) or random (0) [default 0]
 var optoEveryNthCycle% := 4;  'Sets opto timing to occur every Nth cycle [default 4]
 
 ' Sets output sequencer "DIGPS" command parameters (see Spike2 help index for more info on "DIGPS")
@@ -40,7 +40,7 @@ var digpsInterval%    := 4;  'Use 15 or 4 [default 4]
 ' Initialize global variables used other opto-related functions
 var newChairPhase := chairPhase;
 var newChairAngle := 0;
-var delayLabels%[1], delayArrLen%, prevStimNum%, halfCycle%, delayVal2%;
+var delayLabels1%[1], delayLabels2%[1], delayArrLen%, prevStimNum%, halfCycle%, delayVal2%;
 UpdateOptoParamsForSequencer();
 
 ' Compute number of sequencer steps for GAP1, GAP2, and GAP3 in the sequencer file
@@ -281,7 +281,7 @@ Func ToolbarOptoSettings%()
 
     var col1box% := 23;
     var col1width% := col1box% + 23;
-    DlgList(1, "Training type: ", "1Hz Singles|0.5Hz Singles|2Hz Singles", 10, col1box%, 1);
+    DlgList(1, "Training type: ", "1Hz Doubles|0.5Hz Doubles|2Hz Doubles", 10, col1box%, 1);
     DlgList(2, "Timing order: ", "Random|Sequential", 7, col1box%, 2); 
     DlgText("Every Nth sine cycle:", 2, 3);
     DlgInteger(3, 5, 1, 16, col1box%, 3, 0);
@@ -421,8 +421,6 @@ Proc SetSequencerValues()
     SampleSeqVar(24, digpsInterval%);      'PulInt
     SampleSeqVar(25, digpsCycleCount%);    'PulNCycl
     SampleSeqVar(26, optoEveryNthCycle%);  'EveryNth
-    SampleSeqVar(27, halfCycle%);          'HalfCycl
-    SampleSeqVar(30, delayVal2%);          'DelVal2
 
     CheckDelayChange(); 
 End
@@ -431,22 +429,43 @@ End
 ' CALCULATE LEFT AND RIGHT OPTO TIMING DELAYS TO SEND TO SEQUENCER
 '--------------------------------------------------------------------------------
 Proc SetOptoDelays()
-    var tempArrLen%, tempDelayArr%[1];
+    var tempBaseArrLen%, tempBaseArr%[1];
+    var tempArrLen%, tempDelayArr1%[1], tempDelayArr2%[1];
     ' Get the base array of delay timings and its length
     docase
         case optoTrainingType% = 0 then  'For 1 hz singles
-            tempArrLen% := Len(delays1Hz%[]);
-            resize tempDelayArr%[tempArrLen%];
-            ArrConst(tempDelayArr%[], delays1Hz%[]);
+            tempBaseArrLen% := Len(delays1Hz%[]);
+            resize tempBaseArr%[tempBaseArrLen%];
+            ArrConst(tempBaseArr%[], delays1Hz%[]);
         case optoTrainingType% = 1 then  'For 0.5 hz singles
-            tempArrLen% := Len(delays0p5Hz%[]);
-            resize tempDelayArr%[tempArrLen%];
-            ArrConst(tempDelayArr%[], delays0p5Hz%[]);
+            tempBaseArrLen% := Len(delays0p5Hz%[]);
+            resize tempBaseArr%[tempBaseArrLen%];
+            ArrConst(tempBaseArr%[], delays0p5Hz%[]);
         case optoTrainingType% = 2 then  'For 2 hz singles
-            tempArrLen% := Len(delays2Hz%[]);
-            resize tempDelayArr%[tempArrLen%];
-            ArrConst(tempDelayArr%[], delays2Hz%[]);
+            tempBaseArrLen% := Len(delays2Hz%[]);
+            resize tempBaseArr%[tempBaseArrLen%];
+            ArrConst(tempBaseArr%[], delays2Hz%[]);
     endcase;
+
+    ' Define values for quarter and half cycles
+    var halfCycle := (chairFreq*sampleRate) / 2;
+    var quarterCycle := halfCycle / 2;
+
+    tempArrLen% := BinomialC(tempBaseArrLen%, 2) + 1;  'N choose 2 plus 1 for double NoStim
+    resize tempDelayArr1%[tempArrLen%];
+    resize tempDelayArr2%[tempArrLen%];
+    var ii%, jj%, kk%, tempBaseVal1%, tempBaseVal2%;
+    for ii% := 0 to tempBaseArrLen%-1 do
+        tempBaseVal1% := tempBaseArr%[ii%];
+        for jj% := (ii%+1) to tempBaseArrLen%-1 do
+            tempBaseVal2% := tempBaseArr%[jj%];
+            tempDelayArr1%[kk%] := tempBaseVal1%;
+            tempDelayArr2%[kk%] := tempBaseVal2%;
+            kk% := kk% + 1;
+        next;    
+    next;
+    tempDelayArr1%[kk%] := -1;
+    tempDelayArr2%[kk%] := -1;
 
     ' Duration (s) per repeat of the set of array delay timing values
     var durationPerArrRepeat := tempArrLen% * optoEveryNthCycle% * chairFreq; 
@@ -459,37 +478,143 @@ Proc SetOptoDelays()
 
     ' Initialize arrays to store delay timing values over an entire training block
     delayArrLen% := Round(tempArrLen%*nrepeats%);
-    resize delayLabels%[delayArrLen%];
-    var baseDelays%[delayArrLen%];
-    var firstHalfDelays%[delayArrLen%];
+    resize delayLabels1%[delayArrLen%];
+    resize delayLabels2%[delayArrLen%];
+    var baseDelays1%[delayArrLen%], baseDelays2%[delayArrLen%];
+
+    ' Delay arrays are now split up into the four pulses per stimulus cycle
+    var delayValuesA%[delayArrLen%], delayValuesB%[delayArrLen%];
+    var delayValuesC%[delayArrLen%], delayValuesD%[delayArrLen%];
+    var delayChannelsA%[delayArrLen%], delayChannelsB%[delayArrLen%];
+    var delayChannelsC%[delayArrLen%], delayChannelsD%[delayArrLen%];
+
+    ' Define necessary adjustment shifts to correct for opto timings
+    ' Note that the first opto pulse should not need any adjustment
+    var shiftA% := 6;
+    var shiftB% := 12;
+    var shiftC% := 10;
+    var shiftD% := 8;
 
     ' Populate the arrays
-    var ii%, jj%, kk%, delay_jj%;
-    var halfCycle := (chairFreq*sampleRate) / 2;
-    var quarterCycle := halfCycle / 2;
+    var delay1_jj%, delay2_jj%;
+    var delay1_1_jj%, delay1_2_jj%, delay2_1_jj%, delay2_2_jj%;
+    var delayCh1_1_jj%, delayCh1_2_jj%, delayCh2_1_jj%, delayCh2_2_jj%;
+    kk% := 0;
     for ii% := 0 to nrepeats%-1 do
         ' Shuffle array if random timing order is selected in settings
         if optoTimingOrder% = 0 then
-            ArrSort(tempDelayArr%[], -1);
+            ArrSort(tempDelayArr1%[], -1, tempDelayArr2%[]);
         endif;
+        ' Loop through each base delay value
         for jj% := 0 to tempArrLen%-1 do 
-            delay_jj% := tempDelayArr%[jj%];
-            baseDelays%[kk%] := delay_jj%;
-            if delay_jj% = -1 then
-                ' No stim case
-                delayLabels%[kk%] := -1;
-                firstHalfDelays%[kk%] := -1;
+            delay1_jj% := tempDelayArr1%[jj%];  'Base delay value 1
+            delay2_jj% := tempDelayArr2%[jj%];  'Base delay value 2
+            baseDelays1%[kk%] := delay1_jj%;
+            baseDelays2%[kk%] := delay2_jj%;
+        
+            ' Set delay and channel values for each half-cycle of stimulus
+            if (delay1_jj% < Round(halfCycle)) then
+                delay1_1_jj% := delay1_jj%;
+                delay1_2_jj% := Round(delay1_jj% + halfCycle);
+                delayCh1_1_jj% := 3;
+                delayCh1_2_jj% := 4;
             else
-                docase                        
-                    case (delay_jj% < Round(halfCycle)) then
-                        ' Delay timing in first half of cycle
-                        firstHalfDelays%[kk%] := delay_jj%;
-                    case (delay_jj% >= Round(halfCycle)) then
-                        ' Delay timing in second half of cycle
-                        firstHalfDelays%[kk%] := Round(delay_jj% - halfCycle);
-                endcase;
-                delayLabels%[kk%] := Round(delay_jj% - quarterCycle);
+                delay1_1_jj% := Round(delay1_jj% - halfCycle);
+                delay1_2_jj% := delay1_jj%;
+                delayCh1_1_jj% := 4;
+                delayCh1_2_jj% := 3;
             endif;
+            
+            if (delay2_jj% < Round(halfCycle)) then
+                delay2_1_jj% := delay2_jj%;
+                delay2_2_jj% := Round(delay2_jj% + halfCycle);
+                delayCh2_1_jj% := 3;
+                delayCh2_2_jj% := 4;
+            else
+                delay2_1_jj% := Round(delay2_jj% - halfCycle);
+                delay2_2_jj% := delay2_jj%;
+                delayCh2_1_jj% := 4;
+                delayCh2_2_jj% := 3;
+            endif;
+        
+            ' Set desired behaviour for the case of each possible combination
+            docase
+                case (delay1_1_jj% = -1) and (delay2_1_jj% = -1) then
+                    ' Case when delay1 and delay2 are both NoStim
+                    delayValuesA%[kk%] := -1;
+                    delayValuesB%[kk%] := -1;
+                    delayValuesC%[kk%] := -1;
+                    delayValuesD%[kk%] := -1;
+                case (delay1_1_jj% = -1) and (delay2_1_jj% <> -1) then
+                    ' Case when delay1 is NoStim but delay2 is not
+                    delayValuesA%[kk%] := delay2_1_jj% + shiftA%;
+                    delayValuesB%[kk%] := -1;
+                    delayValuesC%[kk%] := Round(halfCycle - shiftB%);
+                    delayValuesD%[kk%] := -1;
+                    delayChannelsA%[kk%] := delayCh2_1_jj%;
+                    delayChannelsC%[kk%] := delayCh2_2_jj%;
+                case (delay1_1_jj% <> -1) and (delay2_1_jj% = -1) then
+                    ' Case when delay2 is NoStim but delay1 is not
+                    delayValuesA%[kk%] := delay1_1_jj% + shiftA%;
+                    delayValuesB%[kk%] := -1;
+                    delayValuesC%[kk%] := Round(halfCycle - shiftB%);
+                    delayValuesD%[kk%] := -1;
+                    delayChannelsA%[kk%] := delayCh1_1_jj%;
+                    delayChannelsC%[kk%] := delayCh1_2_jj%;
+                case (delay1_1_jj% = delay2_1_jj%) and (delayCh1_1_jj% = delayCh2_1_jj%) then
+                    ' Case when delay1 and delay2 have the exact same value and channel
+                    ' Note the result is the same as the previous case
+                    delayValuesA%[kk%] := delay1_1_jj% + shiftA%;
+                    delayValuesB%[kk%] := -1;
+                    delayValuesC%[kk%] := Round(halfCycle - shiftB%);
+                    delayValuesD%[kk%] := -1;
+                    delayChannelsA%[kk%] := delayCh1_1_jj%;
+                    delayChannelsC%[kk%] := delayCh1_2_jj%;
+                case (delay1_1_jj% = delay2_1_jj%) and (delayCh1_1_jj% <> delayCh2_1_jj%) then
+                    ' Case when delay1 and delay2 have the same value but not channel
+                    delayValuesA%[kk%] := delay1_1_jj% + shiftA%;
+                    delayValuesB%[kk%] := 0;
+                    delayValuesC%[kk%] := Round(halfCycle - shiftB%);
+                    delayValuesD%[kk%] := 0;
+                    delayChannelsA%[kk%] := delayCh1_1_jj%;
+                    delayChannelsB%[kk%] := delayCh2_1_jj%;
+                    delayChannelsC%[kk%] := delayCh1_2_jj%;
+                    delayChannelsD%[kk%] := delayCh2_2_jj%;
+                case (delay1_1_jj% < delay2_1_jj%) then
+                    ' Case when delay1 needs to comes before delay2
+                    delayValuesA%[kk%] := delay1_1_jj% + shiftA%;
+                    delayValuesB%[kk%] := Round(delay2_1_jj% - delay1_1_jj% - shiftB%);
+                    delayValuesC%[kk%] := Round(delay1_2_jj% - delay2_1_jj% - shiftC%);
+                    delayValuesD%[kk%] := Round(delay2_2_jj% - delay1_2_jj% - shiftD%);
+                    delayChannelsA%[kk%] := delayCh1_1_jj%;
+                    delayChannelsB%[kk%] := delayCh2_1_jj%;
+                    delayChannelsC%[kk%] := delayCh1_2_jj%;
+                    delayChannelsD%[kk%] := delayCh2_2_jj%;
+                case (delay1_1_jj% > delay2_1_jj%) then
+                    ' Case when delay2 needs to comes before delay1
+                    delayValuesA%[kk%] := delay2_1_jj% + shiftA%;
+                    delayValuesB%[kk%] := Round(delay1_1_jj% - delay2_1_jj% - shiftB%);
+                    delayValuesC%[kk%] := Round(delay2_2_jj% - delay1_1_jj% - shiftC%);
+                    delayValuesD%[kk%] := Round(delay1_2_jj% - delay2_2_jj% - shiftD%);
+                    delayChannelsA%[kk%] := delayCh2_1_jj%;
+                    delayChannelsB%[kk%] := delayCh1_1_jj%;
+                    delayChannelsC%[kk%] := delayCh2_2_jj%;
+                    delayChannelsD%[kk%] := delayCh1_2_jj%;
+            endcase
+        
+            ' Populate the label arrays
+            if delay1_jj% = -1 then
+                delayLabels1%[kk%] := -1;
+            else
+                delayLabels1%[kk%] := Round(delay1_jj% - quarterCycle);
+            endif;
+
+            if delay2_jj% = -1 then
+                delayLabels2%[kk%] := -1;
+            else
+                delayLabels2%[kk%] := Round(delay2_jj% - quarterCycle);
+            endif;
+
             kk% := kk% + 1;
         next;
     next;
@@ -497,29 +622,47 @@ Proc SetOptoDelays()
     PrintLog("Actual training block duration: %g s\n", trainBlockDurationActual);
     PrintLog("Delay timings per set: %d\n", tempArrLen%);
     PrintLog("Number of repeats of array set: %d\n", nrepeats%);
-    PrintLog("\nbase delays: ", tempDelayArr%[]);
-    PrintLog("Labels: ", delayLabels%[]);
-    PrintLog("baseDelays: ", baseDelays%[]);
-    PrintLog("firstHalfDelays%: ", firstHalfDelays%[], "\n");
+    PrintLog("\nbase delays: ", tempBaseArr%[]);
+    PrintLog("Labels1: ", delayLabels1%[]);
+    PrintLog("Labels2: ", delayLabels2%[], "\n");
+    PrintLog("baseDelays1: ", baseDelays1%[]);
+    PrintLog("baseDelays2: ", baseDelays2%[], "\n");
+    PrintLog("delayValuesA%: ", delayValuesA%[]);
+    PrintLog("delayChannelsA%: ", delayChannelsA%[], "\n");
+    PrintLog("delayValuesB%: ", delayValuesB%[]);
+    PrintLog("delayChannelsB%: ", delayChannelsB%[], "\n");
+    PrintLog("delayValuesC%: ", delayValuesC%[]);
+    PrintLog("delayChannelsC%: ", delayChannelsC%[], "\n");
+    PrintLog("delayValuesD%: ", delayValuesD%[]);
+    PrintLog("delayChannelsD%: ", delayChannelsD%[], "\n");
 
-    'The subtracted value can be adjusted to fine-tune timing of 2nd stim
-    delayVal2% := Round(halfCycle - 12);  
-    halfCycle% := Round(halfCycle);
-    SampleSeqTable(baseDelays%[], 0);
-    SampleSeqTable(firstHalfDelays%[], 5000);
+    SampleSeqTable(delayValuesA%[], 0);
+    SampleSeqTable(delayChannelsA%[], 5000);
+    SampleSeqTable(delayValuesB%[], 10000);
+    SampleSeqTable(delayChannelsB%[], 15000);
+    SampleSeqTable(delayValuesC%[], 20000);
+    SampleSeqTable(delayChannelsC%[], 25000);
+    SampleSeqTable(delayValuesD%[], 30000);
+    SampleSeqTable(delayChannelsD%[], 35000);
 End
 
 Proc CheckDelayChange()
-    var currStimNum% := SampleSeqVar(32); 'Current StimNum from sequencer
-    var currDelayLabel%, smpltxt$;
+    var currStimNum% := SampleSeqVar(36); 'Current StimNum from sequencer
+    var currDelayLabel1%, currDelayLabel2%, smpltxt1$, smpltxt2$;
     if (currStimNum% > 0) and (currStimNum% <> prevStimNum%) then
-        currDelayLabel% := delayLabels%[currStimNum%-1];
-        if currDelayLabel% = -1 then
-            smpltxt$ := "NoStim";
+        currDelayLabel1% := delayLabels1%[currStimNum%-1];
+        currDelayLabel2% := delayLabels2%[currStimNum%-1];
+        if currDelayLabel1% = -1 then
+            smpltxt1$ := "NoStim";
         else
-            smpltxt$ := Str$(currDelayLabel%)+"ms";
+            smpltxt1$ := Str$(currDelayLabel1%)+"ms";
         endif;
-        SampleText("("+smpltxt$+")", -1, 1);
+        if currDelayLabel2% = -1 then
+            smpltxt2$ := "NoStim";
+        else
+            smpltxt2$ := Str$(currDelayLabel2%)+"ms";
+        endif;
+        SampleText("("+smpltxt1$+","+smpltxt2$+")", -1, 1);
         prevStimNum% := currStimNum%;
     endif;
 End
