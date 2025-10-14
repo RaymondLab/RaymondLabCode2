@@ -16,48 +16,45 @@ FilePathSet(rootpath$, 0);
 LoadRigParams();
 
 ' Test and Training block parameters
-var nTestBlocks%       := 3;       'Number of pre/post-training test blocks [default 3]
-var testBlockDuration  := 45.0;    'Total duration (s) of test blocks [default 45.0]
-var nTrainingBlocks%   := 6;       'Number of training blocks [default 6]
+var nTestBlocks%       := 3;      'Number of pre/post-training test blocks [default 3]
+var testBlockDuration  := 45.0;   'Total duration (s) of test blocks [default 45.0]
+var nTrainingBlocks%   := 6;      'Number of training blocks [default 6]
 var trainBlockDuration := 300.0;  'Total duration (s) of training block(s) [default 300.0]
-var trainingType%      := 0;       'Defines the training type for the experiment [default 0]
+var trainingType%      := 0;      'Defines the training type for the experiment [default 0]
 
 ' Gap block parameters
 var gapDur   := 5.0;  'Total duration (in seconds) of each gap block [default 5.0]
 var flashDur := 0.2;  'Duration of TTL flash (in seconds) halfway into each gap block [default 0.2]
 
 ' Drum stimulus default sine parameters
-var drumAmp           := -10.0;                     'Drum amplitude in deg/s
-var drumFreq          := 1;                         'Drum frequency in Hz
-var drumPeriod        := 1/drumFreq;                'Drum period in seconds
-var drumPhase         := -90;                       'Drum phase in degrees
-var drumSign          := drumAmp / Abs(drumAmp);    'Sign of given drum amplitude
-var nDrumTestCycles%, nDrumTrainCycles%;            'Number of drum TEST and TRAIN block cyles
-'drumVelocity2Voltage  := drumVelocity2Voltage / 2;
-'chairVelocity2Voltage := chairVelocity2Voltage / 2;
+var drumAmp           := -10.0;             'Drum amplitude in deg/s [default -10.0]
+var drumFreq          := 1;                 'Drum frequency in Hz [default 1]
+var drumPeriod        := 1/drumFreq;        'Drum period in seconds
+var drumPhase         := 0;                 'Drum phase in degrees [default 0]
+var nDrumTestCycles%, nDrumTrainCycles%;    'Number of drum TEST and TRAIN block cyles
 
 ' Chair stimulus default sine parameters
-var chairAmp       := 10.0;                      'In deg/s
-var chairFreq      := 1;                         'In Hz
-var chairPeriod    := 1/chairFreq;               'In seconds
-var chairPhase     := -90;                       'In degrees
-var chairSign      := chairAmp / Abs(chairAmp);  'Sign of given chair amplitude
-var chairDirection := 1;                         '0 for ipsi, 1 for contra
-var nChairTestCycles%, nChairTrainCycles%;        'Number of chair TEST and TRAIN block cyles
+var chairAmp       := 10.0;                 'In deg/s [default 10.0]
+var chairFreq      := 1;                    'In Hz [default 1]
+var chairPeriod    := 1/chairFreq;          'In seconds 
+var chairPhase     := 0;                    'In degrees [default 0]
+var chairDirection := 1;                    '0 for ipsi, 1 for contra
+var nChairTestCycles%, nChairTrainCycles%;  'Number of chair TEST and TRAIN block cyles
 
 ' driftFix parameters
-var Kp         := 0.5;  'Proportional correction gain (default 0.5)
-var Kd         := 0.5;  'Derivative correction gain (default 0.5)
-var numErrors% := 3;    'Number of error values to collect in an array
-var htposErrors[numErrors%], hhposErrors[numErrors%];  'Array of errors
-var htposPrevError, hhposPrevError;  'Previous mean error
+var Kp            := 0.45;  'Proportional correction gain [default 0.45]
+var Ki            := 0.54;  'Integral correction gain [default 0.54]
+var intErrorLimit := 0.3;   'Integral clamping limit [default 0.3]
+var numErrors%    := 3;     'Number of error values to collect in an array [default 3]
+var htposErrors[numErrors%], hhposErrors[numErrors%];  'Array of (proportional) errors
+var htposIntError, hhposIntError, intErrorMax;  'Cumulative (integral) error
 
 ' ToolbarIdle% global variables
-var nBlocks%, blockList$[1];
-var blockNum%;  'Counter which defines which block number is currently active
-var blockFlag%;  'Flag which defines whether a block is actively running or not
+var nBlocks%, blockList$[1], blockLabelList$[1];
+var blockNum%;      'Counter which defines which block number is currently active
+var blockFlag%;     'Flag which defines whether a block is actively running or not
 var blockMarkers$;  'Provides the SampleKey commands for the currently active block
-var runFlag%;  'Flag which denotes whether the experiment is activately running or not
+var runFlag%;       'Flag which denotes whether the experiment is activately running or not
 var lowerSampleKey$, upperSampleKey$;
 var pretestBlockNum%, trainBlockNum%, posttestBlockNum%;
 var blockStartTime, blockEndTime;
@@ -69,17 +66,21 @@ SetNumTestTrainCycles();
 '--------------------------------------------------------------------------------
 ' DRIFTFIX: Applies velocity offset correction when necessary
 '
-' Applies Proportional-Derivative control such that the output velocity offset 
+' Applies Proportional-Integral (PI) control such that the output velocity offset 
 ' v(t) is given by the formula:
 '
-' v(t) = v(0) - Kp*e(t) - Kd*(de/dt)
+' v(t) = v(0) - Kp*e(t) - Ki*Int[e(t)*dt]
 ' 
 ' Where:
-' v(0)  - is the initial velocity offset of the motor
-' e(t)  - is the position error
-' de/dt - is the change in error over some time dt
+' v(0)         - Initial velocity offset of the motor
+' Kp           - Proportional gain
+' e(t)         - Average feedback position error 
+' Ki           - Integral gain
+' Int[e(t)*dt] - Cumulative sum of errors over time 
 '
-' We "soften" the correction by averaging over the previous errors.
+' Notes:
+' 1. We further "soften" the e(t) term by averaging over previous numErrors% errors.
+' 2. We control windup by clamping the absolute integral error to intErrorMax.
 '--------------------------------------------------------------------------------
 Func driftFix%()
     ' Get the current sampling time
@@ -89,25 +90,43 @@ Func driftFix%()
     ArrConst(htposErrors[1:numErrors%-1], htposErrors[0:numErrors%-1]);
     ArrConst(hhposErrors[1:numErrors%-1], hhposErrors[0:numErrors%-1]);
 
-    ' Error is defined as the minimum of the magnitude of position over a cycle period
-    htposErrors[0] := ChanMeasure(HTPOScom_ch%, 9, currentTime-drumPeriod, currentTime);
-    hhposErrors[0] := ChanMeasure(HHPOScom_ch%, 9, currentTime-chairPeriod, currentTime);
+    ' Error is defined as the mean position over a cycle period (which should be zero)
+    htposErrors[0] := ChanMeasure(htpos_ch%, 2, currentTime-drumPeriod, currentTime);
+    hhposErrors[0] := ChanMeasure(hhpos_ch%, 2, currentTime-chairPeriod, currentTime);
 
-    ' Proportional error term is the mean of the all errors over the last period
-    var htposCurrError := drumSign * ArrSum(htposErrors) / numErrors%;
-    var hhposCurrError := chairSign * ArrSum(hhposErrors) / numErrors%;
+    ' Error is "softened" by using the mean of errors over the last numErrors% errors
+    var htposCurrError := ArrSum(htposErrors) / numErrors%;
+    var hhposCurrError := ArrSum(hhposErrors) / numErrors%;
 
-    ' Derivative error term is the change in proportional errors
-    var htposErrorSlope := (htposCurrError - htposPrevError);
-    var hhposErrorSlope := (hhposCurrError - hhposPrevError);
+    ' Final Proportional error term
+    var htposProportionalError := Kp * htposCurrError;
+    var hhposProportionalError := Kp * hhposCurrError;
 
-    ' Current proportional error becomes the previous one
-    htposPrevError := htposCurrError;
-    hhposPrevError := hhposCurrError;
+    ' Integral error term is the scaled cumulative sum of errors
+    var htposIntErrorTest := htposIntError + (Ki * htposCurrError * sampleStepsize);
+    var hhposIntErrorTest := hhposIntError + (Ki * hhposCurrError * sampleStepsize);
 
-    ' Apply PD error correction to the drum and chair velocity offset commands
-    drumVelocityOffset  := drumVelocityOffsetInitial - (Kp*htposCurrError) - (Kd*htposErrorSlope); 
-    chairVelocityOffset := chairVelocityOffsetInitial - (Kp*hhposCurrError) - (Kd*hhposErrorSlope); 
+    ' Apply anti-windup integral condition (only increase IntError if below limit)
+    if Abs(htposIntErrorTest) <= intErrorLimit then
+        htposIntError := htposIntErrorTest;
+    endif;
+    if Abs(hhposIntErrorTest) <= intErrorLimit then
+        hhposIntError := hhposIntErrorTest;
+    endif;
+
+    ' Final Integral error term
+    var htposIntegralError := htposIntError;
+    var hhposIntegralError := hhposIntError;
+
+    ' Apply PI error correction to the drum and chair velocity offset commands
+    var drumVelocityOffsetCorrection  := 0 - htposProportionalError - htposIntegralError;
+    var chairVelocityOffsetCorrection := 0 - hhposProportionalError - hhposIntegralError;
+    drumVelocityOffset  := drumVelocityOffsetInitial + drumVelocityOffsetCorrection;
+    chairVelocityOffset := chairVelocityOffsetInitial + chairVelocityOffsetCorrection;
+
+    'PrintLog("Drum (P=%.5f,I=%.5f,T=%.5f) | Chair (P=%.5f,I=%.5f,T=%.5f)\n", 
+    '    htposProportionalError, htposIntegralError, drumVelocityOffsetCorrection,
+    '    hhposProportionalError, hhposIntegralError, chairVelocityOffsetCorrection);    
 
     ' Update the sequencer variables with the corrected velocity offsets
     SetSequencerValues();
@@ -161,15 +180,12 @@ End
 
 ' Function that opens a new sampling window
 Func ToolbarNewFile%()
-    WindowSetup();  'Sets up channels in the new sampling configuration window
-    WindowUpdate();  'Updates sampling window with protocol-specific configuration
-    WindowVisible(3);  'Maximizes the new sampling window to fit the screen
+    WindowSetup();         'Sets up channels in the new sampling configuration window
+    WindowUpdate();        'Updates sampling window with protocol-specific configuration
+    WindowVisible(3);      'Maximizes the new sampling window to fit the screen
     ToolbarEnable(-1, 1);  'Enables buttons that require a new sampling window
     ToolbarEnable(2, 0); 
     SetSequencerValues(); Yield();
-    ' Ensure that the position magnitude virtual channels are in the positive direction
-    VirtualChan(HTPOScom_ch%, Str$(drumSign)+"*ch("+Str$(htpos_ch%)+")", 0, 1.0/sampleRate);
-    VirtualChan(HHPOScom_ch%, Str$(chairSign)+"*ch("+Str$(hhpos_ch%)+")", 0, 1.0/sampleRate);
     SampleKey("R");  'Ensures that sequencer is set to its default configuration prior to sampling
     return 1;
 End
@@ -206,8 +222,8 @@ End
 
 ' Set number of test and train block cyles based on block duration and stim frequency
 Proc SetNumTestTrainCycles()
-    nDrumTestCycles%   := Round(testBlockDuration / drumFreq)-1;    'Number of drum TEST block cycles
-    nDrumTrainCycles%  := Round(trainBlockDuration / drumFreq)-1;   'Number of drum TRAIN block cycles
-    nChairTestCycles%  := Round(testBlockDuration / chairFreq)-1;   'Number of drum TEST block cycles
-    nChairTrainCycles% := Round(trainBlockDuration / chairFreq)-1;  'Number of drum TRAIN block cycles
+    nDrumTestCycles%   := Round(testBlockDuration / drumFreq);    'Number of drum TEST block cycles
+    nDrumTrainCycles%  := Round(trainBlockDuration / drumFreq);   'Number of drum TRAIN block cycles
+    nChairTestCycles%  := Round(testBlockDuration / chairFreq);   'Number of drum TEST block cycles
+    nChairTrainCycles% := Round(trainBlockDuration / chairFreq);  'Number of drum TRAIN block cycles
 End

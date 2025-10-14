@@ -1,0 +1,341 @@
+' ------------------------------------------------------------------------------
+' SINE - CALIBRATION PROTOCOL (REQUIRES SPIKE2 VERSION 10)
+'
+' Values for local (rig-specific) variables are stored in the system registry: 
+' HKEY_CURRENT_USER\Software\CED\Spike2\RigParams
+' 
+' ------------------------------------------------------------------------------
+
+' Set the sequencer file to use for the protocol
+const sequencerFile$ := "sine_protocols/sine_test_battery.pls";
+
+' This file is the same for all SINE protocols
+#include "sine_core.s2s"
+
+' Define static text battery options and parameters I,L,R,D,C,S,G
+const testBatteryLabelSourceList$[] := {"VORx0", "VORx1", "VORx2", "VORD", "OKR"};
+const testBatteryKeySourceList$[] := {"V", "W", "X", "Y", "Z"};
+const testBatteryStringSourceList$ := 3420;
+
+' Define default text battery string and arrays
+var testBatteryStringList$ := testBatteryStringSourceList$;
+var nTestTypes% := Len(testBatteryStringList$);
+var testBatteryIdList%[nTestTypes%];
+var testBatteryLabelList$[nTestTypes%];
+var testBatteryBlockList$[nTestTypes%];
+ParseTestBatteryStringList();
+
+' Overwrite the default parameter values with protocol-specific values
+nTestBlocks%       := 3;     'Number of test blocks per test type [default 3]
+testBlockDuration  := 45.0;  'Duration (s) of each test block [default 45.0]
+nTrainingBlocks%   := 0;     'Number of training blocks [default 0]
+
+' Re-calculate number of test and train block cyles
+SetNumTestTrainCycles();
+
+' Compute number of sequencer steps for GAP1, GAP2, and GAP3 in the sequencer file
+var halfgapSeqSteps, gap1SeqSteps, gap2SeqSteps, gap3SeqSteps;  'Initialize sequencer file variables
+CalculateGapSeqSteps();
+  
+' Compute total experiment duration for settings window text information
+var textStepPeriod%, textMinutes%;
+var blockdurationTestGap      := gapDur + testBlockDuration;
+var blockdurationTestTrainGap := gapDur + testBlockDuration + gapDur + trainBlockDuration;
+var totalExperimentDuration   := (5.0 * blockdurationTestGap) + (1.0 * nTrainingBlocks% * blockdurationTestTrainGap);
+
+' Initial block list generated from default parameter values
+GenerateBlockList(nTestBlocks%, nTrainingBlocks%);
+
+ToolbarStartup();
+
+
+'--------------------------------------------------------------------------------
+' PROTOCOL-SPECIFIC TOOLBAR FUNCTIONS
+'--------------------------------------------------------------------------------
+' Updates sampling window with protocol-specific configuration
+Proc WindowUpdate()
+    ChanShow("12..15");
+    ChanHide("v1", "v2");
+    HCursorNew(HTVELcom_ch%, 0.0);
+    HCursorNew(HHVELcom_ch%, 0.0);
+    'ChanHide("1,5,6,7,10", "v1", "v2", "14,15");
+End
+
+Func ToolbarSineOn%()
+    ' TODO: Implement regular sine on button
+    return 1;
+end
+
+' Initializes and enables our toolbar functions
+Proc ToolbarStartup()
+    const initialDisabled%[] := {40}; 
+    ToolbarClear();
+    ToolbarSet(0, "Idle", ToolbarIdle%);
+    ToolbarSet(1, "Quit", ToolbarQuit%);
+    ToolbarSet(2, "New File", ToolbarNewFile%);
+    ToolbarSet(3, "File Comments", ToolbarFileComments%);
+    ToolbarSet(5, "Expmt Settings", ToolbarExpmtSettings%);
+    'TODO: ToolbarSet(9, "Sine On", ToolbarSineOn%);
+    ToolbarSet(40, "Run Expmt", ToolbarRunExpmt%);
+    ToolbarEnable(initialDisabled%, 0); 
+    Toolbar("", 231);
+End
+
+Func ToolbarFileComments%()
+    var ii%;
+    DlgCreate("FILE COMMENTS", 0, 0, 79, 7);  'Initialize new dialog window
+    DlgString(1, "Comment 1:", 2000, "", 17, 1);
+    DlgString(2, "Comment 2:", 2000, "", 17, 2);
+    DlgString(3, "Comment 3:", 2000, "", 17, 3);
+    DlgString(4, "Comment 4:", 2000, "", 17, 4);
+    DlgString(5, "Comment 5:", 2000, "", 17, 5);
+
+    DlgAllow(0x3ff, ToolbarIdle%);  'Allow all, no idle
+    DlgShow(fileComments$[0], fileComments$[1], fileComments$[2], fileComments$[3], fileComments$[4]);
+    
+    SetFileComments();
+    return 1;
+End
+
+' Updates settings values whenever another value is changed
+Func UpdateExpmtSettings%(item%)
+    var nTestBlocks_value% := DlgValue(2);
+    var testBlockDuration_value := DlgValue(3);
+    var gapDur_value := DlgValue(4);
+    var flashDur_value := DlgValue(5);
+    var drumAmp_value := DlgValue(6);
+    var drumFreq_value := DlgValue(7);
+    var drumPhase_value := DlgValue(8);
+    var chairAmp_value := DlgValue(9);
+    var chairFreq_value := DlgValue(10);
+    var chairPhase_value := DlgValue(11);
+    DlgEnable(0, 8, 11);
+
+    docase
+        case item% = 5 then 
+            if flashDur_value >= gapDur_value then
+                Message("TTL flash duration must be less than Gap duration.");
+                DlgValue(5, 0.1 * gapDur_value);
+            endif;
+        case item% = 6 then  'Ensures chair amplitude is inverse of drum
+            DlgValue(9, (-1) * (drumAmp_value / Abs(drumAmp_value)) * Abs(drumAmp_value));
+        case item% = 7 then  'Ensures drum and chair have same frequency
+            DlgValue(10, drumFreq_value);
+        case item% = 9 then  'Ensures drum amplitude is inverse of chair
+            DlgValue(6, (-1) * (chairAmp_value / Abs(chairAmp_value)) * Abs(chairAmp_value));
+        case item% = 10 then  'Ensures chair and drum have same frequency
+            DlgValue(7, chairFreq_value);
+    endcase;
+
+    return 1;
+End
+
+' Settings window for modifying general experimental parameters
+Func ToolbarExpmtSettings%()
+    var width% := 88;
+    DlgCreate("EXPERIMENT SETTINGS", 0, 0, width%, 13);  'Initialize new dialog window
+
+    var col1box% := 34;
+    var col1width% := col1box% + 11;
+    DlgText("0=VORx0, 1=VORx1, 2=VORx2, 3=VORD, 4=OKR", 4, 2);
+    DlgText("(ONLY USE NUMBERS BELOW! E.g. 4302)", 4, 3);
+    DlgText("TEST Battery Order:", 4, 4);
+    DlgString(1, 9, 5, "", col1box%, 4);
+
+    DlgText("Num. of blocks per TEST type:", 4, 6);
+    DlgInteger(2, 11, 1, 99999, col1box%, 6, 0);
+    DlgText("TEST block duration (s):", 4, 7);
+    DlgReal(3, 11, 1.0, 99999.0, col1box%, 7, 0);
+    DlgText("GAP block duration (s):|Total duration of each Gap block.", 4, 9);
+    DlgReal(4, 11, 1.0, 100.0, col1box%, 9, 0);
+    DlgText("GAP flash duration (s):|Duration of light flash in the middle of each Gap block.", 4, 10);
+    DlgReal(5, 11, 0.000, 50.0, col1box%, 10, 0);
+
+    ' Drum parameters boxes
+    var col2txt% := col1width% + 6; 
+    var col2box% := col2txt% + 21;
+    var col2width% := 36;
+    DlgText("Velocity (deg/s):", col2txt%, 2);
+    DlgReal(6, 11, -50.0, 50.0, col2box%, 2, 0);
+    DlgText("Frequency (Hz):", col2txt%, 3);
+    DlgReal(7, 11, 0.1, 10.0, col2box%, 3, 0);
+    DlgText("Phase (deg):", col2txt%, 4);
+    DlgReal(8, 11, -360, 360, col2box%, 4, 0);
+
+    ' Chair parameters boxes
+    DlgText("Velocity (deg/s):", col2txt%, 7);
+    DlgReal(9, 11, -50.0, 50.0, col2box%, 7, 0);
+    DlgText("Frequency (Hz):", col2txt%, 8);
+    DlgReal(10, 11, 0.1, 10.0, col2box%, 8, 0);
+    DlgText("Phase (deg):", col2txt%, 9);
+    DlgReal(11, 11, -360, 360, col2box%, 9, 0);
+     
+    DlgAllow(0x3ff, ToolbarIdle%, UpdateExpmtSettings%);  'Allow all, no idle, update settings function
+    var gp1% := DlgGroup("General Parameters", 2, 1, col1width%, 10.5);
+    var gp2% := DlgGroup("Drum Parameters", col2txt%-2, 1, col2width%, 4.5);
+    var gp3% := DlgGroup("Chair Parameters", col2txt%-2, 6, col2width%, 4.5);
+
+    DlgShow(testBatteryStringList$, nTestBlocks%, testBlockDuration, gapDur, flashDur, 
+            drumAmp, drumFreq, drumPhase, chairAmp, chairFreq, chairPhase);
+
+    ' Re-parse the TEST battery lists
+    ParseTestBatteryStringList();
+
+    ' Re-calculate number of test and train block cyles
+    SetNumTestTrainCycles();
+
+    ' Re-compute number of cycle steps for GAP1, GAP2, and GAP3 in sequencer file
+    CalculateGapSeqSteps();
+
+    ' Re-generate the block list
+    GenerateBlockList(nTestBlocks%, nTrainingBlocks%);
+
+    ' Send new variable values to the sequencer
+    SetSequencerValues();
+    return 1;
+End
+
+
+'--------------------------------------------------------------------------------
+' COMPUTE NUMBER OF SEQUENCER STEPS FOR GAP1, GAP2, GAP3 IN SEQUENCER FILE
+'--------------------------------------------------------------------------------
+Proc CalculateGapSeqSteps()
+    halfgapSeqSteps := (gapDur - flashDur) / 2.0;
+    gap1SeqSteps := Round((halfgapSeqSteps * sampleRate / 3.0) - 2.0);
+    gap2SeqSteps := Round((flashDur * sampleRate / 3.0));
+    gap3SeqSteps := Round((halfgapSeqSteps * sampleRate / 3.0) - 1.0);
+End
+
+
+'--------------------------------------------------------------------------------
+' GENERATE/UPDATE BLOCK LIST FOR A GIVEN NUMBER OF TRAINING BLOCKS
+'--------------------------------------------------------------------------------
+Proc GenerateBlockList(m%, n%)
+    var i%, j%;
+    var pretestList$[] := {"Gg", "Pp"};
+    var trainingList$[] := {"Gg", "Tt"};
+    var posttestList$[] := {"Gg", "Pp"};
+    var pretestListLen% := Round(m%*Len(pretestList$[]));
+    var trainingListLen% := Round(n%*Len(trainingList$[]));
+    var posttestListLen% := Round(m%*Len(posttestList$[]));
+
+    ' Compute total number of blocks for the entire experiment
+    var experimentTotalListLen% := Round(2 * m% * nTestTypes%);
+
+    'Resize blockList$[] array to the required size
+    resize blockList$[experimentTotalListLen%]; 
+    resize blockLabelList$[experimentTotalListLen%]; 
+
+    ' Reset all elements of the block list to empty string values
+    for i% := 0 to experimentTotalListLen%-1 do
+        blockList$[i%] := "";
+    next;
+
+    ' Populate array with blocks
+    j% := 0;
+    for i% := 0 to experimentTotalListLen%-1 step 2 do
+        blockList$[i%] := "Gg";
+        blockLabelList$[i%] := "GAP";
+        blockList$[i%+1] := testBatteryBlockList$[j%];
+        blockLabelList$[i%+1] := testBatteryLabelList$[j%];
+        j% := j% + 1;
+    next;
+
+    ' Do a final check to make sure there are no consecutive duplicates
+    for i% := 0 to experimentTotalListLen%-2 do
+        if blockList$[i%] = blockList$[i%+1] then
+            Message("[ERROR] Duplicate blocks found between elements %d and %d!", i%, i%+1);
+            halt
+        endif;
+    next;
+
+    ' Update nBlocks% with current number of total blocks
+    nBlocks% := Len(blockList$[]);
+    PrintLog("Final Block list generated:  ", blockList$[]);
+    PrintLog("Final Block TextMark label list generated:  ", blockLabelList$[], "\n");
+End
+
+
+'--------------------------------------------------------------------------------
+' SEND CURRENT SPIKE2 VARIABLE VALUES TO SEQUENCER
+'--------------------------------------------------------------------------------
+Proc SetSequencerValues()
+    ' Drum parameters
+    SampleSeqVar(2, Amp2Int32%(drumVelocityOffset, drumVelocity2Voltage));  'DrumOff
+    SampleSeqVar(3, Amp2Int16%(drumAmp, drumVelocity2Voltage));             'DrumAmp
+    SampleSeqVar(4, Hz2Int32%(drumFreq));                                   'DrumFrq
+    SampleSeqVar(5, Angle2Int32%(drumPhase));                               'DrumPhs
+    SampleSeqVar(7, nDrumTestCycles%);                                      'NdrumP
+    SampleSeqVar(8, nDrumTrainCycles%);                                     'NdrumT
+
+    ' Chair parameters
+    SampleSeqVar(10, Amp2Int32%(chairVelocityOffset, chairVelocity2Voltage));  'ChairOff
+    SampleSeqVar(11, Amp2Int16%(chairAmp, chairVelocity2Voltage));             'ChairAmp
+    SampleSeqVar(12, Hz2Int32%(chairFreq));                                    'ChairFrq
+    SampleSeqVar(13, Angle2Int32%(chairPhase));                                'ChairPhs
+    SampleSeqVar(15, nChairTestCycles%);                                       'NchairP
+    SampleSeqVar(16, nChairTrainCycles%+1);                                    'NchairT
+
+    ' Gap block parameters
+    SampleSeqVar(18, gap1SeqSteps);  'Gap1Dur
+    SampleSeqVar(19, gap2SeqSteps);  'FlashDur
+    SampleSeqVar(20, gap3SeqSteps);  'Gap3Dur
+End
+
+Func AddTextMark(samplekey$, blocknumber%)
+    ' Search Index "Marker codes, Colour for" for more info on marker code colors
+    var text$, code%;
+    text$ := blockLabelList$[blocknumber%];
+    code% := 2;
+    if samplekey$ = "G" then
+        code% := 1;
+    endif;
+    return SampleText(text$, -1, code%); 
+End
+
+' Parses testBatteryStringList$ to appropriate arrays
+Proc ParseTestBatteryStringList()
+    ' Ensure test battery string list is not empty
+    if (Len(testBatteryStringList$) = 0) or (testBatteryStringList$ = "") then
+        Message("testBatteryStringList$ was found empty. Resetting to default value: %s", testBatteryStringSourceList$);
+        testBatteryStringList$ := testBatteryStringSourceList$;
+    endif
+
+    ' Remove any characters in string that will cause errors
+    Trim(testBatteryStringList$);
+    testBatteryStringList$ := Replace$(testBatteryStringList$, " ", "");
+    testBatteryStringList$ := Replace$(testBatteryStringList$, ",", "");
+    testBatteryStringList$ := Replace$(testBatteryStringList$, ".", "");
+    testBatteryStringList$ := Replace$(testBatteryStringList$, "|", "");
+    'TODO: Remove letter characters
+
+    ' Update number of test types and resize arrays accordingly
+    nTestTypes% := Len(testBatteryStringList$);
+    var nTestBatteryBlocks% := nTestBlocks%*nTestTypes%;
+    resize testBatteryIdList%[nTestBatteryBlocks%];
+    resize testBatteryLabelList$[nTestBatteryBlocks%];
+    resize testBatteryBlockList$[nTestBatteryBlocks%];
+
+    ' Update test battery arrays according to order provided in testBatteryStringList$
+    var i%, j%, k%, testBatteryIdx%, testBatteryLabel$, testBatteryKey$;
+    for i% := 0 to nTestBatteryBlocks%-1 step nTestBlocks% do
+        k% := k% + 1;
+        testBatteryIdx% := Val(Mid$(testBatteryStringList$, k%, 1));
+        testBatteryLabel$ := testBatteryLabelSourceList$[testBatteryIdx%];
+        testBatteryKey$ := testBatteryKeySourceList$[testBatteryIdx%];
+        testBatteryKey$ := UCase$(testBatteryKey$) + LCase$(testBatteryKey$);
+        for j% := 0 to nTestBlocks%-1 do
+            testBatteryIdList%[i%+j%] := testBatteryIdx%;
+            testBatteryLabelList$[i%+j%] := testBatteryLabel$;
+            testBatteryBlockList$[i%+j%] := testBatteryKey$;
+        next;
+    next;
+
+    PrintLog("\nTest Battery String List (%d IDs provided, each repeated %d times): %s\n", 
+        nTestTypes%, 
+        nTestBlocks%,
+        testBatteryStringList$);
+    PrintLog("Test Battery ID List generated:  ", testBatteryIdList%[]);
+    PrintLog("Test Battery Label List generated:  ", testBatteryLabelList$[]);
+    PrintLog("Test Battery Block List generated:  ", testBatteryBlockList$[]);
+End
