@@ -15,7 +15,7 @@ const sequencerFile$ := "sine_protocols/sine_test_battery.pls";
 ' Define static text battery options and parameters I,L,R,D,C,S,G
 const testBatteryLabelSourceList$[] := {"VORx0", "VORx1", "VORx2", "VORD", "OKR"};
 const testBatteryKeySourceList$[] := {"V", "W", "X", "Y", "Z"};
-const testBatteryStringSourceList$ := 3420;
+const testBatteryStringSourceList$ := "3420";
 
 ' Define default text battery string and arrays
 var testBatteryStringList$ := testBatteryStringSourceList$;
