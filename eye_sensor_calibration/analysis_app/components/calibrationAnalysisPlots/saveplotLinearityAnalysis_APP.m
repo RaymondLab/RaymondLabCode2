@@ -104,12 +104,17 @@ hold(ax8, 'on');
 
 allData = logical(ones(length(~mag1.saccades_all), 1));
 
+rsqs1 = [];
 for i = 1:length(mag1GoodStarts)
     chunk = mag1GoodStarts(i)+1:mag1GoodStops(i);
     scatter(ax1, mag1_pos_zeromean(chunk), vid1_pos_zeromean(chunk), 50, c1(i,:), '.', 'HandleVisibility','off');
     scatter(ax3, mag1_pos(chunk), vid1_pos(chunk), 4, c1(i,:), '.', 'HandleVisibility','off');
     scatter(ax8, xpavgs1(chunk), ypdiffs1(chunk), 4, c1(i,:), '.', 'HandleVisibility','off');
+    rsq_i = corrcoef(mag1_pos_zeromean(chunk), vid1_pos_zeromean(chunk));
+    rsqs1(end+1) = rsq_i(1, 2).^2;
 end
+rsq1_mean = mean(rsqs1);
+rsq1_med = median(rsqs1);
 
 slopes = [];
 xylimit = max(max(abs(mag1_pos_zeromean)), max(abs(vid1_pos_zeromean)));
@@ -126,14 +131,14 @@ mstd = std(slopes);
 mvar = var(slopes);
 xFit = linspace(-xylimit, xylimit, 1000);
 yFit = polyval(coefficients , xFit);
-plot(ax1, xFit, yFit, '-r', 'LineWidth',3, 'DisplayName',sprintf(' m = %.5f (std=%.3f, var=%.3f)', coefficients(1), mstd, mvar));
+plot(ax1, xFit, yFit, '-r', 'LineWidth',3, 'DisplayName',sprintf(' m = %.5f (std=%.3f, var=%.3f) | r^2 = %.5f (%.5f median)', coefficients(1), mstd, mvar, rsq1_mean, rsq1_med));
 xline(ax1, 0, ':r', 'HandleVisibility','off');
 yline(ax1, 0, ':r', 'HandleVisibility','off');
 ylim(ax1, [-xylimit, xylimit]);
 xlim(ax1, [-xylimit, xylimit]);
 ax1.XLabel.String = 'Magnet Channel 1 Position';
 ax1.YLabel.String = 'Video Channel Position';
-title(ax1, sprintf('Magnet Channel 1: (%d) Non-Saccade Segments',length(slopes)), 'FontSize',12);
+title(ax1, sprintf('Magnet Channel 1 (saccades removed): (%d) Zero-Mean Segments',length(slopes)), 'FontSize',12);
 grid(ax1, 'on');
 box(ax1, 'on');
 hold(ax1, 'off');
@@ -193,12 +198,17 @@ hold(ax10, 'on');
 
 allData = logical(ones(length(~mag2.saccades_all), 1));
 
+rsqs2 = [];
 for i = 1:length(mag2GoodStarts)
     chunk = mag2GoodStarts(i)+1:mag2GoodStops(i);
     scatter(ax4, mag2_pos_zeromean(chunk), vid2_pos_zeromean(chunk), 50, c2(i,:), '.', 'HandleVisibility','off');
     scatter(ax6, mag2_pos(chunk), vid2_pos(chunk), 4, c2(i,:), '.', 'HandleVisibility','off');
     scatter(ax10, xpavgs2(chunk), ypdiffs2(chunk), 4, c2(i,:), '.', 'HandleVisibility','off');
+    rsq_i = corrcoef(mag2_pos_zeromean(chunk), vid2_pos_zeromean(chunk));
+    rsqs2(end+1) = rsq_i(1, 2).^2;
 end
+rsq2_mean = mean(rsqs2);
+rsq2_med = median(rsqs2);
 
 slopes = [];
 xylimit = max(max(abs(mag2_pos_zeromean)), max(abs(vid2_pos_zeromean)));
@@ -215,14 +225,14 @@ mstd = nanstd(slopes);
 mvar = nanvar(slopes);
 xFit = linspace(-xylimit, xylimit, 1000);
 yFit = polyval(coefficients , xFit);
-plot(ax4, xFit, yFit, '-r', 'LineWidth', 3, 'DisplayName',sprintf(' m = %.5f (std=%.3f, var=%.3f)', coefficients(1), mstd, mvar));
+plot(ax4, xFit, yFit, '-r', 'LineWidth', 3, 'DisplayName',sprintf(' m = %.5f (std=%.3f, var=%.3f) | r^2 = %.5f (%.5f median)', coefficients(1), mstd, mvar, rsq2_mean, rsq2_med));
 xline(ax4, 0, ':r', 'HandleVisibility','off');
 yline(ax4, 0, ':r', 'HandleVisibility','off');
 ylim(ax4, [-xylimit, xylimit]);
 xlim(ax4, [-xylimit, xylimit]);
 ax4.XLabel.String = 'Magnet Channel 2 Position';
 ax4.YLabel.String = 'Video Channel Position';
-title(ax4, sprintf('Magnet Channel 2: (%d) Non-Saccade Segments',length(slopes)), 'FontSize',12);
+title(ax4, sprintf('Magnet Channel 2 (saccades removed): (%d) Zero-Mean Segments',length(slopes)), 'FontSize',12);
 grid(ax4, 'on');
 box(ax4, 'on');
 hold(ax4, 'off');
@@ -273,7 +283,18 @@ linkaxes([ax2,ax5], 'xy');
 linkaxes([ax3,ax6], 'xy');
 linkaxes([ax8,ax10], 'xy');
 
-title(h1, 'Linearity (Rainbow) Plots', 'FontSize',18);
+title(h1, 'Linearity (Rainbow) Plots | Best Channel Highlighted with Blue Border', 'FontSize',18);
+
+%% Add border around channel subplot with highest r^2 value
+if rsq1_mean > rsq2_mean
+    axpos = ax1.Position;
+    vars.vid.bestMagChannel = 1;
+else
+    axpos = ax4.Position;
+    vars.vid.bestMagChannel = 2;
+end
+annotation('rectangle', axpos, 'Color','blue', 'LineWidth',3);
+
 
 %% Save Figure
 set(fig1, 'Units','Inches');
