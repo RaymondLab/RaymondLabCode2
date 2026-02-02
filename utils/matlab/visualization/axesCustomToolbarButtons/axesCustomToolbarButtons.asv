@@ -1,4 +1,4 @@
-function axesCustomToolbarButtons(ax, interactions, description)
+function axesCustomToolbarButtons(ax, interactions, descriptions)
 %AXESCUSTOMTOOLBARBUTTONS Replaces axes toolbar with custom set of buttons
 %   Replaces the default axes toolbar with a custom set of more useful
 %   buttons for exploring plotted time series data.
@@ -11,9 +11,7 @@ function axesCustomToolbarButtons(ax, interactions, description)
 %   "Vertical Zoom"   - Toggles vertical-only zooming.
 %
 % Inputs:
-%   ax          : Target axes to apply this custom toolbar
-%   interactions: (Optional) Custom interactions
-%   description : (Optional) Custom description text for the subplot
+%   ax  : Target axes to apply this custom toolbar
 %
 %   ----------------------------------------------------------------------
 %   Author: Brian Angeles, Stanford University, 01/2025
@@ -27,7 +25,7 @@ else
 end
 
 % Set default description if not provided
-if ~exist('description', 'var')
+if ~exist('descriptions', 'var')
     description = 'No description provided for this subplot.';
 end
 
@@ -45,9 +43,8 @@ vBtn.ValueChangedFcn = {@verticalZoomState, ax};
 vBtn.Tooltip = 'Toggle Vertical-Only Zoom Mode';
 
 % Add an "info" push button
-infoBtn = axtoolbarbtn(tb, 'push', 'Icon','info_icon.gif');
-infoBtn.ButtonPushedFcn = {@showDescription, ax, description};
-infoBtn.Tooltip = 'Show Subplot Info';
+infoBtn = axtoolbarbtn(tb, 'push', 'Icon','help_icon.png', 'Tooltip','Show Subplot Info');
+infoBtn.ButtonPushedFcn = {@showDescription, description, ax};
 
 % Subfunctions that define functionality of custom buttons
     function horizontalZoomState(src, ~, ax)
@@ -72,9 +69,5 @@ infoBtn.Tooltip = 'Show Subplot Info';
                 ax.Interactions = [panInteraction, ...
                     zoomInteraction('Dimensions','y')];
         end
-    end
-
-    function showDescription(~, ~, ~, desc)
-        msgbox(desc, 'Subplot Info', 'help');
     end
 end
