@@ -304,13 +304,13 @@ Func ToolbarOptoSettings%()
     DlgShow(optoTrainingType%, optoTimingOrder%, optoEveryNthCycle%, digpsCycleCount%, digpsDuration%, digpsInterval%);
 
     docase
-        case (optoTrainingType% = 0) or (optoTrainingType% = 1) then
+        case optoTrainingType% = 0 then
             drumFreq := 1;
             chairFreq := 1;
-        case optoTrainingType% = 2 then
+        case optoTrainingType% = 1 then
             drumFreq := 0.5;
             chairFreq := 0.5;
-        case optoTrainingType% = 3 then
+        case optoTrainingType% = 2 then
             drumFreq := 2;
             chairFreq := 2;
     endcase;
