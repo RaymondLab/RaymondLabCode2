@@ -314,6 +314,8 @@ Func ToolbarOptoSettings%()
             drumFreq := 2;
             chairFreq := 2;
     endcase;
+    drumPeriod := 1/drumFreq;
+    chairPeriod := 1/chairFreq;
 
     ' Re-calculate number of test and train block cyles
     SetNumTestTrainCycles();
@@ -448,7 +450,7 @@ Proc SetOptoDelays()
     endcase;
 
     ' Define values for quarter and half cycles
-    var halfCycle := (chairFreq*sampleRate) / 2;
+    var halfCycle := (sampleRate/chairFreq) / 2;
     var quarterCycle := halfCycle / 2;
 
     tempArrLen% := BinomialC(tempBaseArrLen%, 2) + 1;  'N choose 2 plus 1 for double NoStim

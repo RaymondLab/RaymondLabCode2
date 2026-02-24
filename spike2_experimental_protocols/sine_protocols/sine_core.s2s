@@ -27,27 +27,34 @@ var gapDur   := 5.0;  'Total duration (in seconds) of each gap block [default 5.
 var flashDur := 0.2;  'Duration of TTL flash (in seconds) halfway into each gap block [default 0.2]
 
 ' Drum stimulus default sine parameters
-var drumAmp           := -10.0;             'Drum amplitude in deg/s [default -10.0]
+var drumAmp           := 10.0;             'Drum amplitude in deg/s [default -10.0]
 var drumFreq          := 1;                 'Drum frequency in Hz [default 1]
 var drumPeriod        := 1/drumFreq;        'Drum period in seconds
-var drumPhase         := 0;                 'Drum phase in degrees [default 0]
+var drumPhase         := -90;               'Drum phase in degrees [default -90]
 var nDrumTestCycles%, nDrumTrainCycles%;    'Number of drum TEST and TRAIN block cyles
 
 ' Chair stimulus default sine parameters
-var chairAmp       := 10.0;                 'In deg/s [default 10.0]
+var chairAmp       := -10.0;                 'In deg/s [default 10.0]
 var chairFreq      := 1;                    'In Hz [default 1]
 var chairPeriod    := 1/chairFreq;          'In seconds 
-var chairPhase     := 0;                    'In degrees [default 0]
-var chairDirection := 1;                    '0 for ipsi, 1 for contra
+var chairPhase     := -90;                  'In degrees [default -90] NOTE: THIS SHOULD NOT BE CHANGED
 var nChairTestCycles%, nChairTrainCycles%;  'Number of chair TEST and TRAIN block cyles
 
+' Target mean of drum and chair stimuli during driftFix correction
+var drumSinPosMean := (-1 * drumAmp / (2 * _pi * drumFreq)) * sin(drumPhase * (_pi / 180));
+var chairSinPosMean := (-1 * chairAmp / (2 * _pi * chairFreq)) * sin(chairPhase * (_pi / 180));
+PrintLog("Drum Sine Mean Target Amplitude:  ", drumSinPosMean);
+PrintLog("Chair Sine Mean Target Amplitude:  ", chairSinPosMean);
+
 ' driftFix parameters
-var Kp            := 0.45;  'Proportional correction gain [default 0.45]
-var Ki            := 0.54;  'Integral correction gain [default 0.54]
-var intErrorLimit := 0.3;   'Integral clamping limit [default 0.3]
-var numErrors%    := 3;     'Number of error values to collect in an array [default 3]
+var Kp            := 0.6;  'Proportional correction gain [default 0.45]
+var Ki            := 0.1;  'Integral correction gain [default 0.54]
+var intErrorLimit := 0.3;  'Integral clamping limit [default 0.3]
+var numErrors%    := 3;    'Number of error values to collect in an array [default 3]
 var htposErrors[numErrors%], hhposErrors[numErrors%];  'Array of (proportional) errors
 var htposIntError, hhposIntError, intErrorMax;  'Cumulative (integral) error
+var prevBlockFlag% := 0;  'Previous blockFlag% for transition detection
+var suspendUntil   := 0;    'Time until which driftFix should be suspended
 
 ' ToolbarIdle% global variables
 var nBlocks%, blockList$[1], blockLabelList$[1];
@@ -86,13 +93,24 @@ Func driftFix%()
     ' Get the current sampling time
     var currentTime := MaxTime();
 
+    if (currentTime < suspendUntil) then
+        ' Bypass driftFix one cycle period after the beginning and end of each block
+        'PrintLog("BYPASSING DRIFTFIX!: ", currentTime);
+        return 1;  
+    endif;
+
     ' Shift array of errors by one element
     ArrConst(htposErrors[1:numErrors%-1], htposErrors[0:numErrors%-1]);
     ArrConst(hhposErrors[1:numErrors%-1], hhposErrors[0:numErrors%-1]);
 
+    var drumTempAmp := Int16ToAmp(SampleSeqVar(100), drumVelocity2Voltage);
+    var chairTempAmp := Int16ToAmp(SampleSeqVar(101), chairVelocity2Voltage);
+    var drumSinPosMean := (-1 * drumTempAmp / (2 * _pi * drumFreq)) * sin(drumPhase * (_pi / 180));
+    var chairSinPosMean := (-1 * chairTempAmp / (2 * _pi * chairFreq)) * sin(chairPhase * (_pi / 180));
+
     ' Error is defined as the mean position over a cycle period (which should be zero)
-    htposErrors[0] := ChanMeasure(htpos_ch%, 2, currentTime-drumPeriod, currentTime);
-    hhposErrors[0] := ChanMeasure(hhpos_ch%, 2, currentTime-chairPeriod, currentTime);
+    htposErrors[0] := ChanMeasure(htpos_ch%, 2, currentTime-drumPeriod, currentTime) - drumSinPosMean;
+    hhposErrors[0] := ChanMeasure(hhpos_ch%, 2, currentTime-chairPeriod, currentTime) - chairSinPosMean;
 
     ' Error is "softened" by using the mean of errors over the last numErrors% errors
     var htposCurrError := ArrSum(htposErrors) / numErrors%;
@@ -144,10 +162,14 @@ Func ToolbarIdle%()
     if ViewKind() <> 0 then
         return 1;
     endif;
-    ' Check whether motors are drifting and apply correction if needed
-    driftFix%();
     if runFlag% = 1 then  'Check whether the "Run Experiment" button was pressed
         blockFlag% := SampleSeqVar(1);  'Get the current blockFlag% value from the 1401 sequencer variable
+        if blockFlag% <> prevBlockFlag% then  'Set driftFix suspension period after block transitions
+            suspendUntil := MaxTime() + chairPeriod;
+            ArrConst(htposErrors[], 0);
+            ArrConst(hhposErrors[], 0);
+            prevBlockFlag% := blockFlag%;
+        endif;
         if blockFlag% = 0 then  'Check whether a block is not currently running
             if blockNum% > 0 then
                 blockEndTime := MaxTime();
@@ -175,6 +197,8 @@ Func ToolbarIdle%()
             endif;
         endif;
     endif;
+    ' Check whether motors are drifting and apply correction if needed
+    driftFix%();
     return 1;
 End
 

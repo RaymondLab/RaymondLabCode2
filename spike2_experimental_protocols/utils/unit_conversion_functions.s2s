@@ -60,6 +60,12 @@ func Amp2Int16%(amp, scale)
     return int16%;
 end
 
+' Convert in the opposite direction
+Func Int16ToAmp(val, scale)
+    var amp := (val * voltageMax) / (scale * 32768);
+    return amp;
+end
+
 ' ----------
 ' Below are the original function definitions for conversion to Int16% and Int32%.
 ' However, these do not properly convert voltages to their required integer ranges.

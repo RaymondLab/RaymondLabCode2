@@ -314,6 +314,8 @@ Func ToolbarOptoSettings%()
             drumFreq := 2;
             chairFreq := 2;
     endcase;
+    drumPeriod := 1/drumFreq;
+    chairPeriod := 1/chairFreq;
 
     ' Re-calculate number of test and train block cyles
     SetNumTestTrainCycles();
@@ -462,7 +464,7 @@ Proc SetOptoDelays()
 
     ' Populate the arrays
     var ii%, jj%, kk%, delay_jj%;
-    var halfCycle := (chairFreq*sampleRate) / 2;
+    var halfCycle := (sampleRate/chairFreq) / 2;
     var quarterCycle := halfCycle / 2;
     for ii% := 0 to nrepeats%-1 do
         ' Shuffle array if random timing order is selected in settings
