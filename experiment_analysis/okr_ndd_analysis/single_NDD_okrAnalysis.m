@@ -14,11 +14,11 @@ params.exp_traintype = 'OKR';  % Training type (Default 'OKR')
 
 % Define timepoint blocks and corresponding group ids
 % Do not adjust this for now as the group_NDD_okrAnalysis is not set up for this
-params.timepoint_ids    = [2, 3, 4, 59, 60, 61];  % Default [2, 3, 4, 59, 60, 61]
-params.timepoint_groups = [0, 0, 0, 60, 60, 60];  % Default [0, 0, 0, 60, 60, 60]
+params.timepoint_ids    = [2, 3, 4, 14, 15, 16, 59, 60, 61];  % Default [2, 3, 4, 59, 60, 61]
+params.timepoint_groups = [0, 0, 0, 15, 15, 15, 60, 60, 60];  % Default [0, 0, 0, 60, 60, 60]
 
 % Subject condition options for dropdown menu
-params.subcond_options = {'None', 'NR', 'DR'}; 
+params.subcond_options = {'None', 'NR', '23DMR', '24DMR', 'DR'}; 
 
 % Task (training) condition options for dropdown menu
 params.taskcond_options = {'None', 'TNOR', 'TDIM', 'TDMR', '2TNOR', '2TDIM', '2TDMR'}; 
