@@ -260,15 +260,19 @@ hold(axs(2), 'on');
 yline(axs(2), 0, 'Color',[0 0 0]+0.7, 'LineWidth',0.1, ...
     'HandleVisibility','off', 'HitTest','off', 'PickableParts','none');
 axlines(1) = plot(axs(2), NaN, NaN, ...
+    'Color',c1, 'LineWidth',1, 'LineStyle','--', ...
+    'DisplayName',' Stimulus Velocity', ...
+    'HitTest','off', 'PickableParts','none');
+axlines(2) = plot(axs(2), NaN, NaN, ...
     'Color',c3, 'LineWidth',1, ...
     'DisplayName',' Saccades', ...
     'HitTest','off', 'PickableParts','none');
-axlines(2) = plot(axs(2), NaN, NaN, ...
+axlines(3) = plot(axs(2), NaN, NaN, ...
     'Color',c2, 'LineWidth',1, ...
     'DisplayName',' Desaccaded Eye Velocity', ...
     'HitTest','off', 'PickableParts','none'); 
-axlines(3) = plot(axs(2), NaN, NaN, ...
-    'Color',c1, 'LineWidth',2, 'LineStyle','--', ...
+axlines(4) = plot(axs(2), NaN, NaN, ...
+    'Color',c1, 'LineWidth',2, ...
     'DisplayName',' Fit of Raw Eye Velocity', ...
     'HitTest','off', 'PickableParts','none');
 hold(axs(2), 'off');
@@ -289,16 +293,20 @@ title(axs(3), 'Block NaN (NaN of NaN): ampSEM = NaN | phaseSEM = NaN  | varRes =
 hold(axs(3), 'on');
 yline(axs(3), 0, 'Color',[0 0 0]+0.7, 'LineWidth',0.1, ...
     'HandleVisibility','off', 'HitTest','off', 'PickableParts','none');
-axlines(4) = plot(axs(3), NaN, NaN, ...
+axlines(5) = plot(axs(3), NaN, NaN, ...
+    'Color',c1, 'LineWidth',1, 'LineStyle','--', ...
+    'DisplayName',' Stimulus Velocity', ...
+    'HitTest','off', 'PickableParts','none');
+axlines(6) = plot(axs(3), NaN, NaN, ...
     'Color',c3, 'LineWidth',1, ...
     'DisplayName',' Saccades', ...
     'HitTest','off', 'PickableParts','none');
-axlines(5) = plot(axs(3), NaN, NaN, ...
+axlines(7) = plot(axs(3), NaN, NaN, ...
     'Color',c2, 'LineWidth',1, ...
     'DisplayName',' Desaccaded Eye Velocity', ...
     'HitTest','off', 'PickableParts','none'); 
-axlines(6) = plot(axs(3), NaN, NaN, ...
-    'Color',c1, 'LineWidth',2, 'LineStyle','--', ...
+axlines(8) = plot(axs(3), NaN, NaN, ...
+    'Color',c1, 'LineWidth',2, ...
     'DisplayName',' Fit of Raw Eye Velocity', ...
     'HitTest','off', 'PickableParts','none');
 hold(axs(3), 'off');
@@ -322,6 +330,7 @@ uiwait(fig);
     end
 
     function updateBlockPlot(blockId, axIdx, lineIds)
+        stimvel_ii = d.all_stimvel{blockId};
         hevel_ii = d.all_hevel{blockId};
         hevel_des_ii = d.all_hevel_des{blockId};
         hevel_rawfit_ii = d.all_hevel_rawfit{blockId};
@@ -331,11 +340,13 @@ uiwait(fig);
             d.all_nTotalCycles(blockId));
         title(axs(axIdx), btxt);
         axlines(lineIds(1)).XData = btimes;
-        axlines(lineIds(1)).YData = hevel_ii;
+        axlines(lineIds(1)).YData = stimvel_ii;
         axlines(lineIds(2)).XData = btimes;
-        axlines(lineIds(2)).YData = hevel_des_ii;
+        axlines(lineIds(2)).YData = hevel_ii;
         axlines(lineIds(3)).XData = btimes;
-        axlines(lineIds(3)).YData = hevel_rawfit_ii;
+        axlines(lineIds(3)).YData = hevel_des_ii;
+        axlines(lineIds(4)).XData = btimes;
+        axlines(lineIds(4)).YData = hevel_rawfit_ii;
         xlim(axs(axIdx), [0 btimes(end)]);
         drawnow limitrate;
     end
@@ -416,8 +427,8 @@ uiwait(fig);
     
         % Refresh plots
         updateBarPlot();
-        updateBlockPlot(DropDownLeftBlock.ValueIndex, 2, [1,2,3]);
-        updateBlockPlot(DropDownRightBlock.ValueIndex, 3, [4,5,6]);
+        updateBlockPlot(DropDownLeftBlock.ValueIndex, 2, [1,2,3,4]);
+        updateBlockPlot(DropDownRightBlock.ValueIndex, 3, [5,6,7,8]);
     end
 
     function processData()
@@ -440,6 +451,7 @@ uiwait(fig);
         all_nTotalCycles = nan(nBlocks, 1); 
         all_goodCyclesFrac = nan(nBlocks, 1); 
         all_startpt = nan(nBlocks, 1);
+        all_stimvel = cell(nBlocks, 1); 
         all_hevel_cyclemat = cell(nBlocks, 1); 
         all_hevel = cell(nBlocks, 1); 
         all_hevel_des = cell(nBlocks, 1); 
@@ -497,6 +509,11 @@ uiwait(fig);
                 hevel_good_cyclemat = zeros(size(hevel_cyclemat));
             end
             all_startpt(ii) = startpt;
+            if contains(string(d.blockTypes(ii)), 'OKR')
+                all_stimvel{ii} = drumvel_raw_ii;
+            else
+                all_stimvel{ii} = chairvel_raw_ii;
+            end
             all_hevel_cyclemat{ii} = hevel_cyclemat;
             all_hevel{ii} = hevel_ii;
             all_hevel_des{ii} = hevel_des_ii;
@@ -504,12 +521,13 @@ uiwait(fig);
             all_hevel_goodcycles{ii} = hevel_good_cyclemat;
             all_cvd{ii} = cycleVarianceDecomposition(hevel_good_cyclemat);
         end
-
+        
         % Update data struct
         d.all_goodCyclesFrac = all_goodCyclesFrac;
         d.all_nGoodCycles = all_nGoodCycles;
         d.all_nTotalCycles = all_nTotalCycles;
         d.all_startpt = all_startpt;
+        d.all_stimvel = all_stimvel;
         d.all_hevel_cyclemat = all_hevel_cyclemat;
         d.all_hevel = all_hevel;
         d.all_hevel_des = all_hevel_des;
@@ -525,8 +543,8 @@ uiwait(fig);
         DropDownRightBlock.ValueIndex = params.timepoint_ids(end);
 
         % Update the respective plots
-        updateBlockPlot(params.timepoint_ids(1), 2, [1,2,3]);
-        updateBlockPlot(params.timepoint_ids(end), 3, [4,5,6]);
+        updateBlockPlot(params.timepoint_ids(1), 2, [1,2,3,4]);
+        updateBlockPlot(params.timepoint_ids(end), 3, [5,6,7,8]);
         
         % Close progress dialog
         close(pdlg);
@@ -876,6 +894,11 @@ uiwait(fig);
         else
             openLoc = pwd;
         end
+        if strcmp(paramsField, 'exp_filepath')
+            disp('    SELECT EXPERIMENT FILE (.SMR/.MAT) TO ANALYZE...');
+        elseif strcmp(paramsField, 'cal_filepath')
+            disp('    SELECT CALIBRATION FILE (.MAT) TO EXTRACT CHANNEL SCALING FACTORS...');
+        end
         [filename,folderpath] = uigetfile(fileExt, ['Select ', fileExt], openLoc);
         fig.Visible = 'on';
         if isequal(filename, 0), return; end  % User canceled selection
@@ -891,6 +914,7 @@ uiwait(fig);
     function selectFolder(paramsField)
         % Set main figure invisible to prevent file dialog being hidden
         fig.Visible = 'off';
+        disp('    SELECT FOLDER TO SAVE RESULTS IN...');
         folderpath = uigetdir(pwd, 'Select folder to save results in');
         fig.Visible = 'on';
         if isequal(folderpath, 0), return; end  % User canceled selection
