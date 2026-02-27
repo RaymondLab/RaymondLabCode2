@@ -49,7 +49,7 @@
             VAR    V25,PulNCycl=0
             VAR    V26,EveryNth=0
             VAR    V27,DelIdx=0
-            VAR    V28,DelVal=-99
+            VAR    V28,DelVal1=-99
             VAR    V29,StimNum=0
             VAR    V30,CyclCtr=0
 
@@ -82,6 +82,8 @@ TTL1ON: 'L  DIGOUT [.......1]      ;Turn TTL 1 on      >=
 ; RESET: Resets sequencer to initial state
 ;-----------------------------------------------------------------------------
 RESET:  'R  DIGOUT [.......0]      ;Reset to initial state >=
+            MOVI   DrumTmp,0       ;Reset drum amplitude >=
+            MOVI   ChairTmp,0      ;Reset chair amplitude >=
             RATE   0,0             ;Stop sine on drum  >=
             RATE   1,0             ;Stop sine on chair >=
             JUMP   IDLELOOP        ;Return to idle loop
@@ -215,33 +217,49 @@ TEST2:      OFFSET 1,ChairOff      ;Adjust cosine offset >"
 
 
 ;-----------------------------------------------------------------------------
-; OPTO SINE Training Block: Turn sinusoidal chair + opto stimulus on/off
+; OPTO SINE Training Block: Turn sinusoidal chair + unilateral opto stimulus
+;
+; APPROACH 1: DELAY from previous cycle (no phase shift needed)
+;   - CyclCtr = EveryNth (= optoEveryNthCycle-1, set by .s2s)
+;   - Chair phase is standard (-90), angle is 0 (NO phase shift)
+;   - DelVal1 = target + period - seqFixedOverhead (pre-computed, from table)
+;   - Single hemisphere fires on channel 2 (TTL3)
+;
+; Instruction path (WAITC fall-through to DIGPC):
+;   DBNZ(1) + BGE(1) + ADDI(1) + BEQ_noStim(1) = 4 pre-DELAY overhead
+;   DELAY(DelVal1) = adjusted delay
+;   DIGPS(1) + DIGPS(1) + DIGPS(1) + DIGPC(1) = 4 post-DELAY overhead
+;   Total: 8 + DelVal1 steps from WAITC to DIGPC
+;   burstCenter = optoDuration/2 = 7 (default params)
+;   seqFixedOverhead = 4 + 4 + 7 = 15
+;
 ;-----------------------------------------------------------------------------
 OPTOON: 'T  MOVI   BlockFlg,1      ;Start opto stim trials >TRAINING
             MOVI   DrumTmp,0       ;Set drum amplitude >"
             MOV    ChairTmp,ChairAmp ;Set chair amplitude >"
-            DIGOUT [.......0]      ;Start opto stim trials >"
+            DIGOUT [.......0]      ;Ensure opto outputs off >"
             SZ     1,ChairAmp      ;Set cosine amplitude >"
             OFFSET 1,ChairOff      ;Set cosine offset  >"
-            PHASE  1,ChairPhs      ;Set cosine relative phase >"
-            ANGLE  1,ChairAng      ;Set cosine angle   >"
+            PHASE  1,-90           ;Standard cosine phase (no shift) >"
+            ANGLE  1,0             ;Standard cosine angle (no shift) >"
             RATE   1,ChairFrq      ;Set cosine frequency >"
 
-OPTO0:      MOV    CyclCtr,EveryNth ;Set cycle interval between stims >"
-            TABLD  DelVal,[DelIdx] ;Get DelVal from table at DelIdx >"
+OPTO0:      MOV    CyclCtr,EveryNth ;Set cycle counter (EveryNth-1 from .s2s) >"
+            TABLD  DelVal1,[DelIdx] ;Get adjusted delay from table >"
 
 OPTO1:      OFFSET 1,ChairOff      ;Adjust cosine offset >"
             WAITC  1,OPTO1         ;Wait for 0 phase   >"
             DBNZ   CyclCtr,OPTO1   ;Repeat until cycle counter hits zero >"
-            BGE    DelIdx,NDelays,OPTOOFF ;Branch if index exceeds number of trials >"
+            BGE    DelIdx,NDelays,OPTOOFF ;End block if done >"
             ADDI   StimNum,1       ;Increment StimNum by 1 >"
 
-            BEQ    DelVal,-1,OPTO2 ;Skip stim (i.e. NoStim) if DelVal = -1 >"
-            DELAY  DelVal
+            BEQ    DelVal1,-1,OPTO2 ;Skip stim (NoStim) if DelVal1 = -1 >"
+            DELAY  DelVal1         ;Wait adjusted delay from prev cycle >"
             DIGPS  2,P,PulInt      ;Pulse every "PulInt" ms >"
             DIGPS  2,D,PulDur      ;Pulse has duration of "PulDur" ms >"
             DIGPS  2,C,PulNCycl    ;Set number of pulses in train >"
             DIGPC  2,G             ;Start train on TTL3 >"
+
 OPTO2:      ADDI   DelIdx,1        ;Increment DelIdx by 1 >"
             JUMP   OPTO0
 

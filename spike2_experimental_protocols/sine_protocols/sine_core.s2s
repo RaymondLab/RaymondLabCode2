@@ -50,11 +50,10 @@ PrintLog("Chair Sine Mean Target Amplitude:  ", chairSinPosMean);
 var Kp            := 0.6;  'Proportional correction gain [default 0.45]
 var Ki            := 0.1;  'Integral correction gain [default 0.54]
 var intErrorLimit := 0.3;  'Integral clamping limit [default 0.3]
-var numErrors%    := 3;    'Number of error values to collect in an array [default 3]
-var htposErrors[numErrors%], hhposErrors[numErrors%];  'Array of (proportional) errors
-var htposIntError, hhposIntError, intErrorMax;  'Cumulative (integral) error
-var prevBlockFlag% := 0;  'Previous blockFlag% for transition detection
-var suspendUntil   := 0;    'Time until which driftFix should be suspended
+var htposIntError, hhposIntError;  'Cumulative (integral) error
+var prevBlockFlag%   := 0;  'Previous blockFlag% for transition detection
+var suspendUntil     := 0;  'Time until which driftFix should be suspended
+var lastDriftFixTime := 0;  'Time that last driftFix was executed
 
 ' ToolbarIdle% global variables
 var nBlocks%, blockList$[1], blockLabelList$[1];
@@ -86,8 +85,7 @@ SetNumTestTrainCycles();
 ' Int[e(t)*dt] - Cumulative sum of errors over time 
 '
 ' Notes:
-' 1. We further "soften" the e(t) term by averaging over previous numErrors% errors.
-' 2. We control windup by clamping the absolute integral error to intErrorMax.
+' 1. We control windup by clamping the absolute integral error to intErrorMax.
 '--------------------------------------------------------------------------------
 Func driftFix%()
     ' Get the current sampling time
@@ -95,34 +93,32 @@ Func driftFix%()
 
     if (currentTime < suspendUntil) then
         ' Bypass driftFix one cycle period after the beginning and end of each block
-        'PrintLog("BYPASSING DRIFTFIX!: ", currentTime);
         return 1;  
     endif;
 
-    ' Shift array of errors by one element
-    ArrConst(htposErrors[1:numErrors%-1], htposErrors[0:numErrors%-1]);
-    ArrConst(hhposErrors[1:numErrors%-1], hhposErrors[0:numErrors%-1]);
+    var dt := currentTime - lastDriftFixTime;
+    if dt < sampleStepsize then
+        ' Limit drift correction to only once per stimulus cycle period
+        return 1;  
+    endif;
+    lastDriftFixTime := currentTime;
 
     var drumTempAmp := Int16ToAmp(SampleSeqVar(100), drumVelocity2Voltage);
     var chairTempAmp := Int16ToAmp(SampleSeqVar(101), chairVelocity2Voltage);
     var drumSinPosMean := (-1 * drumTempAmp / (2 * _pi * drumFreq)) * sin(drumPhase * (_pi / 180));
     var chairSinPosMean := (-1 * chairTempAmp / (2 * _pi * chairFreq)) * sin(chairPhase * (_pi / 180));
 
-    ' Error is defined as the mean position over a cycle period (which should be zero)
-    htposErrors[0] := ChanMeasure(htpos_ch%, 2, currentTime-drumPeriod, currentTime) - drumSinPosMean;
-    hhposErrors[0] := ChanMeasure(hhpos_ch%, 2, currentTime-chairPeriod, currentTime) - chairSinPosMean;
-
-    ' Error is "softened" by using the mean of errors over the last numErrors% errors
-    var htposCurrError := ArrSum(htposErrors) / numErrors%;
-    var hhposCurrError := ArrSum(hhposErrors) / numErrors%;
+    ' Error is defined as the mean of the last cycle relative to the computed expected mean
+    var htposCurrError := ChanMeasure(htpos_ch%, 2, currentTime-drumPeriod, currentTime) - drumSinPosMean; 
+    var hhposCurrError := ChanMeasure(hhpos_ch%, 2, currentTime-chairPeriod, currentTime) - chairSinPosMean; 
 
     ' Final Proportional error term
     var htposProportionalError := Kp * htposCurrError;
     var hhposProportionalError := Kp * hhposCurrError;
 
     ' Integral error term is the scaled cumulative sum of errors
-    var htposIntErrorTest := htposIntError + (Ki * htposCurrError * sampleStepsize);
-    var hhposIntErrorTest := hhposIntError + (Ki * hhposCurrError * sampleStepsize);
+    var htposIntErrorTest := htposIntError + (Ki * htposCurrError * dt);
+    var hhposIntErrorTest := hhposIntError + (Ki * hhposCurrError * dt);
 
     ' Apply anti-windup integral condition (only increase IntError if below limit)
     if Abs(htposIntErrorTest) <= intErrorLimit then
@@ -166,8 +162,8 @@ Func ToolbarIdle%()
         blockFlag% := SampleSeqVar(1);  'Get the current blockFlag% value from the 1401 sequencer variable
         if blockFlag% <> prevBlockFlag% then  'Set driftFix suspension period after block transitions
             suspendUntil := MaxTime() + chairPeriod;
-            ArrConst(htposErrors[], 0);
-            ArrConst(hhposErrors[], 0);
+            htposIntError := 0;
+            hhposIntError := 0;
             prevBlockFlag% := blockFlag%;
         endif;
         if blockFlag% = 0 then  'Check whether a block is not currently running

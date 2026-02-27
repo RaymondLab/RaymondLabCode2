@@ -37,10 +37,14 @@ var digpsCycleCount%  := 4;  'Use 1 or 4 [default 4]
 var digpsDuration%    := 2;  'Use 14 or 2 [default 2]
 var digpsInterval%    := 4;  'Use 15 or 4 [default 4]
 
-' Initialize global variables used other opto-related functions
-var newChairPhase := chairPhase;
-var newChairAngle := 0;
-var delayLabels%[1], delayArrLen%, prevStimNum%, halfCycle%, delayVal2%;
+' Sequencer timing overhead constants for Approach 1 (derived from instruction counting)
+' These can be fine-tuned using the one-time calibration procedure described below:
+'   1. Set up 1 Hz chair sine (standard phase), trigger pulse at delay=250 ms (peak velocity)
+'   2. Record cosine command (DAC 1) and digital output
+'   3. Measure time from cosine peak to burst center
+'   4. Difference from expected (0 ms) = fixedOverhead to use here
+var seqFixedOverhead%  := 15;    'WAITC to burst center: 4(pre) + 4(post) + 7(burstCenter)
+var delayLabels%[1], delayArrLen%, prevStimNum%;
 UpdateOptoParamsForSequencer();
 
 ' Compute number of sequencer steps for GAP1, GAP2, and GAP3 in the sequencer file
@@ -139,23 +143,6 @@ Func UpdateExpmtSettings%(item%)
     endif;
 
     docase
-        case item% = 1 then
-            docase
-                case (trainingType_value% = 0) then
-                    DlgValue(4, 1);
-                    DlgValue(8, -10.0);
-                    DlgValue(11, 10.0);
-                case (trainingType_value% = 1) then
-                    DlgValue(4, 3);
-                    DlgValue(8, -10.0);
-                    DlgValue(11, 10.0);
-                case trainingType_value% = 2 then
-                    DlgValue(8, 10.0);
-                    DlgValue(11, 10.0);
-                case trainingType_value% = 3 then
-                    DlgValue(8, 0.0);
-                    DlgValue(11, 10.0);
-            endcase;
         case item% = 7 then
             if flashDur_value >= gapDur_value then
                 Message("TTL flash duration must be less than Gap duration.");
@@ -407,8 +394,8 @@ Proc SetSequencerValues()
     SampleSeqVar(10, Amp2Int32%(chairVelocityOffset, chairVelocity2Voltage));  'ChairOff
     SampleSeqVar(11, Amp2Int16%(chairAmp, chairVelocity2Voltage));             'ChairAmp
     SampleSeqVar(12, Hz2Int32%(chairFreq));                                    'ChairFrq
-    SampleSeqVar(13, Angle2Int32%(newChairPhase));                             'ChairPhs
-    SampleSeqVar(14, Angle2Int32%(newChairAngle));                             'ChairAng
+    SampleSeqVar(13, Angle2Int32%(chairPhase));                                'ChairPhs (standard, no shift)
+    SampleSeqVar(14, Angle2Int32%(0));                                         'ChairAng (zero, no shift)
     SampleSeqVar(15, nChairTestCycles%);                                       'NchairP
     SampleSeqVar(16, nChairTrainCycles%+1);                                    'NchairT
 
@@ -418,17 +405,20 @@ Proc SetSequencerValues()
     SampleSeqVar(20, gap3SeqSteps);  'Gap3Dur
 
     ' Opto stim parameters
-    SampleSeqVar(22, delayArrLen%-1);      'NDelays
-    SampleSeqVar(23, digpsDuration%);      'PulDur
-    SampleSeqVar(24, digpsInterval%);      'PulInt
-    SampleSeqVar(25, digpsCycleCount%);    'PulNCycl
-    SampleSeqVar(26, optoEveryNthCycle%);  'EveryNth
+    SampleSeqVar(22, delayArrLen%-1);           'NDelays
+    SampleSeqVar(23, digpsDuration%);           'PulDur
+    SampleSeqVar(24, digpsInterval%);           'PulInt
+    SampleSeqVar(25, digpsCycleCount%);         'PulNCycl
+    SampleSeqVar(26, optoEveryNthCycle% - 1);   'EveryNth (minus 1 for Approach 1)
 
     CheckDelayChange(); 
 End
 
+
 '--------------------------------------------------------------------------------
-' CALCULATE LEFT AND RIGHT OPTO TIMING DELAYS TO SEND TO SEQUENCER
+' CALCULATE OPTO TIMING DELAYS TO SEND TO SEQUENCER
+' Uses Approach 1: DELAY from previous cycle (no phase shift needed)
+'   DelVal1 = target + period - seqFixedOverhead (adjusted delay)
 '--------------------------------------------------------------------------------
 Proc SetOptoDelays()
     var tempArrLen%, tempDelayArr%[1];
@@ -460,12 +450,14 @@ Proc SetOptoDelays()
     ' Initialize arrays to store delay timing values over an entire training block
     delayArrLen% := Round(tempArrLen%*nrepeats%);
     resize delayLabels%[delayArrLen%];
-    var delayValues%[delayArrLen%];
+    var adjustedDelays%[delayArrLen%];
+
+    ' Compute timing constants for this frequency
+    var period := Round(sampleRate / chairFreq);
+    var quarterCycle := period / 4;
 
     ' Populate the arrays
     var ii%, jj%, kk%, delay_jj%;
-    var halfCycle := (sampleRate/chairFreq) / 2;
-    var quarterCycle := halfCycle / 2;
     for ii% := 0 to nrepeats%-1 do
         ' Shuffle array if random timing order is selected in settings
         if optoTimingOrder% = 0 then
@@ -473,14 +465,14 @@ Proc SetOptoDelays()
         endif;
         for jj% := 0 to tempArrLen%-1 do 
             delay_jj% := tempDelayArr%[jj%];
-            delayValues%[kk%] := delay_jj%;
             if delay_jj% = -1 then
                 ' No stim case
                 delayLabels%[kk%] := -1;
-                delayValues%[kk%] := -1;
+                adjustedDelays%[kk%] := -1;
             else
                 delayLabels%[kk%] := Round(delay_jj% - quarterCycle);
-                delayValues%[kk%] := delay_jj% + 11;
+                ' Approach 1: adjusted delay = target + period - fixedOverhead
+                adjustedDelays%[kk%] := Round(delay_jj% + period - seqFixedOverhead%);
             endif;
             kk% := kk% + 1;
         next;
@@ -489,11 +481,13 @@ Proc SetOptoDelays()
     PrintLog("Actual training block duration: %g s\n", trainBlockDurationActual);
     PrintLog("Delay timings per set: %d\n", tempArrLen%);
     PrintLog("Number of repeats of array set: %d\n", nrepeats%);
+    PrintLog("Period: %d ms\n", period);
+    PrintLog("seqFixedOverhead: %d ms\n", seqFixedOverhead%);
     PrintLog("\nBase delays: ", tempDelayArr%[]);
     PrintLog("Labels: ", delayLabels%[]);
-    PrintLog("delayValues: ", delayValues%[], "\n");
+    PrintLog("adjustedDelays (DelVal1): ", adjustedDelays%[], "\n");
 
-    SampleSeqTable(delayValues%[], 0);
+    SampleSeqTable(adjustedDelays%[], 0);
 End
 
 Proc CheckDelayChange()
@@ -524,10 +518,8 @@ Proc UpdateOptoParamsForSequencer()
     endif;
 
     optoDuration% := Round((digpsInterval% * digpsCycleCount%) - pulseGap%);
-    ' The added value can be adjusted to fine-tune the timing of 1st stim
-    var offsetPhaseAngle% := Round(((optoDuration%/2) + 22) * 360 / sampleRate);
-    newChairPhase := chairPhase - offsetPhaseAngle%;
-    newChairAngle := 1.0 * offsetPhaseAngle%;
+    ' Approach 1: No phase shift needed. Timing is handled entirely by the
+    ' adjusted DELAY values computed in SetOptoDelays().
 End
 
 Func AddTextMark(samplekey$, blocknumber%)

@@ -49,18 +49,11 @@
             VAR    V25,PulNCycl=0
             VAR    V26,EveryNth=0
             VAR    V27,DelIdx=0
-            VAR    V28,DelValA=-99
-            VAR    V29,DelValB=-99
-            VAR    V30,DelValC=-99
-            VAR    V31,DelValD=-99
-            VAR    V32,DelChA=-99
-            VAR    V33,DelChB=-99
-            VAR    V34,DelChC=-99
-            VAR    V35,DelChD=-99
-            VAR    V36,StimNum=0
-            VAR    V37,CyclCtr=0
+            VAR    V28,DelVal=-99
+            VAR    V29,StimNum=0
+            VAR    V30,CyclCtr=0
 
-            TABSZ  40001
+            TABSZ  10001
 
 
 ;-----------------------------------------------------------------------------
@@ -232,88 +225,31 @@ OPTOON: 'T  MOVI   BlockFlg,1      ;Start opto stim trials >TRAINING
             DIGOUT [.......0]      ;Start opto stim trials >"
             SZ     1,ChairAmp      ;Set cosine amplitude >"
             OFFSET 1,ChairOff      ;Set cosine offset  >"
-            PHASE  1,-90           ;Standard cosine phase (no shift) >"
-            ANGLE  1,0             ;Standard cosine angle (no shift) >"
+            PHASE  1,ChairPhs      ;Set cosine relative phase >"
+            ANGLE  1,ChairAng      ;Set cosine angle   >"
             RATE   1,ChairFrq      ;Set cosine frequency >"
 
 OPTO0:      MOV    CyclCtr,EveryNth ;Set cycle interval between stims >"
-            TABLD  DelValA,[DelIdx] ;Get DelValA from table at DelIdx >"
-            TABLD  DelChA,[DelIdx+5000] ;Get DelChA from table at DelIdx+5000 >"
-            TABLD  DelValB,[DelIdx+10000] ;Get DelValB from table at DelIdx+10000 >"
-            TABLD  DelChB,[DelIdx+15000] ;Get DelChB from table at DelIdx+15000 >"
-            TABLD  DelValC,[DelIdx+20000] ;Get DelValC from table at DelIdx+20000 >"
-            TABLD  DelChC,[DelIdx+25000] ;Get DelChC from table at DelIdx+25000 >"
-            TABLD  DelValD,[DelIdx+30000] ;Get DelValD from table at DelIdx+30000 >"
-            TABLD  DelChD,[DelIdx+35000] ;Get DelChD from table at DelIdx+35000 >"
+            TABLD  DelVal,[DelIdx] ;Get DelVal from table at DelIdx >"
 
 OPTO1:      OFFSET 1,ChairOff      ;Adjust cosine offset >"
             WAITC  1,OPTO1         ;Wait for 0 phase   >"
             DBNZ   CyclCtr,OPTO1   ;Repeat until cycle counter hits zero >"
-            BGE    DelIdx,NDelays,OPTOOFF ;End block if index exceeds number of trials >"
+            BGE    DelIdx,NDelays,OPTOOFF ;Branch if index exceeds number of trials >"
             ADDI   StimNum,1       ;Increment StimNum by 1 >"
 
-            BEQ    DelValA,-1,OPTO2B ;Skip stim (i.e. NoStim) if value = -1 >"
-            DELAY  DelValA         ;                   >"
-            BEQ    DelChA,4,CH4A   ;                   >"
-CH3A:       DIGPS  2,P,PulInt      ;Pulse every "PulInt" ms >"
+            BEQ    DelVal,-1,OPTO2 ;Skip stim (i.e. NoStim) if DelVal = -1 >"
+            DELAY  DelVal
+            DIGPS  2,P,PulInt      ;Pulse every "PulInt" ms >"
             DIGPS  2,D,PulDur      ;Pulse has duration of "PulDur" ms >"
             DIGPS  2,C,PulNCycl    ;Set number of pulses in train >"
-            DIGPC  2,G             ;Start train        >"
-            JUMP   OPTO2B          ;                   >"
-CH4A:       DIGPS  3,P,PulInt      ;Pulse every "PulInt" ms >"
-            DIGPS  3,D,PulDur      ;Pulse has duration of "PulDur" ms >"
-            DIGPS  3,C,PulNCycl    ;Set number of pulses in train >"
-            DIGPC  3,G             ;Start train        >"
-            JUMP   OPTO2B          ;                   >"
-
-OPTO2B:     BEQ    DelValB,-1,OPTO2C ;Skip stim (i.e. NoStim) if value = -1 >"
-            DELAY  DelValB         ;                   >"
-            BEQ    DelChB,4,CH4B   ;                   >"
-CH3B:       DIGPS  2,P,PulInt      ;Pulse every "PulInt" ms >"
-            DIGPS  2,D,PulDur      ;Pulse has duration of "PulDur" ms >"
-            DIGPS  2,C,PulNCycl    ;Set number of pulses in train >"
-            DIGPC  2,G             ;Start train        >"
-            JUMP   OPTO2C          ;                   >"
-CH4B:       DIGPS  3,P,PulInt      ;Pulse every "PulInt" ms >"
-            DIGPS  3,D,PulDur      ;Pulse has duration of "PulDur" ms >"
-            DIGPS  3,C,PulNCycl    ;Set number of pulses in train >"
-            DIGPC  3,G             ;Start train        >"
-            JUMP   OPTO2C          ;                   >"
-
-OPTO2C:     BEQ    DelValC,-1,OPTO2D ;Skip stim (i.e. NoStim) if value = -1 >"
-            DELAY  DelValC         ;                   >"
-            BEQ    DelChC,4,CH4C   ;                   >"
-CH3C:       DIGPS  2,P,PulInt      ;Pulse every "PulInt" ms >"
-            DIGPS  2,D,PulDur      ;Pulse has duration of "PulDur" ms >"
-            DIGPS  2,C,PulNCycl    ;Set number of pulses in train >"
-            DIGPC  2,G             ;Start train        >"
-            JUMP   OPTO2D          ;                   >"
-CH4C:       DIGPS  3,P,PulInt      ;Pulse every "PulInt" ms >"
-            DIGPS  3,D,PulDur      ;Pulse has duration of "PulDur" ms >"
-            DIGPS  3,C,PulNCycl    ;Set number of pulses in train >"
-            DIGPC  3,G             ;Start train        >"
-            JUMP   OPTO2D          ;                   >"
-
-OPTO2D:     BEQ    DelValD,-1,OPTO3 ;Skip stim (i.e. NoStim) if value = -1 >"
-            DELAY  DelValD         ;                   >"
-            BEQ    DelChD,4,CH4D   ;                   >"
-CH3D:       DIGPS  2,P,PulInt      ;Pulse every "PulInt" ms >"
-            DIGPS  2,D,PulDur      ;Pulse has duration of "PulDur" ms >"
-            DIGPS  2,C,PulNCycl    ;Set number of pulses in train >"
-            DIGPC  2,G             ;Start train        >"
-            JUMP   OPTO3           ;                   >"
-CH4D:       DIGPS  3,P,PulInt      ;Pulse every "PulInt" ms >"
-            DIGPS  3,D,PulDur      ;Pulse has duration of "PulDur" ms >"
-            DIGPS  3,C,PulNCycl    ;Set number of pulses in train >"
-            DIGPC  3,G             ;Start train        >"
-            JUMP   OPTO3           ;                   >"
-
-OPTO3:      ADDI   DelIdx,1        ;Increment DelIdx by 1 >"
+            DIGPC  2,G             ;Start train on TTL3 >"
+OPTO2:      ADDI   DelIdx,1        ;Increment DelIdx by 1 >"
             JUMP   OPTO0
 
 OPTOOFF: 't CLRC   1               ;Stop chair sine at 0 phase >"
-OPTO4:      OFFSET 1,ChairOff      ;Adjust cosine offset >"
-            WAITC  1,OPTO4         ;Wait for end of cycle >"
+OPTO3:      OFFSET 1,ChairOff      ;Adjust cosine offset >"
+            WAITC  1,OPTO3         ;Wait for end of cycle >"
             RATE   1,0             ;Stop chair cosine  >"
             MOVI   DrumTmp,0       ;Set drum amplitude to zero >"
             MOVI   ChairTmp,0      ;Set chair amplitude to zero >"
