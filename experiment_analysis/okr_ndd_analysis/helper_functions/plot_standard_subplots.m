@@ -175,6 +175,8 @@ for ii = 1:nblocks
         mat_Residuals = (b_ii.cyclemat' - b_ii.good_cyclefit(:)) ./ b_ii.good_amp;
         badCycles = any(isnan(b_ii.des_cyclemat'), 1);
         mat_Residuals(:,badCycles) = NaN;
+        min_matRes = min(mat_Residuals(:));
+        max_matRes = max(mat_Residuals(:));
         alphaMap = double(~isnan(mat_Residuals'));
         
         ax = nexttile(h2);
@@ -186,7 +188,9 @@ for ii = 1:nblocks
         hold(ax, 'on');
         imagesc(ax, ctimes, 1:nCycles2, mat_Residuals', 'AlphaData',alphaMap);
         colormap(ax, 'jet');
-        clim(ax, [min(mat_Residuals(:)), max(mat_Residuals(:))]);
+        if min_matRes < max_matRes
+            clim(ax, [min(mat_Residuals(:)), max(mat_Residuals(:))]);
+        end
         yyaxis right;
         plot(ax, ctimes, b_ii.good_cyclefit, '--k', 'LineWidth', 1);
         plot(ax, ctimes, b_ii.hevel_good_cyclecvd.cycleMean, '-k', 'LineWidth', 2);
