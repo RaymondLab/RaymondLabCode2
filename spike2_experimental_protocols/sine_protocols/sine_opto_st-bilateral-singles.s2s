@@ -442,7 +442,7 @@ Proc SetOptoDelays()
     endcase;
 
     ' Duration (s) per repeat of the set of array delay timing values
-    var durationPerArrRepeat := tempArrLen% * optoEveryNthCycle% * chairFreq; 
+    var durationPerArrRepeat := tempArrLen% * optoEveryNthCycle% / chairFreq; 
     
     ' Number of times base array can be repeated within approx. desired training block duration
     var nrepeats% := Round(trainBlockDuration / durationPerArrRepeat);
@@ -504,6 +504,7 @@ Proc SetOptoDelays()
 
     PrintLog("Actual training block duration: %g s\n", trainBlockDurationActual);
     PrintLog("Delay timings per set: %d\n", tempArrLen%);
+    PrintLog("Duration per repeat of each set: %g s\n", durationPerArrRepeat);
     PrintLog("Number of repeats of array set: %d\n", nrepeats%);
     PrintLog("Period: %d ms, HalfCycle: %g ms\n", period, halfCycle);
     PrintLog("DelVal2 (inter-hemisphere): %d ms\n", delayVal2%);

@@ -293,13 +293,13 @@ Func ToolbarOptoSettings%()
     DlgShow(optoTrainingType%, optoTimingOrder%, optoEveryNthCycle%, digpsCycleCount%, digpsDuration%, digpsInterval%);
 
     docase
-        case (optoTrainingType% = 0) or (optoTrainingType% = 1) then
+        case optoTrainingType% = 0 then
             drumFreq := 1;
             chairFreq := 1;
-        case optoTrainingType% = 2 then
+        case optoTrainingType% = 1 then
             drumFreq := 0.5;
             chairFreq := 0.5;
-        case optoTrainingType% = 3 then
+        case optoTrainingType% = 2 then
             drumFreq := 2;
             chairFreq := 2;
     endcase;
@@ -463,7 +463,7 @@ Proc SetOptoDelays()
     tempDelayArr2%[kk%] := -1;
 
     ' Duration (s) per repeat of the set of array delay timing values
-    var durationPerArrRepeat := tempArrLen% * optoEveryNthCycle% * chairFreq; 
+    var durationPerArrRepeat := tempArrLen% * optoEveryNthCycle% / chairFreq; 
     
     ' Number of times base array can be repeated within approx. desired training block duration
     var nrepeats% := Round(trainBlockDuration / durationPerArrRepeat);
@@ -617,6 +617,7 @@ Proc SetOptoDelays()
 
     PrintLog("Actual training block duration: %g s\n", trainBlockDurationActual);
     PrintLog("Delay timings per set: %d\n", tempArrLen%);
+    PrintLog("Duration per repeat of each set: %g s\n", durationPerArrRepeat);
     PrintLog("Number of repeats of array set: %d\n", nrepeats%);
     PrintLog("Period: %d ms, HalfCycle: %g ms\n", period%, halfCycle);
     PrintLog("seqFixedOverheadA: %d, seqInterOverhead: %d, seqSkipOverhead: %d\n",
