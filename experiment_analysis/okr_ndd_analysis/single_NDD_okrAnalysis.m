@@ -21,7 +21,10 @@ params.timepoint_groups = [0, 0, 0, 15, 15, 15, 60, 60, 60];  % Default [0, 0, 0
 params.subcond_options = {'None', 'NR', '23DMR', '24DMR', 'DR'}; 
 
 % Task (training) condition options for dropdown menu
-params.taskcond_options = {'None', 'TNOR', 'TDIM', 'TDMR', '2TNOR', '2TDIM', '2TDMR'}; 
+params.taskcond_options = {'None', 'TNOR', 'TDIM', 'TDMR', ...
+    '2TNOR', '2TDIM', '2TDMR', ...
+    '0DaysDark', '20DaysDark', '40DaysDark', '60DaysDark', ...
+    '180DaysDark', '20DaysNormSwitch', '40DaysNormSwitch'}; 
 
 % Number of perturbations to run for F-Tests
 params.ftestPerturbs = 10000;  % (Default 10000, or 5000 for tests)
@@ -447,6 +450,8 @@ end
 if ~isequal(params.save_folderpath, 0) & isfield(params, 'save_filepath')
     disp('    Adding diffdata analysis results to Excel file...');
     save_DiffDataAnalysisToXlsx(timepoints, diffdata, params);
+    disp('    Adding experiment information metadata to Excel file...');
+    save_ExperimentInfoToXlsx(params, length(blocks));
 end
 
 % Clean up workspace
@@ -499,17 +504,4 @@ function diffSEM = calc_cyclemeanDiffSEM(cyclesem1, cyclesem2)
     cs1_sq = cyclesem1.^2;
     cs2_sq = cyclesem2.^2;
     diffSEM = sqrt(cs1_sq + cs2_sq);
-end
-
-function [gain,gainSEM] = calc_eyeRelGainSEM(eyeAmp, eyeSEM, stimAmp, stimSEM)
-    gain = eyeAmp / stimAmp;
-    a_sq = (eyeSEM / eyeAmp)^2;
-    b_sq = (stimSEM / stimAmp)^2;
-    gainSEM = gain * sqrt(a_sq + b_sq);
-end
-
-function [phase,phaseSEM] = calc_eyeRelPhaseSEM(eyePhase, eyeSEM, stimPhase, stimSEM)
-    phase = (eyePhase - stimPhase);
-    phase = mod(phase, 360) - 180;
-    phaseSEM = sqrt((eyeSEM^2) + (stimSEM^2));
 end

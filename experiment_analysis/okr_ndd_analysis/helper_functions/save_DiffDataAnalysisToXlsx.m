@@ -10,12 +10,19 @@ rownum = 0;
 % Initialize metrics "Type", "BlockNums", and "BaseAmp" columns for table
 metrics.Type = cell(nmetricrows, 1);
 metrics.BlockNums = cell(nmetricrows, 1);
-metrics.BaseAmp = zeros(nmetricrows, 1) + timepoints(1).pooled_good_cyclemean_cvd.amplitudeMean;
+metrics.DrumAmp = zeros(nmetricrows, 1);
+metrics.DrumAmp_SEM = zeros(nmetricrows, 1);
+metrics.DrumPhase = zeros(nmetricrows, 1);
+metrics.DrumPhase_SEM = zeros(nmetricrows, 1);
+metrics.RelGain = zeros(nmetricrows, 1);
+metrics.RelGain_SEM = zeros(nmetricrows, 1);
+metrics.RelPhase = zeros(nmetricrows, 1);
+metrics.RelPhase_SEM = zeros(nmetricrows, 1);
 
 % Nasal-Temporal (NT) half-cycle peak times, centroid, lag, and skew metrics
 metrics.NT_PeakTime1 = zeros(nmetricrows, 1);
 metrics.NT_PeakTime2 = zeros(nmetricrows, 1);
-metrics.NT_CentMean = zeros(nmetricrows, 1);
+metrics.NT_Mean = zeros(nmetricrows, 1);
 metrics.NT_MeanLag = zeros(nmetricrows, 1);
 metrics.NT_MeanSkew = zeros(nmetricrows, 1);
 metrics.NT_Median = zeros(nmetricrows, 1);
@@ -27,7 +34,7 @@ metrics.NT_MeanMedianSkew = zeros(nmetricrows, 1);
 % Temporal-Nasal (TN) half-cycle peak times, centroid, lag, and skew metrics
 metrics.TN_PeakTime1 = zeros(nmetricrows, 1);
 metrics.TN_PeakTime2 = zeros(nmetricrows, 1);
-metrics.TN_CentMean = zeros(nmetricrows, 1);
+metrics.TN_Mean = zeros(nmetricrows, 1);
 metrics.TN_MeanLag = zeros(nmetricrows, 1);
 metrics.TN_MeanSkew = zeros(nmetricrows, 1);
 metrics.TN_Median = zeros(nmetricrows, 1);
@@ -47,12 +54,35 @@ for ii = 1:ntimepoints
     data.([timepoints(ii).timePoint,'_Fit']) = timepoints(ii).pooled_good_cyclemean_cvd.fitMean';
     resii = timepoints(ii).pooled_good_cyclemean_cm;  % Retrieve cycle metric results
 
+    DrumAmp = timepoints(ii).pooled_drumvel_cyclemean_cvd.amplitudeMean;
+    DrumAmp_SEM = timepoints(ii).pooled_drumvel_cyclemean_cvd.amplitudeSEM;
+    EyeAmp = timepoints(ii).pooled_good_cyclemean_cvd.amplitudeMean;
+    EyeAmp_SEM = timepoints(ii).pooled_good_cyclemean_cvd.amplitudeSEM;
+    [RelGain,RelGain_SEM] = calc_eyeRelGainSEM(EyeAmp, EyeAmp_SEM, ...
+            DrumAmp, DrumAmp_SEM);
+
+    DrumPhase = timepoints(ii).pooled_drumvel_cyclemean_cvd.phaseMean_deg;
+    DrumPhase_SEM = timepoints(ii).pooled_drumvel_cyclemean_cvd.phaseSEM_deg;
+    EyePhase = timepoints(ii).pooled_good_cyclemean_cvd.phaseMean_deg;
+    EyePhase_SEM = timepoints(ii).pooled_good_cyclemean_cvd.phaseSEM_deg;
+    [RelPhase,RelPhase_SEM] = calc_eyeRelPhaseSEM(EyePhase, EyePhase_SEM, ...
+            DrumPhase, DrumPhase_SEM);
+
     metrics.Type{rownum} = timepoints(ii).timePoint;
     metrics.BlockNums{rownum} = strrep(timepoints(ii).blockNumbers, ', ', ';');
 
+    metrics.DrumAmp(rownum) = DrumAmp;
+    metrics.DrumAmp_SEM(rownum) = DrumAmp_SEM;
+    metrics.DrumPhase(rownum) = DrumPhase;
+    metrics.DrumPhase_SEM(rownum) = DrumPhase_SEM;
+    metrics.RelGain(rownum) = RelGain;
+    metrics.RelGain_SEM(rownum) = RelGain_SEM;
+    metrics.RelPhase(rownum) = RelPhase;
+    metrics.RelPhase_SEM(rownum) = RelPhase_SEM;
+
     metrics.NT_PeakTime1(rownum) = resii.eye.peak1TimeMs(1);
     metrics.NT_PeakTime2(rownum) = resii.eye.peak1TimeMs(2);
-    metrics.NT_CentMean(rownum) = resii.eye.centroidMean(1);
+    metrics.NT_Mean(rownum) = resii.eye.centroidMean(1);
     metrics.NT_MeanLag(rownum) = resii.centroidMeanDiff(1);
     metrics.NT_MeanSkew(rownum) = resii.eye.skewFromCentroidMean(1);
     metrics.NT_Median(rownum) = resii.eye.centroidMedian(1);
@@ -63,7 +93,7 @@ for ii = 1:ntimepoints
     
     metrics.TN_PeakTime1(rownum) = resii.eye.peak2TimeMs(1);
     metrics.TN_PeakTime2(rownum) = resii.eye.peak2TimeMs(2);
-    metrics.TN_CentMean(rownum) = resii.eye.centroidMean(2);
+    metrics.TN_Mean(rownum) = resii.eye.centroidMean(2);
     metrics.TN_MeanLag(rownum) = resii.centroidMeanDiff(2);
     metrics.TN_MeanSkew(rownum) = resii.eye.skewFromCentroidMean(2);
     metrics.TN_Median(rownum) = resii.eye.centroidMedian(2);
@@ -83,10 +113,19 @@ for ii = 1:ndiffdata
 
     metrics.Type{rownum} = fname;
     metrics.BlockNums{rownum} = "NA";
+
+    metrics.DrumAmp(rownum) = nan;
+    metrics.DrumAmp_SEM(rownum) = nan;
+    metrics.DrumPhase(rownum) = nan;
+    metrics.DrumPhase_SEM(rownum) = nan;
+    metrics.RelGain(rownum) = nan;
+    metrics.RelGain_SEM(rownum) = nan;
+    metrics.RelPhase(rownum) = nan;
+    metrics.RelPhase_SEM(rownum) = nan;
     
     metrics.NT_PeakTime1(rownum) = resii.eye.peak1TimeMs(1);
     metrics.NT_PeakTime2(rownum) = resii.eye.peak1TimeMs(2);
-    metrics.NT_CentMean(rownum) = resii.eye.centroidMean(1);
+    metrics.NT_Mean(rownum) = resii.eye.centroidMean(1);
     metrics.NT_MeanLag(rownum) = resii.centroidMeanDiff(1);
     metrics.NT_MeanSkew(rownum) = resii.eye.skewFromCentroidMean(1);
     metrics.NT_Median(rownum) = resii.eye.centroidMedian(1);
@@ -97,7 +136,7 @@ for ii = 1:ndiffdata
     
     metrics.TN_PeakTime1(rownum) = resii.eye.peak2TimeMs(1);
     metrics.TN_PeakTime2(rownum) = resii.eye.peak2TimeMs(2);
-    metrics.TN_CentMean(rownum) = resii.eye.centroidMean(2);
+    metrics.TN_Mean(rownum) = resii.eye.centroidMean(2);
     metrics.TN_MeanLag(rownum) = resii.centroidMeanDiff(2);
     metrics.TN_MeanSkew(rownum) = resii.eye.skewFromCentroidMean(2);
     metrics.TN_Median(rownum) = resii.eye.centroidMedian(2);

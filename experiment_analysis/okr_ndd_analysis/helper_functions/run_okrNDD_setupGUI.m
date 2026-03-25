@@ -149,7 +149,7 @@ DropDownLeftBlock = uidropdown(GridLayout_Params, ...
     'Items',{'None'}, ...
     'ValueIndex',1, ...
     'FontSize',fontsz1, ...
-    'ValueChangedFcn',@(src,evt) dropdownChanged(evt, 2, [1,2,3]));
+    'ValueChangedFcn',@(src,evt) dropdownChanged(evt, 2, [1,2,3,4]));
 
 LabelCohort = uilabel(GridLayout_Params, ...
     'Text','Cohort: ', ...
@@ -218,7 +218,7 @@ DropDownRightBlock = uidropdown(GridLayout_Params, ...
     'Items',{'None'}, ...
     'ValueIndex',1, ...
     'FontSize',fontsz1, ...
-    'ValueChangedFcn',@(src,evt) dropdownChanged(evt, 3, [4,5,6]));
+    'ValueChangedFcn',@(src,evt) dropdownChanged(evt, 3, [4,5,6,7]));
 
 
 %% Sub-grid layout for displaying saccade threshold results subplots
@@ -654,6 +654,7 @@ uiwait(fig);
                 scaleCh2 = [];
                 params.setupAllCompleted(2) = 0;
                 params.cal_filepath = '';
+                params.calScaleChs = [];
                 params.customScaleChs = [];
                 TextFieldCal.Value = '';
                 ButtonNext.Enable = 'off';
@@ -758,6 +759,7 @@ uiwait(fig);
             TextFieldCal.Value = sprintf('scaleCh1 = %.4f | scaleCh2 = %.4f', cal.scaleCh1, cal.scaleCh2);
             % Update params file with calibration file info
             params.cal_filepath = filepath;
+            params.calScaleChs = [scaleCh1, scaleCh2];
             % Set second flag as completed
             params.setupAllCompleted(2) = 1;
             fprintf('Loaded calibration scaling factors from file: %s\n', TextFieldCal.Value);
@@ -803,7 +805,8 @@ uiwait(fig);
         scaleCh2 = temp2;
         % Set text field and scaleCh property
         TextFieldCal.Value = sprintf('scaleCh1 = %.4f | scaleCh2 = %.4f', temp1, temp2);
-        % Update params file with custom scaling values
+        % Update params file with cal and custom scaling values
+        params.calScaleChs = [nan, nan];
         params.customScaleChs = [temp1, temp2];
         % Set second flag as completed
         params.setupAllCompleted(2) = 1;
