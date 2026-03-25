@@ -659,7 +659,7 @@ uiwait(fig);
                 TextFieldCal.Value = '';
                 ButtonNext.Enable = 'off';
                 % Reset plots to initial empty state
-                for k = 1:6
+                for k = 1:8
                     axlines(k).XData = NaN;
                     axlines(k).YData = NaN;
                 end
