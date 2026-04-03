@@ -707,6 +707,7 @@ uiwait(fig);
             TextFieldExp.Value = filepath;
             TextFieldExp.Tooltip = filepath;
             % Update params file with experiment file info
+            params.exp_date       = smr.date;
             params.exp_filepath   = filepath;
             params.exp_folderpath = exp_folderpath;
             params.exp_filename   = exp_filename;
@@ -819,7 +820,7 @@ uiwait(fig);
         end
     end
 
-    function nout = formatName(sid, econd, etask, scohort)
+    function nout = formatName(sid, econd, etask, scohort, edate)
         % Define naming format for all saved files and their respective folders.
         % This will make it easier for our group analysis scripts to recursively 
         % find all the relevant analysis data.
@@ -831,7 +832,13 @@ uiwait(fig);
         if ~exist('scohort','var') || isempty(scohort)
             scohort = "NONE";
         end
-        nout = sprintf('cond-%s_task-%s_sub-%s_cohort-%s_analysis-diffdata', econd, etask, sid, scohort);
+        if ~exist('edate','var') || isempty(edate)
+            edate = "NONE";
+        else
+            dt = datetime(edate, 'InputFormat', 'dd-MMM-yyyy HH:mm:ss');
+            edate = datestr(dt, 'yyyymmdd');
+        end
+        nout = sprintf('cond-%s_task-%s_sub-%s_cohort-%s_date-%s_analysis-diffdata', econd, etask, sid, scohort, edate);
     end
 
     function nextButtonPushed()
@@ -847,7 +854,7 @@ uiwait(fig);
         params.exp_taskcond = params.taskcond_options{DropDownTaskCond.ValueIndex};
         params.saccadeThresh = NumericFieldThresh.Value;
         % Define corresponding save folderpath
-        save_foldername = formatName(params.exp_subid, params.exp_subcond, params.exp_taskcond, params.exp_subcohort);
+        save_foldername = formatName(params.exp_subid, params.exp_subcond, params.exp_taskcond, params.exp_subcohort, params.exp_date);
         params.save_folderpath = fullfile(params.save_folderpath, save_foldername);
         % Prompt overwrite if the folderpath already exists
         if isfolder(params.save_folderpath)  % If so, ask to overwrite
