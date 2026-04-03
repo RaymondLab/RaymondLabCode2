@@ -111,7 +111,9 @@ for ii = 1:ntimepoints
     pltnum = 0;
     nblocks = length(tp_ids);
     for jj = 1:nblocks
-        [stimin, stimax] = bounds(br_ii(jj).stimvel_cyclecvd.cycleMean);
+        if ~isempty(fieldnames(br_ii(jj).stimvel_cyclecvd))
+            [stimin, stimax] = bounds(br_ii(jj).stimvel_cyclecvd.cycleMean);
+        end
         if stimin < minval, minval = stimin; end
         if stimax > maxval, maxval = stimax; end
 
@@ -127,7 +129,9 @@ for ii = 1:ntimepoints
         timeData = [repmat(cycleTimes(:), 1, nCycles); nan(1, nCycles)];
         plot(timeData(:), cycleData(:), 'Color',[1 0.7 1], 'LineWidth',0.1, 'DisplayName','Individual Eye Velocity Cycles', 'HitTest','off', 'PickableParts','none');
         yline(0, 'Color',[0 0 0]+0.7, 'LineWidth',0.1, 'HandleVisibility','off', 'HitTest','off', 'PickableParts','none');
-        plot(cycleTimes, br_ii(jj).stimvel_cyclecvd.cycleMean, '--k', 'LineWidth',2, 'DisplayName',sprintf('%s Velocity Cycle-Mean',br_ii(jj).stimType), 'HitTest','off', 'PickableParts','none'); 
+        if ~isempty(fieldnames(br_ii(jj).stimvel_cyclecvd))
+            plot(cycleTimes, br_ii(jj).stimvel_cyclecvd.cycleMean, '--k', 'LineWidth',2, 'DisplayName',sprintf('%s Velocity Cycle-Mean',br_ii(jj).stimType), 'HitTest','off', 'PickableParts','none'); 
+        end
         plot(cycleTimes, br_ii(jj).good_cyclefit, '-k', 'LineWidth',2, 'DisplayName','Fit of Eye Velocity', 'HitTest','off', 'PickableParts','none');
         plot(cycleTimes, timepoints(ii).good_cyclemean_mat(jj,:), 'b', 'LineWidth',3, 'DisplayName','Eye Velocity Cycle-Mean', 'HitTest','off', 'PickableParts','none');
         plot(cycleTimes, timepoints(ii).good_cyclemedian_mat(jj,:), '--r', 'LineWidth',2, 'DisplayName','Eye Velocity Cycle-Median', 'HitTest','off', 'PickableParts','none');
@@ -156,7 +160,9 @@ for ii = 1:ntimepoints
         fill([cycleTimes, fliplr(cycleTimes)], [upper, fliplr(lower)], [1 0.7 1], 'FaceAlpha', 0.6, 'EdgeColor', 'none', ...
             'DisplayName','Cycle-Mean SEM', 'HitTest','off', 'PickableParts','none');
         yline(0, 'Color',[0 0 0]+0.7, 'LineWidth',0.1, 'HandleVisibility','off', 'HitTest','off', 'PickableParts','none');
-        plot(cycleTimes, br_ii(jj).stimvel_cyclecvd.cycleMean, '--k', 'LineWidth',2, 'DisplayName',sprintf('%s Velocity Cycle-Mean',br_ii(jj).stimType), 'HitTest','off', 'PickableParts','none'); 
+        if ~isempty(fieldnames(br_ii(jj).stimvel_cyclecvd))
+            plot(cycleTimes, br_ii(jj).stimvel_cyclecvd.cycleMean, '--k', 'LineWidth',2, 'DisplayName',sprintf('%s Velocity Cycle-Mean',br_ii(jj).stimType), 'HitTest','off', 'PickableParts','none'); 
+        end
         plot(cycleTimes, br_ii(jj).hevel_good_cyclecvd.fitMean, '-k', 'LineWidth',2, 'DisplayName','Fit of Eye Velocity', 'HitTest','off', 'PickableParts','none');
         plot(cycleTimes, br_ii(jj).hevel_good_cyclecvd.cycleMean, '-b', 'LineWidth',2.5, 'DisplayName','Eye Velocity Cycle-Mean', 'HitTest','off', 'PickableParts','none');
         hold off;
@@ -395,12 +401,14 @@ title(h(plot_number), sprintf('%s: All Block "Good" Cycle-Means Analysis', param
 filename{end+1} = sprintf('%02d_all_block_goodcycles_analysis.fig', figure_number);
 
 nblocks = length(blocks);
-ncycles = length(blocks(1).stimvel_cyclecvd.cycleMean);
+ncycles = length(blocks(1).good_cyclefit);
 good_cyclemeans = zeros(nblocks-2, ncycles);
 stimvel_cyclemeans = zeros(nblocks-2, ncycles);
 for ii = 1:nblocks-2
     good_cyclemeans(ii,:) = mean(blocks(ii+1).good_cyclemat, 1, 'omitnan');
-    stimvel_cyclemeans(ii,:) = blocks(ii+1).stimvel_cyclecvd.cycleMean;
+    if ~isempty(fieldnames(blocks(ii+1).stimvel_cyclecvd))
+        stimvel_cyclemeans(ii,:) = blocks(ii+1).stimvel_cyclecvd.cycleMean;
+    end
 end
 
 res = calc_cycleMetrics(good_cyclemeans, stimvel_cyclemeans);

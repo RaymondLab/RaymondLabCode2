@@ -81,7 +81,7 @@ for ii = 1:ntimepoints
     metrics.RelPhase_SEM(rownum) = RelPhase_SEM;
 
     metrics.NT_PeakTime1(rownum) = resii.eye.peak1TimeMs(1);
-    metrics.NT_PeakTime2(rownum) = resii.eye.peak1TimeMs(2);
+    metrics.NT_PeakTime2(rownum) = resii.eye.peak2TimeMs(1);
     metrics.NT_Mean(rownum) = resii.eye.centroidMean(1);
     metrics.NT_MeanLag(rownum) = resii.centroidMeanDiff(1);
     metrics.NT_MeanSkew(rownum) = resii.eye.skewFromCentroidMean(1);
@@ -91,7 +91,7 @@ for ii = 1:ntimepoints
     metrics.NT_BowleySkew(rownum) = resii.eye.skewQuantile(1);
     metrics.NT_MeanMedianSkew(rownum) = resii.eye.skewMeanMedian(1);
     
-    metrics.TN_PeakTime1(rownum) = resii.eye.peak2TimeMs(1);
+    metrics.TN_PeakTime1(rownum) = resii.eye.peak1TimeMs(2);
     metrics.TN_PeakTime2(rownum) = resii.eye.peak2TimeMs(2);
     metrics.TN_Mean(rownum) = resii.eye.centroidMean(2);
     metrics.TN_MeanLag(rownum) = resii.centroidMeanDiff(2);
@@ -124,7 +124,7 @@ for ii = 1:ndiffdata
     metrics.RelPhase_SEM(rownum) = nan;
     
     metrics.NT_PeakTime1(rownum) = resii.eye.peak1TimeMs(1);
-    metrics.NT_PeakTime2(rownum) = resii.eye.peak1TimeMs(2);
+    metrics.NT_PeakTime2(rownum) = resii.eye.peak2TimeMs(1);
     metrics.NT_Mean(rownum) = resii.eye.centroidMean(1);
     metrics.NT_MeanLag(rownum) = resii.centroidMeanDiff(1);
     metrics.NT_MeanSkew(rownum) = resii.eye.skewFromCentroidMean(1);
@@ -134,7 +134,7 @@ for ii = 1:ndiffdata
     metrics.NT_BowleySkew(rownum) = resii.eye.skewQuantile(1);
     metrics.NT_MeanMedianSkew(rownum) = resii.eye.skewMeanMedian(1);
     
-    metrics.TN_PeakTime1(rownum) = resii.eye.peak2TimeMs(1);
+    metrics.TN_PeakTime1(rownum) = resii.eye.peak1TimeMs(2);
     metrics.TN_PeakTime2(rownum) = resii.eye.peak2TimeMs(2);
     metrics.TN_Mean(rownum) = resii.eye.centroidMean(2);
     metrics.TN_MeanLag(rownum) = resii.centroidMeanDiff(2);

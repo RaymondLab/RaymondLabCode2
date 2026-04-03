@@ -69,8 +69,12 @@ for ii = 1:nblocks
     btimes = (0:length(b_ii.hevel)-1) / fs;
 
     % Set ylimits based on stimulus velocity
-    ylimits = double([round(min(b_ii.stimvel_cyclecvd.cycleMean)/10)*12, ...
-        round(max(b_ii.stimvel_cyclecvd.cycleMean)/10)*12]);
+    if ~isempty(fieldnames(b_ii.stimvel_cyclecvd))
+        ylimits = double([round(min(b_ii.stimvel_cyclecvd.cycleMean)/10)*12, ...
+            round(max(b_ii.stimvel_cyclecvd.cycleMean)/10)*12]);
+    else
+        ylimits = [0 0];
+    end
     
     % Check for bad or missing stim
     if abs(ylimits(1)) <= 2
@@ -109,7 +113,9 @@ for ii = 1:nblocks
     plot(ax, ctimes, b_ii.hevel_good_cyclecvd.cycleMean, 'b', 'DisplayName','"Good" Cycles-Only');
     plot(ax, ctimes, mean(b_ii.des_cyclemat, 1, 'omitnan'), 'g', 'DisplayName','All Desaccaded Cycles');
     plot(ax, ctimes, b_ii.des_cyclefit, 'r', 'DisplayName','Fit of All Desaccaded Cycles');
-    plot(ax, ctimes, b_ii.stimvel_cyclecvd.cycleMean, 'k', 'DisplayName','Stimulus Velocity');
+    if ~isempty(fieldnames(b_ii.stimvel_cyclecvd))
+        plot(ax, ctimes, b_ii.stimvel_cyclecvd.cycleMean, 'k', 'DisplayName','Stimulus Velocity');
+    end
     yline(ax, 0, ':k', 'HandleVisibility','off');
     hold(ax,'off');
 
@@ -155,7 +161,9 @@ for ii = 1:nblocks
         ax = nexttile(h2);
         if isequal(rowOnPage, 1), title(ax, 'Good Cycles and Cycle-mean'); end
         hold(ax, 'on');
-        plot(ax, ctimes, b_ii.stimvel_cyclecvd.cycleMean, '--k', 'LineWidth', 1);
+        if ~isempty(fieldnames(b_ii.stimvel_cyclecvd))
+            plot(ax, ctimes, b_ii.stimvel_cyclecvd.cycleMean, '--k', 'LineWidth', 1);
+        end
         plot(ax, timeData, cycleData, 'b', 'LineWidth', .1); 
         plot(ax, ctimes, b_ii.hevel_good_cyclecvd.cycleMean, 'k', 'LineWidth', 2);
         yline(ax, 0, ':k');
