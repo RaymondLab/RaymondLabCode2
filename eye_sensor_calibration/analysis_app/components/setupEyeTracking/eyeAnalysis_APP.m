@@ -5,6 +5,10 @@ theta = 0:.1:2*pi;
 phi = linspace(0, 2*pi, 100);
 lastGoodFrame = 1;
 
+%% Initialize v4 CR tracking state
+trackParams.prevPri = [NaN NaN];
+trackParams.prevSec = [NaN NaN];
+
 %% Get Images
 % Display a progress bar
 pbar = uiprogressdlg(app.eyeCalibrationUIFigure, ...
@@ -17,8 +21,7 @@ trackParams.nImages = size(imgStack, 3);
 %% Pre-process Images
 pbar.Value = .4; 
 pbar.Message = 'Preprocessing images.';
-imgStackCrs = preprocessImages(imgStack, trackParams.adjustmentValuesCRs, trackParams.maskCRs);
-pbar.Value = .6; 
+pbar.Value = .6;
 imgStackPupil = preprocessImages(imgStack, trackParams.adjustmentValuesPupil, trackParams.maskPupil);
 pbar.Value = .8; 
 imgStack = preprocessImages(imgStack, trackParams.defaultImgAdj);
@@ -55,7 +58,6 @@ for i = 1:n-1
     
     %% Load image
     img = imgStack(:,:,i);
-    imgCRs = imgStackCrs(:,:,i);
     imgPupil = imgStackPupil(:,:,i);
     
     %% Use most recent good frame as a starting point
@@ -72,7 +74,7 @@ for i = 1:n-1
     
     %% Detect Pupil  
     try
-        [trackParams, frameData(i), plotData] = detectPupilCR_APP(app, img, imgPupil, imgCRs, frameData(lastGoodFrame), frameData(i), trackParams, 0);
+        [trackParams, frameData(i), plotData] = detectPupilCR_APP(app, img, imgPupil, [], frameData(lastGoodFrame), frameData(i), trackParams, 0);
     catch msgid
         fprintf('Error in img %i:\n', i)
         disp(msgid.message)

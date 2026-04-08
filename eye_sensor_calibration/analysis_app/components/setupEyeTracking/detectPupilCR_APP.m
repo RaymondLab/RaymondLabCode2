@@ -62,9 +62,8 @@ function [trackParams, newFrame, plotData] = detectPupilCR_APP(app, img, imgPupi
 % Copyright (c) 2005
 % All Rights Reserved.
 
-%% Process imputs
+%% Process inputs
 img = double(img);
-imgCRs = double(imgCRs);
 imgPupil = double(imgPupil);
 
 %% Preallocate
@@ -74,92 +73,130 @@ plotData.epy = nan;
 plotData.epy2 = nan;
 plotData.points = nan;
 
-%% Find corneal reflections
-% only search through portion of image, Corneal reflections shouldn't move
-try 
-    if ~isempty([referenceFrame.cr1_x,referenceFrame.cr2_x]) && ~any(isnan([referenceFrame.cr1_x,referenceFrame.cr2_x]))
+%% Find corneal reflections (v4 pipeline: top-hat + CHT + marker selection)
 
-        TOP    = floor(max(min([referenceFrame.cr1_y,referenceFrame.cr2_y]) - ...
-                           max([referenceFrame.cr1_r,referenceFrame.cr2_r])*2, 1 ));
-        BOTTOM = floor(min(max([referenceFrame.cr1_y,referenceFrame.cr2_y]) + ...
-                           max([referenceFrame.cr1_r,referenceFrame.cr2_r])*2, size(imgCRs,1) ));
-        LEFT   = floor(max(min([referenceFrame.cr1_x,referenceFrame.cr2_x]) - ...
-                           max([referenceFrame.cr1_r,referenceFrame.cr2_r])*2, 1 ));
-        RIGHT  = floor(min(max([referenceFrame.cr1_x,referenceFrame.cr2_x]) + ...
-                           max([referenceFrame.cr1_r,referenceFrame.cr2_r])*2, size(imgCRs,2) ));
+% Stage 1: Top-hat preprocessing on the base image
+seTopHat = strel('disk', trackParams.topHatDiskRadius);
+imgTopHat = double(imtophat(uint8(img), seTopHat));
 
-        newImg = imgCRs(TOP:BOTTOM, LEFT:RIGHT);
-        [~, circen, crr] = CircularHough_Grd(newImg, trackParams.radiiCR, trackParams.CRthresh, trackParams.CRfilter, 1);
+% Stage 2: Circular Hough Transform on top-hat image
+[~, circen, cirrad] = CircularHough_Grd(imgTopHat, trackParams.radiiCR, ...
+    trackParams.CRthresh, trackParams.CRfilter, 1);
 
-        circen(:,1) = circen(:,1) + LEFT-1;
-        circen(:,2) = circen(:,2) + TOP-1;
-        
-        for i = length(circen):-1:1
-            if imgCRs(floor(circen(i,2)), floor(circen(i,1))) == 0
-                circen(i,:) = [];
-                crr(i) = [];
-            elseif imgCRs(floor(circen(i,2)), floor(circen(i,1))) < 150
-                circen(i,:) = [];
-                crr(i) = [];
-            end
+% Remove duplicate detections (30px threshold)
+if size(circen, 1) > 1
+    k = 1;
+    while k < size(circen, 1)
+        dups = sqrt(sum((repmat(circen(k,:), size(circen,1), 1) - circen).^2, 2)) < 30;
+        dups(k) = false;
+        circen(dups,:) = [];
+        cirrad(dups) = [];
+        k = k + 1;
+    end
+end
+
+% Convert CHT circles to props struct for filtering/ranking
+nCirc = size(circen, 1);
+props = struct('WeightedCentroid',{}, 'Area',{}, 'Eccentricity',{}, ...
+    'MaxIntensity',{}, 'Radius',{});
+for ci = 1:nCirc
+    cx = circen(ci, 1); cy = circen(ci, 2);
+    cr = max(cirrad(ci), 1);
+    props(ci).WeightedCentroid = [cx, cy];
+    props(ci).Area = round(pi * cr^2);
+    props(ci).Eccentricity = 0;
+    iy = max(1, min(round(cy), size(img,1)));
+    ix = max(1, min(round(cx), size(img,2)));
+    props(ci).MaxIntensity = img(iy, ix);
+    props(ci).Radius = cr;
+end
+
+% Stage 3: Candidate filtering by area and eccentricity
+[validProps, ~] = filterCandidatesCR(props, ...
+    trackParams.crMinArea, trackParams.crMaxArea, trackParams.crMaxEccentricity);
+
+% Stage 4: Primary CR selection (nearest to fixed primary marker)
+[rankedProps, priIdx] = rankByDistanceCR(validProps, trackParams.priMarker);
+priFound = false; priWC = [NaN NaN]; priRad = NaN;
+if priIdx > 0
+    candWC = rankedProps(priIdx).WeightedCentroid;
+    if ~isnan(trackParams.prevPri(1))
+        jumpDist = sqrt(sum((candWC - trackParams.prevPri).^2));
+        if jumpDist > trackParams.maxJumpPx
+            % Jump too large — use previous position
+            priWC = trackParams.prevPri; priRad = NaN; priFound = true;
+        else
+            % Accept detection
+            priWC = candWC; priRad = rankedProps(priIdx).Radius;
+            priFound = true; trackParams.prevPri = candWC;
         end
     else
-        [A, circen, crr] = CircularHough_Grd(imgCRs, trackParams.radiiCR, trackParams.CRthresh, trackParams.CRfilter, 1);
+        % First detection — accept
+        priWC = candWC; priRad = rankedProps(priIdx).Radius;
+        priFound = true; trackParams.prevPri = candWC;
     end
-catch
-    [A, circen, crr] = CircularHough_Grd(imgCRs, trackParams.radiiCR, trackParams.CRthresh, trackParams.CRfilter, 1);
+end
+if ~priFound && ~isnan(trackParams.prevPri(1))
+    priWC = trackParams.prevPri; priRad = NaN;
 end
 
-maxvals = diag(imgCRs(round(circen(:,2)),round(circen(:,1))));
-
-%% Check for duplicates
-i=1;
-while i<size(circen,1)
-    duplicates = sqrt(sum((repmat(circen(i,:),size(circen,1),1) - circen).^2,2)) <30;
-    duplicates(i)=0;
-    circen(duplicates,:)=[];
-    crr(duplicates) = [];
-    maxvals(duplicates) = [];
-    i=i+1;
+% Stage 5: Secondary CR selection (cone constraint + distance to secondary marker)
+secWC = [NaN NaN]; secRad = NaN;
+if ~isnan(priWC(1)) && priIdx > 0
+    secCandidates = rankedProps([1:priIdx-1, priIdx+1:end]);
+    [secProp, ~, ~] = selectSecondaryCRfn( ...
+        secCandidates, priWC, trackParams.cameraSide, ...
+        trackParams.secConeHalfAngle, trackParams.secMarker);
+    if ~isempty(secProp)
+        candSec = secProp.WeightedCentroid;
+        if ~isnan(trackParams.prevSec(1))
+            jumpDist = sqrt(sum((candSec - trackParams.prevSec).^2));
+            if jumpDist > trackParams.maxJumpPx
+                secWC = trackParams.prevSec; secRad = NaN;
+            else
+                secWC = candSec; secRad = secProp.Radius;
+                trackParams.prevSec = candSec;
+            end
+        else
+            secWC = candSec; secRad = secProp.Radius;
+            trackParams.prevSec = candSec;
+        end
+    end
+end
+if all(isnan(secWC)) && ~isnan(trackParams.prevSec(1))
+    secWC = trackParams.prevSec; secRad = NaN;
 end
 
-if size(circen,1)>4
-    circen = circen(1:4,:);
-end
-
-cry = circen(:,2);
-crx = circen(:,1);
-[cry, I] = sort(cry,1,'descend');
-crr = crr(I);
-crx = crx(I);
-
-%% Make sure first 2 crs go from left to right
-if size(circen,1)>=2
-    [crx(1:2), I] = sort(crx(1:2));
-    cry(1:2) = cry(I);
-    crr(1:2) = crr(I);
+% Map primary/secondary to CR1(left)/CR2(right) for output compatibility
+if strcmp(trackParams.cameraSide, 'left')
+    crx = [priWC(1); secWC(1)];
+    cry = [priWC(2); secWC(2)];
+    crr_out = [priRad; secRad];
 else
-    cry(2) = NaN;
-    crx(2) = NaN;
-    crr(2) = NaN;
+    crx = [secWC(1); priWC(1)];
+    cry = [secWC(2); priWC(2)];
+    crr_out = [secRad; priRad];
 end
 
-%% Remove corneal reflection
-if ~isempty(circen)
+%% Remove corneal reflection from pupil image
+if ~all(isnan(crx))
     totalMask = imgPupil > 204;  % Remove any bright spots
     InoCR = imgPupil;
-    
+
     for i = 1:length(crx) % Remove each CR
+        if isnan(crx(i)) || isnan(cry(i)), continue; end
+        crMaskRadius = crr_out(i);
+        if isnan(crMaskRadius), crMaskRadius = mean(trackParams.radiiCR); end
         [X, Y] = meshgrid(1:size(imgPupil,2), 1:size(imgPupil,1));
-        maskCurr = ((X-crx(i)).^2 + (Y-cry(i)).^2) < crr(i).^2;
+        maskCurr = ((X-crx(i)).^2 + (Y-cry(i)).^2) < crMaskRadius.^2;
         totalMask(maskCurr) = true;
     end
 
     totalMaskDilate = imdilate(totalMask,strel('disk', trackParams.spotMaskRadius));
     InoCR(totalMaskDilate) = NaN;
-    
+
     gaussian_smooth_image = @(I, sigma) imfilter(I, fspecial('gaussian',[ceil(2.5*sigma),ceil(2.5*sigma)],sigma), 'symmetric');
-    InoCR = gaussian_smooth_image(InoCR, 3);   
+    InoCR = gaussian_smooth_image(InoCR, 3);
 else
     InoCR = imgPupil;
 end
@@ -200,10 +237,10 @@ end
 
 newFrame.cr1_x = crx(1);
 newFrame.cr1_y = cry(1);
-newFrame.cr1_r = crr(1);
+newFrame.cr1_r = crr_out(1);
 newFrame.cr2_x = crx(2);
 newFrame.cr2_y = cry(2);
-newFrame.cr2_r = crr(2);
+newFrame.cr2_r = crr_out(2);
 
 points = [epx2(:), epy2(:)];
 
@@ -214,7 +251,82 @@ plotData.epy = epy;
 plotData.epy2 = epy2;
 plotData.points = points;
 
-%% Plotting 
+%% Plotting
 if plotOn
    plotEyeTrackingImageFrame_APP(app, img, newFrame, plotData);
+end
+end
+
+%% =====================================================================
+%  LOCAL HELPER FUNCTIONS (v4 CR detection pipeline)
+%  =====================================================================
+
+function [validProps, rejectedProps] = filterCandidatesCR(props, minArea, maxArea, maxEcc)
+% Filters CR candidates by area range and eccentricity.
+    if isempty(props)
+        validProps = props; rejectedProps = props; return;
+    end
+    keep = true(numel(props), 1);
+    for k = 1:numel(props)
+        if props(k).Area < minArea || props(k).Area > maxArea
+            keep(k) = false; continue;
+        end
+        if props(k).Eccentricity > maxEcc
+            keep(k) = false;
+        end
+    end
+    validProps    = props(keep);
+    rejectedProps = props(~keep);
+end
+
+function [rankedProps, priIdx] = rankByDistanceCR(validProps, marker)
+% Sorts candidates by Euclidean distance to marker; returns sorted props and index of nearest.
+    if isempty(validProps) || any(isnan(marker))
+        rankedProps = validProps; priIdx = 0; return;
+    end
+    dists = zeros(numel(validProps), 1);
+    for k = 1:numel(validProps)
+        wc = validProps(k).WeightedCentroid;
+        dists(k) = sqrt((wc(1) - marker(1))^2 + (wc(2) - marker(2))^2);
+    end
+    [~, sortOrder] = sort(dists, 'ascend');
+    rankedProps = validProps(sortOrder);
+    priIdx = 1;
+end
+
+function [secProp, inCone, outCone] = selectSecondaryCRfn(candidates, priWC, camSide, coneHalfAngle, secMarker)
+% Selects secondary CR using cone constraint from primary + distance to secondary marker.
+    secProp = []; inCone = []; outCone = [];
+    if isempty(candidates) || any(isnan(priWC)), return; end
+
+    if strcmp(camSide, 'left')
+        coneDir = [1 0];
+    else
+        coneDir = [-1 0];
+    end
+    cosThresh = cosd(coneHalfAngle);
+    isInCone  = false(numel(candidates), 1);
+
+    for k = 1:numel(candidates)
+        wc  = candidates(k).WeightedCentroid;
+        vec = [wc(1) - priWC(1), wc(2) - priWC(2)];
+        mag = sqrt(vec(1)^2 + vec(2)^2);
+        if mag < eps, continue; end
+        cosAngle = dot(vec, coneDir) / mag;
+        if cosAngle >= cosThresh
+            isInCone(k) = true;
+        end
+    end
+
+    inCone  = candidates(isInCone);
+    outCone = candidates(~isInCone);
+    if isempty(inCone), return; end
+
+    dists = zeros(numel(inCone), 1);
+    for k = 1:numel(inCone)
+        wc = inCone(k).WeightedCentroid;
+        dists(k) = sqrt((wc(1) - secMarker(1))^2 + (wc(2) - secMarker(2))^2);
+    end
+    [~, minIdx] = min(dists);
+    secProp = inCone(minIdx);
 end

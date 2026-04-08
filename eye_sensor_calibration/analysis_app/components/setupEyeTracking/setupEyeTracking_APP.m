@@ -8,12 +8,6 @@ frame = 1;
 ok = 0;
 while ~ok && (frame < 10)
 
-    % Mask image (with CR contrast adjustment) based on CR ROI
-    [imgCRs] = readImg(trackParams.adjustmentValuesCRs, ...
-                       trackParams.cam, ...
-                       frame, ...
-                       trackParams.maskCRs);
-
     % Mask image (with pupil contrast adjustment) based on pupil ROI
     [imgPupil] = readImg(trackParams.adjustmentValuesPupil, ...
                          trackParams.cam, ...
@@ -23,9 +17,13 @@ while ~ok && (frame < 10)
     % Mask image (with minimal contrasting) based on pupil ROI
     [img] = readImg(trackParams.defaultImgAdj, trackParams.cam, frame);
 
+    % Initialize v4 CR tracking state
+    trackParams.prevPri = [NaN NaN];
+    trackParams.prevSec = [NaN NaN];
+
     % Detect pupil and CRs
     try
-        [trackParams, frameData] = detectPupilCR_APP(app, img, imgPupil, imgCRs, [], [], trackParams, 1);
+        [trackParams, frameData] = detectPupilCR_APP(app, img, imgPupil, [], [], [], trackParams, 1);
         ok = 1;
     catch msgid
         warning(msgid.message)
