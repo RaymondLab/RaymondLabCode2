@@ -115,52 +115,50 @@ end
 [validProps, ~] = filterCandidatesCR(props, ...
     trackParams.crMinArea, trackParams.crMaxArea, trackParams.crMaxEccentricity);
 
-% Stage 4: Primary CR selection (nearest to fixed primary marker)
-[rankedProps, priIdx] = rankByDistanceCR(validProps, trackParams.priMarker);
+% Stage 4: Primary CR selection (soft-scored: prevPri + marker)
 priFound = false; priWC = [NaN NaN]; priRad = NaN;
-if priIdx > 0
-    candWC = rankedProps(priIdx).WeightedCentroid;
-    if ~isnan(trackParams.prevPri(1))
-        jumpDist = sqrt(sum((candWC - trackParams.prevPri).^2));
-        if jumpDist > trackParams.maxJumpPx
-            % Jump too large — use previous position
-            priWC = trackParams.prevPri; priRad = NaN; priFound = true;
-        else
-            % Accept detection
-            priWC = candWC; priRad = rankedProps(priIdx).Radius;
-            priFound = true; trackParams.prevPri = candWC;
-        end
-    else
-        % First detection — accept
-        priWC = candWC; priRad = rankedProps(priIdx).Radius;
-        priFound = true; trackParams.prevPri = candWC;
+if ~isempty(validProps)
+    bestPri = softScoreSelectCR(validProps, trackParams.priMarker, ...
+        trackParams.prevPri, trackParams.wPrev, trackParams.wMarker);
+    if ~isempty(bestPri)
+        priWC = bestPri.WeightedCentroid;
+        priRad = bestPri.Radius;
+        priFound = true;
+        trackParams.prevPri = priWC;
     end
 end
+
+% Find priIdx for excluding primary from secondary candidates
+priIdx = 0;
+if priFound
+    for pidx = 1:numel(validProps)
+        if isequal(validProps(pidx).WeightedCentroid, priWC)
+            priIdx = pidx; break;
+        end
+    end
+end
+
+% Missing primary — use previous position
 if ~priFound && ~isnan(trackParams.prevPri(1))
     priWC = trackParams.prevPri; priRad = NaN;
 end
 
-% Stage 5: Secondary CR selection (cone constraint + distance to secondary marker)
+% Stage 5: Secondary CR selection (cone + soft-scored)
 secWC = [NaN NaN]; secRad = NaN;
-if ~isnan(priWC(1)) && priIdx > 0
-    secCandidates = rankedProps([1:priIdx-1, priIdx+1:end]);
+if ~isnan(priWC(1))
+    if priIdx > 0
+        secCandidates = validProps([1:priIdx-1, priIdx+1:end]);
+    else
+        secCandidates = validProps;
+    end
     [secProp, ~, ~] = selectSecondaryCRfn( ...
         secCandidates, priWC, trackParams.cameraSide, ...
-        trackParams.secConeHalfAngle, trackParams.secMarker);
+        trackParams.secConeHalfAngle, trackParams.secMarker, ...
+        trackParams.prevSec, trackParams.wPrev, trackParams.wMarker);
     if ~isempty(secProp)
-        candSec = secProp.WeightedCentroid;
-        if ~isnan(trackParams.prevSec(1))
-            jumpDist = sqrt(sum((candSec - trackParams.prevSec).^2));
-            if jumpDist > trackParams.maxJumpPx
-                secWC = trackParams.prevSec; secRad = NaN;
-            else
-                secWC = candSec; secRad = secProp.Radius;
-                trackParams.prevSec = candSec;
-            end
-        else
-            secWC = candSec; secRad = secProp.Radius;
-            trackParams.prevSec = candSec;
-        end
+        secWC = secProp.WeightedCentroid;
+        secRad = secProp.Radius;
+        trackParams.prevSec = secWC;
     end
 end
 if all(isnan(secWC)) && ~isnan(trackParams.prevSec(1))
@@ -279,23 +277,10 @@ function [validProps, rejectedProps] = filterCandidatesCR(props, minArea, maxAre
     rejectedProps = props(~keep);
 end
 
-function [rankedProps, priIdx] = rankByDistanceCR(validProps, marker)
-% Sorts candidates by Euclidean distance to marker; returns sorted props and index of nearest.
-    if isempty(validProps) || any(isnan(marker))
-        rankedProps = validProps; priIdx = 0; return;
-    end
-    dists = zeros(numel(validProps), 1);
-    for k = 1:numel(validProps)
-        wc = validProps(k).WeightedCentroid;
-        dists(k) = sqrt((wc(1) - marker(1))^2 + (wc(2) - marker(2))^2);
-    end
-    [~, sortOrder] = sort(dists, 'ascend');
-    rankedProps = validProps(sortOrder);
-    priIdx = 1;
-end
-
-function [secProp, inCone, outCone] = selectSecondaryCRfn(candidates, priWC, camSide, coneHalfAngle, secMarker)
-% Selects secondary CR using cone constraint from primary + distance to secondary marker.
+function [secProp, inCone, outCone] = selectSecondaryCRfn( ...
+    candidates, priWC, camSide, coneHalfAngle, secMarker, ...
+    prevSec, wPrev, wMarker)
+% Selects secondary CR using cone constraint from primary + soft scoring.
     secProp = []; inCone = []; outCone = [];
     if isempty(candidates) || any(isnan(priWC)), return; end
 
@@ -322,11 +307,31 @@ function [secProp, inCone, outCone] = selectSecondaryCRfn(candidates, priWC, cam
     outCone = candidates(~isInCone);
     if isempty(inCone), return; end
 
-    dists = zeros(numel(inCone), 1);
-    for k = 1:numel(inCone)
-        wc = inCone(k).WeightedCentroid;
-        dists(k) = sqrt((wc(1) - secMarker(1))^2 + (wc(2) - secMarker(2))^2);
+    % Soft-scored selection among in-cone candidates
+    secProp = softScoreSelectCR(inCone, secMarker, prevSec, wPrev, wMarker);
+end
+
+function bestProp = softScoreSelectCR(candidates, marker, prev, wPrev, wMarker)
+% Selects the best candidate using a weighted score of distance to the
+% previous position (temporal continuity) and the fixed marker (spatial
+% prior). When no previous position exists, uses marker distance only.
+    bestProp = [];
+    if isempty(candidates), return; end
+
+    scores = zeros(numel(candidates), 1);
+    hasPrev = ~any(isnan(prev));
+
+    for k = 1:numel(candidates)
+        wc = candidates(k).WeightedCentroid;
+        distToMarker = sqrt((wc(1)-marker(1))^2 + (wc(2)-marker(2))^2);
+        if hasPrev
+            distToPrev = sqrt((wc(1)-prev(1))^2 + (wc(2)-prev(2))^2);
+            scores(k) = wPrev * distToPrev + wMarker * distToMarker;
+        else
+            scores(k) = distToMarker;
+        end
     end
-    [~, minIdx] = min(dists);
-    secProp = inCone(minIdx);
+
+    [~, bestIdx] = min(scores);
+    bestProp = candidates(bestIdx);
 end

@@ -63,18 +63,25 @@ for i = 1:n-1
     %% Use most recent good frame as a starting point
     if i ~= 1
         lastGoodFrame = i;
-        
-        while (any(structfun(@isnan, frameData(lastGoodFrame))) || any(structfun(@isempty, frameData(lastGoodFrame)))) && lastGoodFrame > 0
+
+        while lastGoodFrame > 0 && (any(structfun(@isnan, frameData(lastGoodFrame))) || any(structfun(@isempty, frameData(lastGoodFrame))))
             lastGoodFrame = lastGoodFrame - 1;
         end
 
-        maxRadii = nanmax(frameData(lastGoodFrame).pupil_r1, frameData(lastGoodFrame).pupil_r2);
-        trackParams.radiiPupil(2) = round(maxRadii*1.15);
+        if lastGoodFrame > 0
+            maxRadii = nanmax(frameData(lastGoodFrame).pupil_r1, frameData(lastGoodFrame).pupil_r2);
+            trackParams.radiiPupil(2) = round(maxRadii*1.15);
+        end
     end
     
-    %% Detect Pupil  
+    %% Detect Pupil
     try
-        [trackParams, frameData(i), plotData] = detectPupilCR_APP(app, img, imgPupil, [], frameData(lastGoodFrame), frameData(i), trackParams, 0);
+        if lastGoodFrame > 0
+            refFrame = frameData(lastGoodFrame);
+        else
+            refFrame = [];
+        end
+        [trackParams, frameData(i), plotData] = detectPupilCR_APP(app, img, imgPupil, [], refFrame, frameData(i), trackParams, 0);
     catch msgid
         fprintf('Error in img %i:\n', i)
         disp(msgid.message)
