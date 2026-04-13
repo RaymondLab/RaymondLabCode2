@@ -132,7 +132,7 @@ ButtonNext.Layout.Column = 5;
 Panel_Params = uipanel(GridLayout_Main);
 Panel_Params.Layout.Row = 2;
 columnwidths = horzcat({'0.25x',105,75}, ...
-    repmat({'0.25x',105,75}, 1, 6), ...
+    repmat({'0.25x',105,75}, 1, 7), ...
     {'1x'});
 GridLayout_Params = uigridlayout(Panel_Params, ...
     'RowHeight',{'1x'}, ...
@@ -195,12 +195,25 @@ DropDownTaskCond = uidropdown(GridLayout_Params, ...
     'ValueIndex',1, ...
     'FontSize',fontsz1);
 
+% Lowpass filter cutoff frequency label and numeric field components
+LabelLowpass = uilabel(GridLayout_Params, ...
+    'Text','Lowpass Freq Cutoff: ', ...
+    'FontSize',fontsz1, ...
+    'HorizontalAlignment','right');
+LabelLowpass.Layout.Column = 17;
+NumericFieldLowpass = uieditfield(GridLayout_Params, ...
+    'numeric', ...
+    'FontSize',fontsz1, ...
+    'Value',params.lowpassCutoff, ...
+    'HorizontalAlignment','center', ...
+    'ValueChangedFcn',@(src,evt) lowpassChanged(evt));
+
 % Saccade threshold label and numeric field components
 LabelThresh = uilabel(GridLayout_Params, ...
     'Text','Saccade Thresh: ', ...
     'FontSize',fontsz1, ...
     'HorizontalAlignment','right');
-LabelThresh.Layout.Column = 17;
+LabelThresh.Layout.Column = 20;
 NumericFieldThresh = uieditfield(GridLayout_Params, ...
     'numeric', ...
     'FontSize',fontsz1, ...
@@ -213,7 +226,7 @@ LabelRightBlock = uilabel(GridLayout_Params, ...
     'Text','Right Block: ', ...
     'FontSize',fontsz1, ...
     'HorizontalAlignment','right');
-LabelRightBlock.Layout.Column = 20;
+LabelRightBlock.Layout.Column = 23;
 DropDownRightBlock = uidropdown(GridLayout_Params, ...
     'Items',{'None'}, ...
     'ValueIndex',1, ...
@@ -373,6 +386,14 @@ uiwait(fig);
         drawnow limitrate;
     end
 
+    function reprocessLowpass()
+        if ~all(params.setupAllCompleted(1:2)), return; end
+        for ii = 1:d.nBlocks
+            filterBlock(ii);
+        end
+        reprocessSaccadeThreshold();
+    end
+
     function reprocessSaccadeThreshold()
         nBlocks = d.nBlocks;
         thresh = NumericFieldThresh.Value;
@@ -431,121 +452,90 @@ uiwait(fig);
         updateBlockPlot(DropDownRightBlock.ValueIndex, 3, [5,6,7,8]);
     end
 
+    function filterBlock(ii)
+        blockIds = d.blockIds;
+        % Extract corresponding block segments for reference stimulus (chair/drum) and eye data
+        chairvel_raw_ii = d.chairvel_raw(blockIds(1,ii):blockIds(2,ii));
+        drumvel_raw_ii  = d.drumvel_raw(blockIds(1,ii):blockIds(2,ii));
+        hevel_raw_ii = d.hevel_raw(blockIds(1,ii):blockIds(2,ii));
+        hepos_raw_ii = d.hepos_raw(blockIds(1,ii):blockIds(2,ii));
+        % Get filtered eye position and eye velocity traces
+        hepos_ii = butterworthfilter(hepos_raw_ii, NumericFieldLowpass.Value, params.fs, 'n',4);
+
+        % % TODO: Impliment FIF?
+        % opts = Settings_FIF_v3('delta',params.fifSettings.delta, ...
+        %     'Xi',params.fifSettings.Xi, ...
+        %     'NIMFs',params.fifSettings.NIMFs, ...
+        %     'alpha',params.fifSettings.alpha, ...
+        %     'verbose',0);
+        % [IMFs,~] = FIF_v2_12(hepos_raw_ii(:)', opts);
+        % hepos_ii = sum(IMFs(params.fifSettings.minIMF,:), 1);
+
+        hevel_ii = movingslope(hepos_ii, params.filterWindow) * params.fs;
+        % Perform initial fit of the raw eye velocity data
+        keep = abs(hevel_raw_ii) < 5 * std(abs(hevel_raw_ii)) + mean(abs(hevel_raw_ii));
+        [fit0,~] = calc_sineFit(params.exp_stimfreq, params.fs, keep, hevel_raw_ii);
+        hevel_raw_fit = fit0.eyevel_fit;
+        % Apply saccade detection to the filtered eye velocity trace to get the necessary saccade masks
+        [saccDilMask,~,~] = run_saccadeDetection(hevel_ii, ...
+            hevel_raw_fit, ...
+            NumericFieldThresh.Value, ...
+            d.saccadePad, ...
+            params.minGoodChunk_len, ...
+            params.saccadeMethod);
+        % Calculate sinusoidal fits of the desaccaded eye, chair, and drum velocity block data
+        [bfit,~] = calc_sineFit(params.exp_stimfreq, params.fs, ~saccDilMask, hevel_ii, chairvel_raw_ii, drumvel_raw_ii);
+        % Calculate the start point of the first positive stimulus cycle
+        startpt = max(1, round(mod(-bfit.ref_angle,360) / 360 * params.fs/params.exp_stimfreq));
+        % Get cycles
+        hevel_cyclemat = segmentIntoCycles(hevel_ii, startpt, d.cycleLength);
+
+        % Store Stage A outputs (saccade-threshold-dependent outputs come from reprocessSaccadeThreshold)
+        if contains(string(d.blockTypes(ii)), 'OKR')
+            d.all_stimvel{ii} = drumvel_raw_ii;
+        else
+            d.all_stimvel{ii} = chairvel_raw_ii;
+        end
+        d.all_hevel{ii}          = hevel_ii;
+        d.all_hevel_rawfit{ii}   = hevel_raw_fit;
+        d.all_startpt(ii)        = startpt;
+        d.all_hevel_cyclemat{ii} = hevel_cyclemat;
+    end
+
     function processData()
         % Display progress dialog
         pdlg = uiprogressdlg(fig, 'Title','Importing data, please wait...');
-        
+
         % Validate the value of nBlocks
         nBlocks = d.nBlocks;
         if isempty(nBlocks) || ~isnumeric(nBlocks) || (nBlocks < 1)
             error('Invalid value of nBlocks: %s! Abortin script...', string(nBlocks));
         end
-        
+
         % Validate the blockIds array
         blockIds = d.blockIds;
         if isempty(blockIds) || ~isequal(size(blockIds,1), 2) || ~isequal(size(blockIds,2), nBlocks)
             error('The array "blockIds" is invalid! Aborting script...');
         end
 
-        all_nGoodCycles = nan(nBlocks, 1); 
-        all_nTotalCycles = nan(nBlocks, 1); 
-        all_goodCyclesFrac = nan(nBlocks, 1); 
-        all_startpt = nan(nBlocks, 1);
-        all_stimvel = cell(nBlocks, 1); 
-        all_hevel_cyclemat = cell(nBlocks, 1); 
-        all_hevel = cell(nBlocks, 1); 
-        all_hevel_des = cell(nBlocks, 1); 
-        all_hevel_rawfit = cell(nBlocks, 1); 
-        all_hevel_goodcycles = cell(nBlocks, 1);
-        all_cvd = cell(nBlocks, 1);
+        % Preallocate fields populated by filterBlock (Stage A)
+        d.all_startpt        = nan(nBlocks, 1);
+        d.all_stimvel        = cell(nBlocks, 1);
+        d.all_hevel          = cell(nBlocks, 1);
+        d.all_hevel_rawfit   = cell(nBlocks, 1);
+        d.all_hevel_cyclemat = cell(nBlocks, 1);
 
         for ii = 1:nBlocks
-            % Extract corresponding block segments for reference stimulus (chair/drum) and eye data
-            chairvel_raw_ii = d.chairvel_raw(blockIds(1,ii):blockIds(2,ii));
-            drumvel_raw_ii  = d.drumvel_raw(blockIds(1,ii):blockIds(2,ii));
-            hevel_raw_ii = d.hevel_raw(blockIds(1,ii):blockIds(2,ii));
-            hepos_raw_ii = d.hepos_raw(blockIds(1,ii):blockIds(2,ii));
-            % Get filtered eye position and eye velocity traces
-            hepos_ii = butterworthfilter(hepos_raw_ii, params.lowpassCutoff, params.fs, 'n',4);
-            
-            % % TODO: Impliment FIF?
-            % opts = Settings_FIF_v3('delta',params.fifSettings.delta, ...
-            %     'Xi',params.fifSettings.Xi, ...
-            %     'NIMFs',params.fifSettings.NIMFs, ...
-            %     'alpha',params.fifSettings.alpha, ...
-            %     'verbose',0);
-            % [IMFs,~] = FIF_v2_12(hepos_raw_ii(:)', opts);
-            % hepos_ii = sum(IMFs(params.fifSettings.minIMF,:), 1);
-
-            hevel_ii = movingslope(hepos_ii, params.filterWindow) * params.fs;
-            % Perform initial fit of the raw eye velocity data
-            keep = abs(hevel_raw_ii) < 5 * std(abs(hevel_raw_ii)) + mean(abs(hevel_raw_ii));
-            [fit0,~] = calc_sineFit(params.exp_stimfreq, params.fs, keep, hevel_raw_ii);
-            hevel_raw_fit = fit0.eyevel_fit;
-            % Apply saccade detection to the filtered eye velocity trace to get the necessary saccade masks
-            [saccDilMask,saccMask,hevel_des_ii] = run_saccadeDetection(hevel_ii, ...
-                hevel_raw_fit, ...
-                NumericFieldThresh.Value, ...
-                d.saccadePad, ...
-                params.minGoodChunk_len, ...
-                params.saccadeMethod);
-            % Calculate sinusoidal fits of the desaccaded eye, chair, and drum velocity block data
-            [bfit,~] = calc_sineFit(params.exp_stimfreq, params.fs, ~saccDilMask, hevel_ii, chairvel_raw_ii, drumvel_raw_ii);
-            % Calculate the start point of the first positive stimulus cycle
-            startpt = max(1, round(mod(-bfit.ref_angle,360) / 360 * params.fs/params.exp_stimfreq));
-            % Get cycles
-            hevel_cyclemat = segmentIntoCycles(hevel_ii, startpt, d.cycleLength); 
-            sacc_mat       = segmentIntoCycles(double(saccMask), startpt, d.cycleLength);
-            % sacc_mat is used to find the "bad" cycles that contain any NaN values
-            badCycles = any(sacc_mat, 2);
-            % This is used to calculate how many "good" cycles there are
-            all_nGoodCycles(ii)      = sum(~badCycles);
-            [all_nTotalCycles(ii),~] = size(sacc_mat);
-            all_goodCyclesFrac(ii)   = all_nGoodCycles(ii) / all_nTotalCycles(ii);
-            % A separate cycle mean is calculated using only "good" cycles 
-            if all_nGoodCycles(ii) > 0
-                hevel_good_cyclemat = hevel_cyclemat(~badCycles, :);
-            else
-                hevel_good_cyclemat = zeros(size(hevel_cyclemat));
-            end
-            all_startpt(ii) = startpt;
-            if contains(string(d.blockTypes(ii)), 'OKR')
-                all_stimvel{ii} = drumvel_raw_ii;
-            else
-                all_stimvel{ii} = chairvel_raw_ii;
-            end
-            all_hevel_cyclemat{ii} = hevel_cyclemat;
-            all_hevel{ii} = hevel_ii;
-            all_hevel_des{ii} = hevel_des_ii;
-            all_hevel_rawfit{ii} = hevel_raw_fit;
-            all_hevel_goodcycles{ii} = hevel_good_cyclemat;
-            all_cvd{ii} = cycleVarianceDecomposition(hevel_good_cyclemat);
+            filterBlock(ii);
         end
-        
-        % Update data struct
-        d.all_goodCyclesFrac = all_goodCyclesFrac;
-        d.all_nGoodCycles = all_nGoodCycles;
-        d.all_nTotalCycles = all_nTotalCycles;
-        d.all_startpt = all_startpt;
-        d.all_stimvel = all_stimvel;
-        d.all_hevel_cyclemat = all_hevel_cyclemat;
-        d.all_hevel = all_hevel;
-        d.all_hevel_des = all_hevel_des;
-        d.all_hevel_rawfit = all_hevel_rawfit;
-        d.all_hevel_goodcycles = all_hevel_goodcycles;
-        d.all_cvd = all_cvd;
-
-        % Update the bar plot
-        updateBarPlot();
 
         % Update selected left/right block dropdowns
-        DropDownLeftBlock.ValueIndex = params.timepoint_ids(1);
+        DropDownLeftBlock.ValueIndex  = params.timepoint_ids(1);
         DropDownRightBlock.ValueIndex = params.timepoint_ids(end);
 
-        % Update the respective plots
-        updateBlockPlot(params.timepoint_ids(1), 2, [1,2,3,4]);
-        updateBlockPlot(params.timepoint_ids(end), 3, [5,6,7,8]);
-        
+        % Run saccade detection (Stage B) and refresh all plots
+        reprocessSaccadeThreshold();
+
         % Close progress dialog
         close(pdlg);
     end
@@ -876,6 +866,19 @@ uiwait(fig);
         fprintf('    Analysis results will be saved to: %s\n', save_filename);
         uiresume(fig);
         delete(fig);
+    end
+
+    function lowpassChanged(evt)
+        NewValue = evt.Value;
+        % Only continue if a valid value was given
+        if isempty(NewValue) || isnan(NewValue) || (NewValue <= 0)
+            warning('Provided saccade threshold is invalid and will be ignored: %s', string(NewValue));
+            return
+        end
+        % Only reprocess if data has been loaded
+        if all(params.setupAllCompleted(1:2))
+            reprocessLowpass();
+        end
     end
 
     function threshChanged(evt)

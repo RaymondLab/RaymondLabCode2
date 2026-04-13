@@ -1,2 +1,6 @@
 **/.DS_Store
 **/.asv
+**/.ipynb_checkpoints
+**/.pytest_cache
+**/.vscode
+**/.claude

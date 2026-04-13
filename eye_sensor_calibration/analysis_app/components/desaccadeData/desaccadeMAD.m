@@ -38,11 +38,39 @@ fit1 = vars *b;
 
 eye_vel_err = (eye_vel_pfilt - fit1);
 
-% Compute the moving MAD threshold
-threshMovMAD = lambda*movmad(eye_vel_err, round(freq*samplerate));
+maxIter     = 10;
+lambdaPeak  = lambda;  % Strict factor for onset/offset walk
+lambdaOnset = 3;       % Lenient factor for onset/offset walk
+% Start by assuming all finite samples are "clean"
+keep = ~isnan(eye_vel_err);  
+% Iteratatively re-compute threshold until it stabilizes
+for iter = 1:maxIter
+    med                  = median(eye_vel_err(keep), 'omitnan');
+    sigma                = 1.4826 * median(abs(eye_vel_err(keep) - med), 'omitnan');
+    newKeep              = abs(eye_vel_err - med) <= lambda * sigma;
+    newKeep(isnan(eye_vel_err)) = false;  % NaNs never count as "clean"
+    % Stop iterating once the new threshold results in no new detections
+    if isequal(newKeep, keep), break, end
+    keep = newKeep;
+end
 
-% Remove all points that exceed the threshold
-badDataLocations = abs(eye_vel_err - movmedian(eye_vel_err, round(freq*samplerate))) > threshMovMAD;
+% Dual-threshold onset/offset walk
+peakMask  = abs(eye_vel_err - med) >  lambdaPeak  * sigma;   % strict
+onsetMask = abs(eye_vel_err - med) >  lambdaOnset * sigma;   % lenient
+onsetMask(isnan(eye_vel_err)) = false;
+
+% Keep only onsetMask regions that contain at least one peakMask sample
+CC = bwconncomp(onsetMask);
+saccMask = false(size(eye_vel_err));
+for k = 1:CC.NumObjects
+    idx = CC.PixelIdxList{k};
+    if any(peakMask(idx))
+        saccMask(idx) = true;
+    end
+end
+
+% Threshold line for plotting
+threshMovMAD = med + lambda * sigma;
 
 % Remove points around omit centers as defined by pre & post saccade time
 presaccade = round((presaccade/1000)*samplerate);
@@ -50,7 +78,7 @@ postsaccade = round((postsaccade/1000)*samplerate);
 sacmask = ones(1, presaccade+postsaccade);
 
 % Filter function replaces zeros with ones (equal to remove time) around an omit center
-rejecttemp1 = conv(double(badDataLocations), sacmask);
+rejecttemp1 = conv(double(saccMask), sacmask);
 rejecttemp2 = rejecttemp1(presaccade:postsaccade+length(data)-1);
 
 % Eyevel with desaccade segments removed

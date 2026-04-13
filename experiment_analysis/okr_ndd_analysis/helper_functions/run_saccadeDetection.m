@@ -6,6 +6,37 @@ if nargin<6, method = "SVT"; end
 xmse = (x - base);
 if strcmp(method, "SVT")
     saccMask = xmse.^2 > thresh;
+elseif strcmp(method, "MAD")
+    maxIter     = 10;
+    lambdaPeak  = thresh;  % Strict factor for onset/offset walk
+    lambdaOnset = 3;       % Lenient factor for onset/offset walk
+    % Start by assuming all finite samples are "clean"
+    keep = ~isnan(xmse);  
+    % Iteratatively re-compute threshold until it stabilizes
+    for iter = 1:maxIter
+        med                  = median(xmse(keep), 'omitnan');
+	    sigma                = 1.4826 * median(abs(xmse(keep) - med), 'omitnan');
+	    newKeep              = abs(xmse - med) <= thresh * sigma;
+	    newKeep(isnan(xmse)) = false;  % NaNs never count as "clean"
+	    % Stop iterating once the new threshold results in no new detections
+	    if isequal(newKeep, keep), break, end
+        keep = newKeep;
+    end
+
+    % Dual-threshold onset/offset walk
+    peakMask  = abs(xmse - med) >  lambdaPeak  * sigma;   % strict
+    onsetMask = abs(xmse - med) >  lambdaOnset * sigma;   % lenient
+    onsetMask(isnan(xmse)) = false;
+
+    % Keep only onsetMask regions that contain at least one peakMask sample
+    CC = bwconncomp(onsetMask);
+    saccMask = false(size(xmse));
+    for k = 1:CC.NumObjects
+        idx = CC.PixelIdxList{k};
+        if any(peakMask(idx))
+            saccMask(idx) = true;
+        end
+    end
 else
     error('Invalid saccade detection "%s" was provided! Aborting script...', method);
 end
