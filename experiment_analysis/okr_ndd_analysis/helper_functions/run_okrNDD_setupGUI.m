@@ -828,7 +828,7 @@ uiwait(fig);
             dt = datetime(edate, 'InputFormat', 'dd-MMM-yyyy HH:mm:ss');
             edate = datestr(dt, 'yyyymmdd');
         end
-        nout = sprintf('cond-%s_task-%s_sub-%s_cohort-%s_date-%s_analysis-diffdata', econd, etask, sid, scohort, edate);
+        nout = sprintf('cond-%s_task-%s_sub-%s_date-%s_analysis', econd, etask, sid, edate);
     end
 
     function nextButtonPushed()
