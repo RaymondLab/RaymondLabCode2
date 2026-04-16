@@ -119,9 +119,10 @@ else
         mag2.time = dattime(rawMagnetData(3));
     end
     
-    % Alignment (positive/negative) sign for magnet channels
+    % Alignment (positive/negative) sign for video and magnet channels
     mag1.align_sign = 1.0;
     mag2.align_sign = 1.0;
+    vid.align_sign  = 1.0;
     
     
     %% Upsample Video Traces (OLD METHOD)

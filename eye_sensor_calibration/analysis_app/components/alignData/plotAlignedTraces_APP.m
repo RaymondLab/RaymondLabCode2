@@ -47,20 +47,32 @@ else
 end
 
 %% Get cycle averages
-[~, mag1_vinv_mean] = VOR_breakTrace(1000, 1, mag1.vel_data_aligned_scaledInVel);
-[~, mag2_vinv_mean] = VOR_breakTrace(1000, 1, mag2.vel_data_aligned_scaledInVel);
-[~, vid_mean]       = VOR_breakTrace(1000, 1, vid.vel_data_upsampled_aligned);
+if ~any(isnan(vid.stim_aligned))
+    [~,stim_phase,~,~,~] = fit_sineWave(vid.stim_aligned, mag1.samplerate, vars.stimFreq);
+    startpt = max(1,round(mod(-stim_phase,360)/360 * mag1.samplerate/vars.stimFreq));
+else
+    startpt = 1;
+end
+[~, mag1_vinv_mean] = VOR_breakTrace(1000, startpt, mag1.vel_data_aligned_scaledInVel);
+[~, mag2_vinv_mean] = VOR_breakTrace(1000, startpt, mag2.vel_data_aligned_scaledInVel);
+[~, vid_mean]       = VOR_breakTrace(1000, startpt, vid.vel_data_upsampled_aligned*vid.align_sign);
+
+if exist('stim_phase', 'var')
+    [~, stim_vinv_mean] = VOR_breakTrace(1000, startpt, vid.stim_aligned);
+else
+    stim_vinv_mean = nan(size(vid_mean));
+end
 
 %% PLOT Position, Velocity, and Velocity Cycles
 cla(app.UIAxesAlignedPositions);
 cla(app.UIAxesAlignedVelocities);
 
 % Position
-plot(app.UIAxesAlignedPositions, vidTime, zeros(1,length(vidTime)), ':k', 'LineWidth',0.25, 'HandleVisibility','off');
+plot(app.UIAxesAlignedPositions, vidTime, zeros(1,length(vidTime)), ':k', 'LineWidth',0.25, 'HandleVisibility','off', 'HitTest','off', 'PickableParts','none');
 hold(app.UIAxesAlignedPositions, 'on');
-plot(app.UIAxesAlignedPositions, vidTime, vid.pos_data_upsampled_aligned, 'k', 'DisplayName','Video');
-plot(app.UIAxesAlignedPositions, mag1Time, mag1.pos_data_aligned_scaledInVel, 'b', 'DisplayName','Magnet Channel 1');
-plot(app.UIAxesAlignedPositions, mag2Time, mag2.pos_data_aligned_scaledInVel , 'r', 'DisplayName','Magnet Channel 2');
+plot(app.UIAxesAlignedPositions, vidTime, vid.pos_data_upsampled_aligned*vid.align_sign, 'k', 'DisplayName','Video', 'HitTest','off', 'PickableParts','none');
+plot(app.UIAxesAlignedPositions, mag1Time, mag1.pos_data_aligned_scaledInVel, 'b', 'DisplayName','Magnet Channel 1', 'HitTest','off', 'PickableParts','none');
+plot(app.UIAxesAlignedPositions, mag2Time, mag2.pos_data_aligned_scaledInVel , 'r', 'DisplayName','Magnet Channel 2', 'HitTest','off', 'PickableParts','none');
 xlim(app.UIAxesAlignedPositions, [0, vidTime(end)]);
 ylim(app.UIAxesAlignedPositions, [-posYlim, posYlim]);
 ylabel(app.UIAxesAlignedPositions, 'Position (deg)');
@@ -68,11 +80,11 @@ legend(app.UIAxesAlignedPositions);
 hold(app.UIAxesAlignedPositions, 'off');
 
 % Velocity 
-plot(app.UIAxesAlignedVelocities, vidTime, zeros(1,length(vidTime)), ':k', 'LineWidth',0.25, 'HandleVisibility','off');
+plot(app.UIAxesAlignedVelocities, vidTime, zeros(1,length(vidTime)), ':k', 'LineWidth',0.25, 'HandleVisibility','off', 'HitTest','off', 'PickableParts','none');
 hold(app.UIAxesAlignedVelocities, 'on');
-plot(app.UIAxesAlignedVelocities, vidTime, vid.vel_data_upsampled_aligned, 'k', 'DisplayName','Video');
-plot(app.UIAxesAlignedVelocities, mag1Time, mag1.vel_data_aligned_scaledInVel, 'b', 'DisplayName','Magnet Channel 1');
-plot(app.UIAxesAlignedVelocities, mag2Time, mag2.vel_data_aligned_scaledInVel, 'r', 'DisplayName','Magnet Channel 2');
+plot(app.UIAxesAlignedVelocities, vidTime, vid.vel_data_upsampled_aligned*vid.align_sign, 'k', 'DisplayName','Video', 'HitTest','off', 'PickableParts','none');
+plot(app.UIAxesAlignedVelocities, mag1Time, mag1.vel_data_aligned_scaledInVel, 'b', 'DisplayName','Magnet Channel 1', 'HitTest','off', 'PickableParts','none');
+plot(app.UIAxesAlignedVelocities, mag2Time, mag2.vel_data_aligned_scaledInVel, 'r', 'DisplayName','Magnet Channel 2', 'HitTest','off', 'PickableParts','none');
 xlim(app.UIAxesAlignedVelocities, [0, vidTime(end)]);
 ylim(app.UIAxesAlignedVelocities, [-velYlim, velYlim]);
 xlabel(app.UIAxesAlignedVelocities, 'Time (s)');
@@ -86,11 +98,13 @@ linkaxes([app.UIAxesAlignedPositions, app.UIAxesAlignedVelocities], 'x');
 try
     cla(app.UIAxesAlignedVelocityCycles);
     velcYlim = 4*max([std(vid_mean), std(mag1_vinv_mean), std(mag2_vinv_mean)]);
-    plot(app.UIAxesAlignedVelocityCycles, zeros(1,length(vid_mean)), ':k', 'LineWidth',0.25, 'HandleVisibility','off'); 
+    plot(app.UIAxesAlignedVelocityCycles, zeros(1,length(vid_mean)), ':k', 'LineWidth',0.25, 'HandleVisibility','off', 'HitTest','off', 'PickableParts','none'); 
     hold(app.UIAxesAlignedVelocityCycles, 'on');
-    plot(app.UIAxesAlignedVelocityCycles, vid_mean, 'k', 'DisplayName','Video');
-    plot(app.UIAxesAlignedVelocityCycles, mag1_vinv_mean, 'b', 'DisplayName','Magnet Channel 1');
-    plot(app.UIAxesAlignedVelocityCycles, mag2_vinv_mean, 'r', 'DisplayName','Magnet Channel 2');
+    plot(app.UIAxesAlignedVelocityCycles, stim_vinv_mean, 'Color',[0 0 0]+0.7, 'LineStyle','--', 'LineWidth',0.1, ...
+        'DisplayName',vid.stim_label, 'HitTest','off', 'PickableParts','none');
+    plot(app.UIAxesAlignedVelocityCycles, vid_mean, 'k', 'DisplayName','Video', 'HitTest','off', 'PickableParts','none');
+    plot(app.UIAxesAlignedVelocityCycles, mag1_vinv_mean, 'b', 'DisplayName','Magnet Channel 1', 'HitTest','off', 'PickableParts','none');
+    plot(app.UIAxesAlignedVelocityCycles, mag2_vinv_mean, 'r', 'DisplayName','Magnet Channel 2', 'HitTest','off', 'PickableParts','none');
     legend(app.UIAxesAlignedVelocityCycles);
     ylim(app.UIAxesAlignedVelocityCycles, [-velcYlim, velcYlim]);
     xlabel(app.UIAxesAlignedVelocityCycles, 'Time (ms)');

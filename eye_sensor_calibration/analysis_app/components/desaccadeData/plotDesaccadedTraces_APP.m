@@ -25,17 +25,21 @@ elseif app.DesaccadeMethodDropDown.Value == "Moving Median MAD"
     mag2MovMedVel = (mag2.vel_data_aligned - mag2.vel_fit');
     vidMovMedVel  = (vid.vel_data_upsampled_aligned - vid.vel_fit');
     % Absolute Moving Zero-Median of the Velocity Error
-    mag1VelThreshSac = abs(mag1MovMedVel - movmedian(mag1MovMedVel, 1000));
-    mag2VelThreshSac = abs(mag2MovMedVel - movmedian(mag2MovMedVel, 1000));
-    vidVelThreshSac = abs(vidMovMedVel - movmedian(vidMovMedVel, 1000));
+    mag1VelThreshSac = abs(mag1MovMedVel - median(mag1MovMedVel,'omitnan'));
+    mag2VelThreshSac = abs(mag2MovMedVel - median(mag2MovMedVel,'omitnan'));
+    vidVelThreshSac = abs(vidMovMedVel - median(vidMovMedVel,'omitnan'));
     % Threshold Arrays for Plotting
     mag1Thresh = mag1.madThresh;
     mag2Thresh = mag2.madThresh;
     vidThresh = vid.madThresh;
     % Calculate the Y-Axis Limits for the Threshold Plot
-    mag1ThreshYLim = 3*std(mag1.madThresh);
-    mag2ThreshYLim = 3*std(mag2.madThresh);
-    vidThreshYLim  = 3*std(vid.madThresh);
+    try
+        mag1ThreshYLim = 1.2 * max(abs(mag1Thresh(~isnan(mag1Thresh))));
+        mag2ThreshYLim = 1.2 * max(abs(mag2Thresh(~isnan(mag2Thresh))));
+        vidThreshYLim  = 1.2 * max(abs(vidThresh(~isnan(vidThresh))));
+    catch
+        % Do nothing
+    end
     threshYLabel = '|Velocity - median(Velocity)| (V/s)';
 else
     error('"'+app.DesaccadeMethodDropDown.Value+'" is an invalid desaccading option.');
@@ -275,7 +279,11 @@ else
     set(app.UIAxesVidThreshold.Children(1), 'YData',vidThresh);
     set(app.UIAxesVidThreshold.Children(2), 'YData',vidVelThresh);
     set(app.UIAxesVidThreshold.Children(3), 'YData',vidVelThreshSac);
-    ylim(app.UIAxesVidThreshold, [0, vidThreshYLim]);
+    try
+        ylim(app.UIAxesVidThreshold, [0, vidThreshYLim]);
+    catch
+        % Do nothing
+    end
     set(app.UIAxesVidPosition.Children(1), 'YData',vidPos);
     set(app.UIAxesVidVelocity.Children(2), 'YData',vidVel);
     ylim(app.UIAxesVidVelocity, [-vidVelYLim, vidVelYLim]);

@@ -41,14 +41,17 @@ eye_vel_err = (eye_vel_pfilt - fit1);
 maxIter     = 10;
 lambdaPeak  = lambda;  % Strict factor for onset/offset walk
 lambdaOnset = 3;       % Lenient factor for onset/offset walk
+% Threshold line for plotting
+threshMovMAD = nan(size(eye_vel_err));
 % Start by assuming all finite samples are "clean"
-keep = ~isnan(eye_vel_err);  
+keep = ~isnan(eye_vel_err); 
 % Iteratatively re-compute threshold until it stabilizes
 for iter = 1:maxIter
     med                  = median(eye_vel_err(keep), 'omitnan');
     sigma                = 1.4826 * median(abs(eye_vel_err(keep) - med), 'omitnan');
     newKeep              = abs(eye_vel_err - med) <= lambda * sigma;
     newKeep(isnan(eye_vel_err)) = false;  % NaNs never count as "clean"
+    threshMovMAD(keep~=newKeep) = lambda * sigma;
     % Stop iterating once the new threshold results in no new detections
     if isequal(newKeep, keep), break, end
     keep = newKeep;
@@ -68,9 +71,6 @@ for k = 1:CC.NumObjects
         saccMask(idx) = true;
     end
 end
-
-% Threshold line for plotting
-threshMovMAD = med + lambda * sigma;
 
 % Remove points around omit centers as defined by pre & post saccade time
 presaccade = round((presaccade/1000)*samplerate);

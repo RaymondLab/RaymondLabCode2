@@ -7,6 +7,9 @@ loadAnalysisInfo_APP;
 
 %% Add lag to channels
 if lag < 0
+    % Stim channel
+    vid.stim_aligned = vid.stim((-lag)+1:end);
+
     % Magnet channel 1
     mag1.pos_data_aligned = mag1.pos_data((-lag)+1:end);
     mag1.vel_data_aligned = mag1.vel_data((-lag)+1:end);
@@ -19,6 +22,9 @@ if lag < 0
     vid.pos_data_upsampled_aligned = vid.pos_data_upsampled(1:end+lag);
     vid.vel_data_upsampled_aligned = vid.vel_data_upsampled(1:end+lag);
 else
+    % Stim channel
+    vid.stim_aligned = vid.stim(1:end-lag);
+
     % Magnet channel 1
     mag1.pos_data_aligned = mag1.pos_data(1:end-lag);
     mag1.vel_data_aligned = mag1.vel_data(1:end-lag);
@@ -37,6 +43,9 @@ if length(mag1.pos_data_aligned) < length(vid.pos_data_upsampled_aligned)
     vid.pos_data_upsampled_aligned = vid.pos_data_upsampled_aligned(1:length(mag1.pos_data_aligned));
     vid.vel_data_upsampled_aligned = vid.vel_data_upsampled_aligned(1:length(mag1.pos_data_aligned));
 elseif length(mag1.pos_data_aligned) > length(vid.pos_data_upsampled_aligned)
+    % Stim channel
+    vid.stim_aligned = vid.stim(1:length(vid.pos_data_upsampled_aligned));
+
     % Magnet channel 1
     mag1.pos_data_aligned = mag1.pos_data_aligned(1:length(vid.pos_data_upsampled_aligned));
     mag1.vel_data_aligned = mag1.vel_data_aligned(1:length(vid.pos_data_upsampled_aligned));

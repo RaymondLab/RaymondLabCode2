@@ -11,7 +11,7 @@ vid_posfilt_data_aligned  = butterworthfilter(vid.pos_data_upsampled_aligned, ap
 
 veltau = .01;
 mag1.vel_data_aligned          = movingslopeCausal(mag1_posfilt_data_aligned, round(mag1.samplerate*veltau)) * mag1.samplerate;
-mag2.vel_data_aligned          = movingslopeCausal(mag2_posfilt_data_aligned, round(mag1.samplerate*veltau)) * mag1.samplerate;
+mag2.vel_data_aligned          = movingslopeCausal(mag2_posfilt_data_aligned, round(mag2.samplerate*veltau)) * mag2.samplerate;
 vid.vel_data_upsampled_aligned = movingslopeCausal(vid_posfilt_data_aligned, round(mag1.samplerate*veltau)) * mag1.samplerate;
 
 % Save data
