@@ -16,8 +16,12 @@ function timepoints = run_timepointAnalysis(blocks, params, cycleLength, nPermut
         nids = length(tp_ii_ids);
 
         timepoint_cyclelabels = [];
-        good_cyclemean_mat   = zeros(nids, cycleLength);
-        good_cyclemedian_mat = zeros(nids, cycleLength);
+        good_cyclemean_mat   = nan(nids, cycleLength);
+        good_cyclemedian_mat = nan(nids, cycleLength);
+        nGoodCycles          = nan(nids, 1);
+        goodAmplitudeCV      = nan(nids, 1);
+        goodResidualMAD      = nan(nids, 1);
+        goodEtaSquared       = nan(nids, 1);
 
         for jj = 1:nids
             id_jj = tp_ii_ids(jj);
@@ -25,6 +29,10 @@ function timepoints = run_timepointAnalysis(blocks, params, cycleLength, nPermut
             timepoint_cyclelabels = [timepoint_cyclelabels; repmat(id_jj, ngc_jj, 1)];
             good_cyclemean_mat(jj,:)   = mean(blocks(id_jj).good_cyclemat, 1, 'omitnan');
             good_cyclemedian_mat(jj,:) = median(blocks(id_jj).good_cyclemat, 1, 'omitnan');
+            nGoodCycles(jj) = blocks(id_jj).nGoodCycles;
+            goodAmplitudeCV(jj) = blocks(id_jj).amplitudeCV;
+            goodResidualMAD(jj) = blocks(id_jj).residualMAD;
+            goodEtaSquared(jj) = blocks(id_jj).etaSquared;
         end
 
         drumvel_cyclemat   = vertcat(blocks(tp_ii_ids).stimvel_cyclemat);
@@ -34,7 +42,7 @@ function timepoints = run_timepointAnalysis(blocks, params, cycleLength, nPermut
             'Fs',params.fs, 'StimFreq',params.exp_stimfreq, ...
             'nPermutations',nPermutations);
 
-        nPooledCycles = size(timepoint_cyclemat, 1);
+        nPooledGoodCycles = size(timepoint_cyclemat, 1);
         pooled_drumvel_cyclemean_cvd = cycleVarianceDecomposition(drumvel_cyclemat);
         pooled_good_cyclemean_cvd    = cycleVarianceDecomposition(timepoint_cyclemat);
         pooled_good_cyclemedian      = median(timepoint_cyclemat, 1, 'omitnan');
@@ -50,23 +58,32 @@ function timepoints = run_timepointAnalysis(blocks, params, cycleLength, nPermut
             good_nGoodCyclesWeighted_cyclemean, ...
             [char(tp_ii), ' cycle-means']);
 
-        timepoints(ii).timePoint        = char(tp_ii);
-        timepoints(ii).blockType        = blocks(tp_ii_ids(1)).blockType;
-        timepoints(ii).blockNumbers     = tp_blocknumbers;
-        timepoints(ii).blockResultsIds  = tp_ii_ids;
+        timepoints(ii).timePoint       = char(tp_ii);
+        timepoints(ii).blockType       = blocks(tp_ii_ids(1)).blockType;
+        timepoints(ii).blockNumbers    = tp_blocknumbers;
+        timepoints(ii).blockResultsIds = tp_ii_ids;
 
-        pooled_good_cyclemean_cm        = calc_cycleMetrics(pooled_good_cyclemean_cvd.cycleMean, pooled_drumvel_cyclemean_cvd.cycleMean);
-        pooled_good_cyclemedian_cm      = calc_cycleMetrics(pooled_good_cyclemedian,              pooled_drumvel_cyclemean_cvd.cycleMean);
-        good_cyclemean_cm               = calc_cycleMetrics(good_cyclemean_cvd.cycleMean,         pooled_drumvel_cyclemean_cvd.cycleMean);
-        good_cyclemedian_cm             = calc_cycleMetrics(good_cyclemedian_cvd.cycleMean,       pooled_drumvel_cyclemean_cvd.cycleMean);
+        pooled_good_cyclemean_cm         = calc_cycleMetrics(pooled_good_cyclemean_cvd.cycleMean, pooled_drumvel_cyclemean_cvd.cycleMean);
+        pooled_good_cyclemedian_cm       = calc_cycleMetrics(pooled_good_cyclemedian,              pooled_drumvel_cyclemean_cvd.cycleMean);
+        good_cyclemean_cm                = calc_cycleMetrics(good_cyclemean_cvd.cycleMean,         pooled_drumvel_cyclemean_cvd.cycleMean);
+        good_cyclemedian_cm              = calc_cycleMetrics(good_cyclemedian_cvd.cycleMean,       pooled_drumvel_cyclemean_cvd.cycleMean);
         nGoodCyclesWeighted_cyclemean_cm = calc_cycleMetrics(good_nGoodCyclesWeighted_cyclemean,  pooled_drumvel_cyclemean_cvd.cycleMean);
 
-        timepoints(ii).nPooledCycles                    = nPooledCycles;
-        timepoints(ii).pooled_drumvel_cyclemean_cvd     = pooled_drumvel_cyclemean_cvd;
-        timepoints(ii).pooled_good_cyclemean_cvd        = pooled_good_cyclemean_cvd;
-        timepoints(ii).pooled_good_cyclemean_cm         = pooled_good_cyclemean_cm;
-        timepoints(ii).pooled_good_cyclemedian          = pooled_good_cyclemedian;
-        timepoints(ii).pooled_good_cyclemedian_cm       = pooled_good_cyclemedian_cm;
+        timepoints(ii).nGoodCycles     = nGoodCycles;
+        timepoints(ii).goodAmplitudeCV = goodAmplitudeCV;
+        timepoints(ii).goodResidualMAD = goodResidualMAD;
+        timepoints(ii).goodEtaSquared  = goodEtaSquared;
+
+        timepoints(ii).nPooledGoodCycles     = nPooledGoodCycles;
+        timepoints(ii).pooledGoodAmplitudeCV = pooled_good_cyclemean_cvd.amplitudeCV;
+        timepoints(ii).pooledGoodResidualMAD = pooled_good_cyclemean_cvd.residualMAD;
+        timepoints(ii).pooledGoodEtaSquared  = pooled_good_cyclemean_cvd.etaSquared;
+
+        timepoints(ii).pooled_drumvel_cyclemean_cvd = pooled_drumvel_cyclemean_cvd;
+        timepoints(ii).pooled_good_cyclemean_cvd    = pooled_good_cyclemean_cvd;
+        timepoints(ii).pooled_good_cyclemean_cm     = pooled_good_cyclemean_cm;
+        timepoints(ii).pooled_good_cyclemedian      = pooled_good_cyclemedian;
+        timepoints(ii).pooled_good_cyclemedian_cm   = pooled_good_cyclemedian_cm;
 
         timepoints(ii).good_cyclemean_cvd               = good_cyclemean_cvd;
         timepoints(ii).good_cyclemean_cm                = good_cyclemean_cm;

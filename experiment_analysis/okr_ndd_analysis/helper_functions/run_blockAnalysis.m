@@ -38,8 +38,6 @@ function block = run_blockAnalysis(params, data, ii, lpc, saccThresh)
         hevel_raw_fit, saccThresh, saccadePad, ...
         params.minGoodChunk_len, params.saccadeMethod);
 
-    saccadeFrac = mean(saccDilMask);
-
     [bfit,stat] = calc_sineFit(params.exp_stimfreq, params.fs, ~saccDilMask, ...
         hevel_ii, chairvel_raw_ii, drumvel_raw_ii);
 
@@ -58,9 +56,10 @@ function block = run_blockAnalysis(params, data, ii, lpc, saccThresh)
     saccmask_mat       = segmentIntoCycles(double(saccMask), startpt, cycleLength);
     mse_cyclemat       = segmentIntoCycles((hevel_ii-hevel_raw_fit).^2, startpt, cycleLength);
 
-    badCycles = any(saccmask_mat, 2);
-    nGoodCycles      = sum(~badCycles);
-    [nTotalCycles,~] = size(hevel_cyclemat);
+    badCycles        = any(saccmask_mat, 2);
+    nGoodCycles      = sum(~badCycles);                  % Number of "good" cycles (clean of saccades)
+    [nTotalCycles,~] = size(hevel_cyclemat);             % Number of total cycles in the block
+    saccadeFrac      = sum(saccMask) / numel(saccMask);  % Fraction of block samples that were flagged as saccades
 
     chairvel_cyclecvd = cycleVarianceDecomposition(chairvel_cyclemat);
     drumvel_cyclecvd  = cycleVarianceDecomposition(drumvel_cyclemat);
@@ -104,22 +103,22 @@ function block = run_blockAnalysis(params, data, ii, lpc, saccThresh)
         good_rel_phase = nan; good_rel_phase_SEM = nan;
     end
 
-    block.stimFreq          = params.exp_stimfreq;
-    block.hevel_amp         = bfit.eyevel_amp;
-    block.hevel_phase       = bfit.eyevel_phase;
-    block.hevel_rel_gain    = bfit.eyevel_rel_gain;
-    block.hevel_rel_phase   = bfit.eyevel_rel_phase;
-    block.good_amp          = hevel_good_cyclecvd.amplitudeMean;
-    block.good_amp_SEM      = hevel_good_cyclecvd.amplitudeSEM;
-    block.good_phase        = hevel_good_cyclecvd.phaseMean_deg;
-    block.good_phase_SEM    = hevel_good_cyclecvd.phaseSEM_deg;
-    block.good_rel_gain     = good_rel_gain;
-    block.good_rel_gain_SEM = good_rel_gain_SEM;
-    block.good_rel_phase    = good_rel_phase;
+    block.stimFreq = params.exp_stimfreq;
+    block.hevel_amp       = bfit.eyevel_amp;
+    block.hevel_phase     = bfit.eyevel_phase;
+    block.hevel_rel_gain  = bfit.eyevel_rel_gain;
+    block.hevel_rel_phase = bfit.eyevel_rel_phase;
+    block.good_amp           = hevel_good_cyclecvd.amplitudeMean;
+    block.good_amp_SEM       = hevel_good_cyclecvd.amplitudeSEM;
+    block.good_phase         = hevel_good_cyclecvd.phaseMean_deg;
+    block.good_phase_SEM     = hevel_good_cyclecvd.phaseSEM_deg;
+    block.good_rel_gain      = good_rel_gain;
+    block.good_rel_gain_SEM  = good_rel_gain_SEM;
+    block.good_rel_phase     = good_rel_phase;
     block.good_rel_phase_SEM = good_rel_phase_SEM;
-    block.saccadeFrac       = saccadeFrac;
-    block.nGoodCycles       = nGoodCycles;
-    block.nTotalCycles      = nTotalCycles;
+    block.saccadeFrac  = saccadeFrac;
+    block.nGoodCycles  = nGoodCycles;
+    block.nTotalCycles = nTotalCycles;
 
     block.startTime = bssTimes(1,ii);
     block.endTime   = bssTimes(2,ii);
@@ -178,6 +177,9 @@ function block = run_blockAnalysis(params, data, ii, lpc, saccThresh)
     block.stimvel_amp_SEM   = block.stimvel_cyclecvd.amplitudeSEM;
     block.stimvel_phase     = block.stimvel_cyclecvd.phaseMean_deg;
     block.stimvel_phase_SEM = block.stimvel_cyclecvd.phaseSEM_deg;
+    block.amplitudeCV       = block.hevel_good_cyclecvd.amplitudeCV;
+    block.residualMAD       = block.hevel_good_cyclecvd.residualMAD;
+    block.etaSquared        = block.hevel_good_cyclecvd.etaSquared;
 
     check_valuesApproxEqual(cfit.eyevel_amp, block.hevel_good_cyclecvd.amplitudeMean, '"Good" cycles amplitudes');
     check_valuesApproxEqual(cfit.eyevel_phase, block.hevel_good_cyclecvd.phaseMean_deg, '"Good" cycles phases');

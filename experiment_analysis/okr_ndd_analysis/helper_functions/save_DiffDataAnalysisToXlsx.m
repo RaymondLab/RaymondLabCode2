@@ -43,6 +43,16 @@ metrics.TN_MedianSkew = zeros(nmetricrows, 1);
 metrics.TN_BowleySkew = zeros(nmetricrows, 1);
 metrics.TN_MeanMedianSkew = zeros(nmetricrows, 1);
 
+% Trace quality metrics
+metrics.nPooledGoodCycles = zeros(nmetricrows, 1);
+metrics.nGoodCycles = cell(nmetricrows, 1);
+metrics.pooledGoodAmplitudeCV = zeros(nmetricrows, 1);
+metrics.goodAmplitudeCV = cell(nmetricrows, 1);
+metrics.pooledGoodResidualMAD = zeros(nmetricrows, 1);
+metrics.goodResidualMAD = cell(nmetricrows, 1);
+metrics.pooledGoodEtaSquared = zeros(nmetricrows, 1);
+metrics.goodEtaSquared = cell(nmetricrows, 1);
+
 % Initialize diffdata struct for table
 data.CycleTimes = (0:length(timepoints(1).pooled_drumvel_cyclemean_cvd.cycleMean)-1)' / params.fs;
 data.StimVel = timepoints(1).pooled_drumvel_cyclemean_cvd.cycleMean';
@@ -101,6 +111,15 @@ for ii = 1:ntimepoints
     metrics.TN_MedianSkew(rownum) = resii.eye.skewFromCentroidMedian(2);
     metrics.TN_BowleySkew(rownum) = resii.eye.skewQuantile(2);
     metrics.TN_MeanMedianSkew(rownum) = resii.eye.skewMeanMedian(2);
+
+    metrics.nPooledGoodCycles(rownum) = timepoints(ii).nPooledGoodCycles;
+    metrics.nGoodCycles{rownum} = strjoin(string(timepoints(ii).nGoodCycles), ';');
+    metrics.pooledGoodAmplitudeCV(rownum) = timepoints(ii).pooledGoodAmplitudeCV;
+    metrics.goodAmplitudeCV{rownum} = strjoin(string(timepoints(ii).goodAmplitudeCV), ';');
+    metrics.pooledGoodResidualMAD(rownum) = timepoints(ii).pooledGoodResidualMAD;
+    metrics.goodResidualMAD{rownum} = strjoin(string(timepoints(ii).goodResidualMAD), ';');
+    metrics.pooledGoodEtaSquared(rownum) = timepoints(ii).pooledGoodEtaSquared;
+    metrics.goodEtaSquared{rownum} = strjoin(string(timepoints(ii).goodEtaSquared), ';');
 end
 
 
@@ -112,7 +131,7 @@ for ii = 1:ndiffdata
     resii = diffdata(ii).pooled_good_cyclemean_diff_cm;  % Retrieve cycle metric results
 
     metrics.Type{rownum} = fname;
-    metrics.BlockNums{rownum} = "NA";
+    metrics.BlockNums{rownum} = "";
 
     metrics.DrumAmp(rownum) = nan;
     metrics.DrumAmp_SEM(rownum) = nan;
@@ -144,6 +163,15 @@ for ii = 1:ndiffdata
     metrics.TN_MedianSkew(rownum) = resii.eye.skewFromCentroidMedian(2);
     metrics.TN_BowleySkew(rownum) = resii.eye.skewQuantile(2);
     metrics.TN_MeanMedianSkew(rownum) = resii.eye.skewMeanMedian(2);
+
+    metrics.nPooledGoodCycles(rownum) = nan;
+    metrics.nGoodCycles{rownum} = "";
+    metrics.pooledGoodAmplitudeCV(rownum) = nan;
+    metrics.goodAmplitudeCV{rownum} = "";
+    metrics.pooledGoodResidualMAD(rownum) = nan;
+    metrics.goodResidualMAD{rownum} = "";
+    metrics.pooledGoodEtaSquared(rownum) = nan;
+    metrics.goodEtaSquared{rownum} = "";
 end
 
 % Convert the structs to tables

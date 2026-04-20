@@ -39,6 +39,8 @@ if ~exist('plots', 'var')
     xlim(app.UIAxesTab1EyeTracking, [min(aaa),max(aaa)]);
     ylim(app.UIAxesTab1EyeTracking, [min(bbb),max(bbb)]);
     hold(app.UIAxesTab1EyeTracking, 'on');
+    xline(app.UIAxesTab1EyeTracking, size(iImg,2)/2, '--g', 'LineWidth',0.3, 'HandleVisibility','off', 'HitTest','off', 'PickableParts','none');
+    yline(app.UIAxesTab1EyeTracking, size(iImg,1)/2, '--g', 'LineWidth',0.3, 'HandleVisibility','off', 'HitTest','off', 'PickableParts','none');
     
     % Corneal Reflection 1
     plots.plot1 = line(app.UIAxesTab1EyeTracking, cr1Lx, cr1Ly, 'Color','b');

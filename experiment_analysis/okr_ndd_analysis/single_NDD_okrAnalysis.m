@@ -11,7 +11,7 @@ addpath(genpath(params.script_folderpath));
 % General experiment parameters
 params.exp_stimfreq  = 1.0;    % Training stimulus frequency (Default 1.0)
 params.exp_traintype = 'OKR';  % Training type (Default 'OKR')
-
+% 
 % Define timepoint blocks and corresponding group ids
 % Do not adjust this for now as the group_NDD_okrAnalysis is not set up for this
 params.timepoint_ids    = [2, 3, 4, 14, 15, 16, 59, 60, 61];  % Default [2, 3, 4, 59, 60, 61]
@@ -21,11 +21,12 @@ params.timepoint_groups = [0, 0, 0, 15, 15, 15, 60, 60, 60];  % Default [0, 0, 0
 params.subcond_options = {'None', 'NR', '23DMR', '24DMR', 'DR'}; 
 
 % Task (training) condition options for dropdown menu
-params.taskcond_options = {'None', 'TNOR', 'TDIM', 'TDMR', ...
+params.taskcond_options = {'None', ...
+    'TNOR', 'TDIM', 'TDMR', ...
     '2TNOR', '2TDIM', '2TDMR', ...
-    '0DaysDark', '20DaysDark', '40DaysDark', '60DaysDark', ...
-    'N20DaysSwitch', 'N40DaysSwitch', ...
-    '120DaysDark', 'N20DaysSwitch2'}; 
+    'D0', 'D20', 'D40', 'D60', ...
+    'D60N20', 'D60N40', ...
+    'D120', 'D120N20'}; 
 
 % Number of perturbations to run for F-Tests
 params.ftestPerturbs = 10000;  % (Default 10000, or 5000 for tests)
@@ -36,7 +37,7 @@ params.customScaleChs = [];
 % Data preprocessing parameters
 params.filtering_options = {'Butter', 'FIF'};
 params.transientThresh   = 1;   % Transient "spike" removal threshold (Default 1)
-params.lowpassCutoff     = 9;   % Lowpass filter cutoff frequency (Default 11)
+params.lowpassCutoff     = 15;  % Lowpass filter cutoff frequency (Default 11)
 params.filterWindow      = 11;  % SG filter window size (Default 30)
 
 % FIF-specific settings
@@ -47,10 +48,10 @@ params.fifSettings.alpha = 24;
 params.fifSettings.minIMF = 4;
 
 % Saccade removal parameters
-params.saccadeMethod    = 'MAD';  % Saccade detection method (Default 'SVT')
-params.saccadeThresh    = 5;   % Saccade detection threshold (Default 1000)
+params.saccadeMethod    = 'MAD';  % Saccade detection method (Default 'MAD' or 'SVT')
+params.saccadeThresh    = 7;   % Saccade detection threshold (Default 7 or 1000)
 params.saccadeLRPad     = 0.05;   % Padding in seconds to expand saccade candidates (Default 0.05)
-params.minGoodChunk_len = 50;     % Minimum allowed gap between saccades (Default 50)
+params.minGoodChunk_len = 200;     % Minimum allowed gap between saccades (Default 200)
 
 % File and folder paths (by default, all should be '')
 params.exp_filepath    = '';  % Experiment file (.smr or .mat) path
@@ -58,7 +59,7 @@ params.cal_filepath    = '';  % Calibration file (.mat) path
 params.save_folderpath = '';  % Target save folder path
 
 % LPC x saccade-threshold comparison sweep (opt-in: needs >=2 values in BOTH)
-params.lowpass_cutoffs = [9, 15, 30];   % e.g. [9, 15, 30]; empty or scalar = no comparison
+params.lowpass_cutoffs = [7, 15, 30];   % e.g. [9, 15, 30]; empty or scalar = no comparison
 params.saccade_threshs = [2.5, 5, 9];   % e.g. [2.5, 5, 9];  empty or scalar = no comparison
 params.ntColor = [1 0 0];      % NT peak marker color (robustness tabs)
 params.tnColor = [0 0 1];      % TN peak marker color (robustness tabs)
@@ -113,7 +114,6 @@ for ii = 1:nBlocks
     blocks(ii) = bk;
 end
 
-
 % Clean up workspace
 clearvars('-except', 'analysis', 'blocks', 'cycleLength', 'cycleTimes', 'data', 'diffdata', 'params', 'timepoints');
 
@@ -135,7 +135,6 @@ clearvars('-except', 'analysis', 'blocks', 'cycleLength', 'cycleTimes', 'data', 
 
 %% DIFFDATA ANALYSIS
 disp('    Conducting diffdata analysis...');
-
 diffdata = run_diffdataAnalysis(timepoints);
 
 % Add sheets to existing Excel for diffdata analysis results
@@ -184,5 +183,3 @@ clearvars('-except', 'analysis');
 fprintf('\n---ANALYSIS COMPLETED!---\n\n');
 msgbox('Analysis complete!', 'Done');
 toc
-
-

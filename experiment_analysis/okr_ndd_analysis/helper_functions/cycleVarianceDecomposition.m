@@ -44,6 +44,12 @@ function results = cycleVarianceDecomposition(cycles, varargin)
 %   'MinValidCycles'- Minimum number of valid cycles at a time point for
 %                     pointwise statistics to be computed (default: 3).
 %                     Time points with fewer valid cycles get NaN.
+%   'SpectralHarmonics'      - Multiples of StimFreq to exclude from the
+%                              spectral-noise-floor estimate (default:
+%                              [1 2 3]). DC is always excluded.
+%   'SpectralExclusionBandHz'- Half-width (Hz) of the exclusion band
+%                              around each harmonic when estimating the
+%                              spectral noise floor. Default: StimFreq/4.
 %
 %   OUTPUT
 %   ------
@@ -94,6 +100,9 @@ function results = cycleVarianceDecomposition(cycles, varargin)
 %     --- Amplitude and phase uncertainty (delta method) ---
 %     .amplitudeMean    : Scalar amplitude from mean coefficients
 %     .amplitudeSEM     : Scalar SEM of amplitude (delta method)
+%     .amplitudeCV      : amplitudeSEM / amplitudeMean (dimensionless
+%                         coefficient of variation; good cross-experiment
+%                         measure of cycle-to-cycle gain reliability)
 %     .amplitudeCI      : [1 x 2] CI for amplitude
 %     .phaseMean_deg    : Scalar phase from mean coefficients (degrees)
 %     .phaseSEM_deg     : Scalar SEM of phase (delta method, degrees)
@@ -123,6 +132,16 @@ function results = cycleVarianceDecomposition(cycles, varargin)
 %     .residualRMSMean      : Mean residual RMS across included cycles
 %     .residualRMSOutlierTh : Outlier threshold (median + 3*MAD)
 %     .outlierCycleIdx      : Indices of suspected outlier cycles
+%     .residualMAD          : Robust scale of residual samples across all
+%                             included cycles (1.4826 * MAD; matches SD
+%                             for Gaussian noise but is outlier-resistant)
+%     .residualMADPerCycle  : [nCycles x 1] per-cycle residual MAD
+%     .residualPSDFreq      : [1 x nFreq] frequency vector (Hz) for the
+%                             residual PSD
+%     .residualPSD          : [1 x nFreq] Welch PSD of the concatenated
+%                             residuals ((deg/s)^2/Hz if input is deg/s)
+%     .spectralNoiseFloor   : Median PSD outside stim harmonics (linear)
+%     .spectralNoiseFloor_dB: 10*log10(spectralNoiseFloor)
 %
 %   EXAMPLE
 %   -------
@@ -181,6 +200,10 @@ function results = cycleVarianceDecomposition(cycles, varargin)
         @(x) isscalar(x) && x > 0 && x <= 1);
     addParameter(p, 'MinValidCycles', 3, ...
         @(x) isscalar(x) && x >= 2 && round(x) == x);
+    addParameter(p, 'SpectralHarmonics', [1 2 3], ...
+        @(x) isnumeric(x) && isvector(x) && all(x > 0));
+    addParameter(p, 'SpectralExclusionBandHz', [], ...
+        @(x) isempty(x) || (isscalar(x) && x > 0));
     parse(p, cycles, varargin{:});
 
     Fs              = p.Results.Fs;
@@ -189,6 +212,11 @@ function results = cycleVarianceDecomposition(cycles, varargin)
     alpha           = p.Results.Alpha;
     minValidFrac    = p.Results.MinValidFrac;
     minValidCycles  = p.Results.MinValidCycles;
+    spectralHarmonics    = p.Results.SpectralHarmonics(:)';
+    spectralExclHalfHz   = p.Results.SpectralExclusionBandHz;
+    if isempty(spectralExclHalfHz)
+        spectralExclHalfHz = stimFreq / 4;
+    end
 
     %% Orient matrix to [nCycles x cycleLength]
     [nRows, nCols] = size(cycles);
@@ -389,6 +417,13 @@ function results = cycleVarianceDecomposition(cycles, varargin)
     amplitudeCI   = ampMean       + tCritCoeff * semAmp     * [-1, 1];
     phaseCI_deg   = phaseMean_deg + tCritCoeff * semPhi_deg * [-1, 1];
 
+    % Amplitude coefficient of variation (dimensionless gain-reliability)
+    if isfinite(ampMean) && ampMean > 0
+        amplitudeCV = semAmp / ampMean;
+    else
+        amplitudeCV = NaN;
+    end
+
     %% Variance decomposition (pointwise, using included cycles only)
     inclFitWaveforms = fitWaveformsAll(cycleIncluded, :);
     inclResiduals    = residualsAll(cycleIncluded, :);
@@ -454,6 +489,78 @@ function results = cycleVarianceDecomposition(cycles, varargin)
         outlierIdx      = [];
     end
 
+    % Robust scale of residual samples themselves (pooled across included cycles)
+    inclResidSamps  = inclResiduals(:);
+    inclResidSamps  = inclResidSamps(~isnan(inclResidSamps));
+    if numel(inclResidSamps) >= minValidCycles
+        medR        = median(inclResidSamps);
+        residualMAD = 1.4826 * median(abs(inclResidSamps - medR));
+    else
+        residualMAD = NaN;
+    end
+
+    % Per-cycle residual MAD (NaN-aware)
+    residualMADPerCycle = NaN(nCycles, 1);
+    for k = 1:nCycles
+        rk = residualsAll(k, :);
+        rk = rk(~isnan(rk));
+        if ~isempty(rk)
+            residualMADPerCycle(k) = 1.4826 * median(abs(rk - median(rk)));
+        end
+    end
+
+    % Spectral noise floor from the concatenated residuals.
+    % Strategy: flatten included residuals into one long sequence, fill short
+    % NaN gaps by linear interpolation (zeroing any remaining NaN at edges),
+    % run a Welch PSD, then take the median PSD in bins outside the stim
+    % fundamental and its harmonics. Requires Signal Processing Toolbox for
+    % pwelch; on failure, NaN is returned.
+    residualPSDFreq       = [];
+    residualPSD           = [];
+    spectralNoiseFloor    = NaN;
+    spectralNoiseFloor_dB = NaN;
+    if nCyclesIncluded >= minValidCycles
+        try
+            % Concatenate included cycles row-wise so time progresses naturally
+            residVec = reshape(inclResiduals', 1, []);
+            if any(isnan(residVec))
+                residVec = fillmissing(residVec, 'linear', 'EndValues', 'nearest');
+            end
+            residVec(isnan(residVec)) = 0;  % guard if entire series was NaN
+
+            segLen  = min(4 * cycleLength, length(residVec));
+            segLen  = max(segLen, 64);
+            overlap = round(segLen / 2);
+            nfft    = max(2^nextpow2(segLen), 256);
+            win     = 0.5 * (1 - cos(2*pi*(0:segLen-1)'/(segLen-1)));  % Hann
+
+            [Pxx, freqs] = pwelch(residVec, win, overlap, nfft, Fs);
+
+            % Exclude bins near stim fundamental and harmonics, plus DC
+            excludeMask = freqs < max(spectralExclHalfHz, Fs/segLen);
+            for hk = spectralHarmonics
+                fc = hk * stimFreq;
+                if fc <= freqs(end)
+                    excludeMask = excludeMask | ...
+                        (freqs >= fc - spectralExclHalfHz & ...
+                         freqs <= fc + spectralExclHalfHz);
+                end
+            end
+
+            residualPSDFreq = freqs(:)';
+            residualPSD     = Pxx(:)';
+
+            if any(~excludeMask)
+                spectralNoiseFloor    = median(Pxx(~excludeMask));
+                spectralNoiseFloor_dB = 10 * log10(max(spectralNoiseFloor, eps));
+            end
+        catch ME
+            warning('cycle_decomposition:spectralFloorFailed', ...
+                'Spectral noise floor computation failed (%s: %s).', ...
+                ME.identifier, ME.message);
+        end
+    end
+
     %% Pack results struct
     results = struct();
 
@@ -501,6 +608,7 @@ function results = cycleVarianceDecomposition(cycles, varargin)
     % --- Amplitude and phase uncertainty ---
     results.amplitudeMean    = ampMean;
     results.amplitudeSEM     = semAmp;
+    results.amplitudeCV      = amplitudeCV;
     results.amplitudeCI      = amplitudeCI;
     results.phaseMean_deg    = phaseMean_deg;
     results.phaseSEM_deg     = semPhi_deg;
@@ -524,12 +632,18 @@ function results = cycleVarianceDecomposition(cycles, varargin)
     results.residualFraction     = residualFraction;
 
     % --- Data quality diagnostics ---
-    results.snr_dB               = snr_dB;
-    results.snrMean_dB           = snrMean_dB;
-    results.residualRMS          = residualRMS;
-    results.residualRMSMean      = residualRMSMean;
-    results.residualRMSOutlierTh = outlierTh;
-    results.outlierCycleIdx      = outlierIdx;
+    results.snr_dB                = snr_dB;
+    results.snrMean_dB            = snrMean_dB;
+    results.residualRMS           = residualRMS;
+    results.residualRMSMean       = residualRMSMean;
+    results.residualRMSOutlierTh  = outlierTh;
+    results.outlierCycleIdx       = outlierIdx;
+    results.residualMAD           = residualMAD;
+    results.residualMADPerCycle   = residualMADPerCycle;
+    results.residualPSDFreq       = residualPSDFreq;
+    results.residualPSD           = residualPSD;
+    results.spectralNoiseFloor    = spectralNoiseFloor;
+    results.spectralNoiseFloor_dB = spectralNoiseFloor_dB;
 
 end
 

@@ -268,7 +268,7 @@ axs(2) = uiaxes(GridLayout_Plots);
 axesCustomToolbarButtons(axs(2));
 axs(2).Layout.Row = 2;
 axs(2).Layout.Column = 1;
-title(axs(2), 'Block NaN (NaN of NaN): ampSEM = NaN | phaseSEM = NaN  | varRes = NaN');
+title(axs(2), {'Block NaN (NaN of NaN): amp = NaN | phase = NaN', ' '});
 hold(axs(2), 'on');
 yline(axs(2), 0, 'Color',[0 0 0]+0.7, 'LineWidth',0.1, ...
     'HandleVisibility','off', 'HitTest','off', 'PickableParts','none');
@@ -302,7 +302,7 @@ axs(3) = uiaxes(GridLayout_Plots);
 axesCustomToolbarButtons(axs(3));
 axs(3).Layout.Row = 2;
 axs(3).Layout.Column = 2;
-title(axs(3), 'Block NaN (NaN of NaN): ampSEM = NaN | phaseSEM = NaN  | varRes = NaN');
+title(axs(3), {'Block NaN (NaN of NaN): amp = NaN | phase = NaN', ' '});
 hold(axs(3), 'on');
 yline(axs(3), 0, 'Color',[0 0 0]+0.7, 'LineWidth',0.1, ...
     'HandleVisibility','off', 'HitTest','off', 'PickableParts','none');
@@ -338,8 +338,13 @@ uiwait(fig);
     %% Helper functions
     function titleTxt = get_blockTitleText(bidx, ngc, ntc)
         cvd = d.all_cvd{bidx};
-        titleTxt = [sprintf('Block %d (%d of %d):', bidx, ngc, ntc), ...
-            sprintf(' ampSEM = %.4f | phaseSEM = %.4f  | varRes = %.4f', cvd.amplitudeSEM, cvd.phaseSEM_deg, cvd.varResidualMean)];
+        bTxt = sprintf('Block %d (%d of %d):', bidx, ngc, ntc);
+        fTxt = sprintf(' amp = %.1f (SEM = %.4f) | phase = %.1f (SEM = %.4f)', ...
+            cvd.amplitudeMean, cvd.amplitudeSEM, ...
+            cvd.phaseMean_deg, cvd.phaseSEM_deg);
+        mTxt = sprintf('[amplitudeCV = %.4f | residualMAD = %.4f | etaSquared = %.4f]', ...
+            cvd.amplitudeCV, cvd.residualMAD, cvd.etaSquared);
+        titleTxt = {[bTxt, fTxt], mTxt};
     end
 
     function updateBlockPlot(blockId, axIdx, lineIds)
@@ -401,6 +406,7 @@ uiwait(fig);
         all_nGoodCycles = nan(nBlocks, 1);
         all_nTotalCycles = nan(nBlocks, 1);
         all_goodCyclesFrac = nan(nBlocks, 1);
+        all_blockSaccadeFrac = nan(nBlocks, 1);
         all_hevel_des = cell(nBlocks, 1);
         all_hevel_goodcycles = cell(nBlocks, 1);
         all_cvd = cell(nBlocks, 1);
@@ -423,9 +429,10 @@ uiwait(fig);
             sacc_mat = segmentIntoCycles(double(saccMask), startpt, d.cycleLength);
             badCycles = any(sacc_mat, 2);
     
-            all_nGoodCycles(ii)      = sum(~badCycles);
-            [all_nTotalCycles(ii),~] = size(sacc_mat);
-            all_goodCyclesFrac(ii)   = all_nGoodCycles(ii) / all_nTotalCycles(ii);
+            all_blockSaccadeFrac(ii)    = sum(saccMask) / numel(saccMask);
+            all_nGoodCycles(ii)         = sum(~badCycles);
+            [all_nTotalCycles(ii),~]    = size(sacc_mat);
+            all_goodCyclesFrac(ii)      = all_nGoodCycles(ii) / all_nTotalCycles(ii);
     
             if all_nGoodCycles(ii) > 0
                 hevel_good_cyclemat = hevel_cyclemat(~badCycles, :);
@@ -442,6 +449,7 @@ uiwait(fig);
         d.all_nGoodCycles = all_nGoodCycles;
         d.all_nTotalCycles = all_nTotalCycles;
         d.all_goodCyclesFrac = all_goodCyclesFrac;
+        d.all_saccadeFrac = all_blockSaccadeFrac;
         d.all_hevel_des = all_hevel_des;
         d.all_hevel_goodcycles = all_hevel_goodcycles;
         d.all_cvd = all_cvd;
@@ -653,8 +661,8 @@ uiwait(fig);
                     axlines(k).XData = NaN;
                     axlines(k).YData = NaN;
                 end
-                title(axs(2), 'Block NaN (NaN of NaN): ampSEM = NaN | phaseSEM = NaN  | varRes = NaN');
-                title(axs(3), 'Block NaN (NaN of NaN): ampSEM = NaN | phaseSEM = NaN  | varRes = NaN');
+                title(axs(2), {'Block NaN (NaN of NaN): amp = NaN | phase = NaN', ' '});
+                title(axs(3), {'Block NaN (NaN of NaN): amp = NaN | phase = NaN', ' '});
                 % Reset bar plot
                 set(axbar, 'XData', NaN, 'YData', NaN, 'CData',[0 0 0]);
                 delete(axtext);
@@ -810,7 +818,7 @@ uiwait(fig);
         end
     end
 
-    function nout = formatName(sid, econd, etask, scohort, edate)
+    function nout = formatName(sid, econd, etask, edate)
         % Define naming format for all saved files and their respective folders.
         % This will make it easier for our group analysis scripts to recursively 
         % find all the relevant analysis data.
@@ -818,17 +826,14 @@ uiwait(fig);
         % ename - Experiment file name (without the extension)
         % econd - Experiment subject condition (e.g., DR, NR, etc.)
         % etask - Experiment task condition (e.g. std, dim, dmr)
-        % scohort - Subject cohort (optional, default [] or '')
-        if ~exist('scohort','var') || isempty(scohort)
-            scohort = "NONE";
-        end
+        % edate - Experiment recording date (optional, default [] or '')
         if ~exist('edate','var') || isempty(edate)
             edate = "NONE";
         else
             dt = datetime(edate, 'InputFormat', 'dd-MMM-yyyy HH:mm:ss');
             edate = datestr(dt, 'yyyymmdd');
         end
-        nout = sprintf('cond-%s_task-%s_sub-%s_date-%s_analysis', econd, etask, sid, edate);
+        nout = sprintf('sub-%s_date-%s_cond-%s_task-%s_analysis', econd, etask, sid, edate);
     end
 
     function nextButtonPushed()
@@ -844,7 +849,7 @@ uiwait(fig);
         params.exp_taskcond = params.taskcond_options{DropDownTaskCond.ValueIndex};
         params.saccadeThresh = NumericFieldThresh.Value;
         % Define corresponding save folderpath
-        save_foldername = formatName(params.exp_subid, params.exp_subcond, params.exp_taskcond, params.exp_subcohort, params.exp_date);
+        save_foldername = formatName(params.exp_subid, params.exp_subcond, params.exp_taskcond, params.exp_date);
         params.save_folderpath = fullfile(params.save_folderpath, save_foldername);
         % Prompt overwrite if the folderpath already exists
         if isfolder(params.save_folderpath)  % If so, ask to overwrite
