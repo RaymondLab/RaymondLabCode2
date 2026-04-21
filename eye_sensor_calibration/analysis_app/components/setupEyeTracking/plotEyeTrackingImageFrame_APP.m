@@ -43,20 +43,20 @@ if ~exist('plots', 'var')
     yline(app.UIAxesTab1EyeTracking, size(iImg,1)/2, '--g', 'LineWidth',0.3, 'HandleVisibility','off', 'HitTest','off', 'PickableParts','none');
     
     % Corneal Reflection 1
-    plots.plot1 = line(app.UIAxesTab1EyeTracking, cr1Lx, cr1Ly, 'Color','b');
-    plots.plot4 = plot(app.UIAxesTab1EyeTracking, cr1Mx, cr1My, '+b', 'LineWidth',2, 'MarkerSize',10);
+    plots.plot1 = line(app.UIAxesTab1EyeTracking, cr1Lx, cr1Ly, 'Color','b', 'HitTest','off', 'PickableParts','none');
+    plots.plot4 = plot(app.UIAxesTab1EyeTracking, cr1Mx, cr1My, '+b', 'LineWidth',2, 'MarkerSize',10, 'HitTest','off', 'PickableParts','none');
     
     % Corneal Reflection 2
-    plots.plot2 = line(app.UIAxesTab1EyeTracking, cr2Lx, cr2Ly, 'Color','c');
-    plots.plot5 = plot(app.UIAxesTab1EyeTracking, cr2Mx, cr2My, '+c', 'LineWidth',2, 'MarkerSize',10);
+    plots.plot2 = line(app.UIAxesTab1EyeTracking, cr2Lx, cr2Ly, 'Color','c', 'HitTest','off', 'PickableParts','none');
+    plots.plot5 = plot(app.UIAxesTab1EyeTracking, cr2Mx, cr2My, '+c', 'LineWidth',2, 'MarkerSize',10, 'HitTest','off', 'PickableParts','none');
     
     % Pupil
-    plots.plot3 = line(app.UIAxesTab1EyeTracking, pLx, pLy, 'Color','r');
-    plots.plot6 = plot(app.UIAxesTab1EyeTracking, pMx, pMy, '+r', 'LineWidth',2, 'MarkerSize',10);
+    plots.plot3 = line(app.UIAxesTab1EyeTracking, pLx, pLy, 'Color','r', 'HitTest','off', 'PickableParts','none');
+    plots.plot6 = plot(app.UIAxesTab1EyeTracking, pMx, pMy, '+r', 'LineWidth',2, 'MarkerSize',10, 'HitTest','off', 'PickableParts','none');
     
     if exist('iPlotData','var')
-        plots.plot7 = plot(app.UIAxesTab1EyeTracking, iPlotData.epx, iPlotData.epy, '.c');
-        plots.plot8 = plot(app.UIAxesTab1EyeTracking, iPlotData.epx2, iPlotData.epy2, '.y');
+        plots.plot7 = plot(app.UIAxesTab1EyeTracking, iPlotData.epx, iPlotData.epy, '.c', 'HitTest','off', 'PickableParts','none');
+        plots.plot8 = plot(app.UIAxesTab1EyeTracking, iPlotData.epx2, iPlotData.epy2, '.y', 'HitTest','off', 'PickableParts','none');
     end
     hold(app.UIAxesTab1EyeTracking, 'off');
 else

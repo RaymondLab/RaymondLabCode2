@@ -80,7 +80,7 @@ seTopHat = strel('disk', trackParams.topHatDiskRadius);
 imgTopHat = double(imtophat(uint8(img), seTopHat));
 
 % Stage 2: Circular Hough Transform on top-hat image
-[~, circen, cirrad] = CircularHough_Grd(imgTopHat, trackParams.radiiCR, ...
+[accum, circen, cirrad] = CircularHough_Grd(imgTopHat, trackParams.radiiCR, ...
     trackParams.CRthresh, trackParams.CRfilter, 1);
 
 % Remove duplicate detections (30px threshold)
@@ -115,55 +115,16 @@ end
 [validProps, ~] = filterCandidatesCR(props, ...
     trackParams.crMinArea, trackParams.crMaxArea, trackParams.crMaxEccentricity);
 
-% Stage 4: Primary CR selection (soft-scored: prevPri + marker)
-priFound = false; priWC = [NaN NaN]; priRad = NaN;
-if ~isempty(validProps)
-    bestPri = softScoreSelectCR(validProps, trackParams.priMarker, ...
-        trackParams.prevPri, trackParams.wPrev, trackParams.wMarker);
-    if ~isempty(bestPri)
-        priWC = bestPri.WeightedCentroid;
-        priRad = bestPri.Radius;
-        priFound = true;
-        trackParams.prevPri = priWC;
-    end
-end
+% Stage 4: Pair-based CR tracking (cost function)
+[priWC, priRad, priAmp, secWC, secRad, secAmp, ...
+ trackParams.pairState, newFrame.frameStatus, pairAccepted, ...
+ newFrame.pairCost, newFrame.pairDist] = ...
+    trackCRPair(validProps, trackParams.pairState, trackParams.crTrackParams);
 
-% Find priIdx for excluding primary from secondary candidates
-priIdx = 0;
-if priFound
-    for pidx = 1:numel(validProps)
-        if isequal(validProps(pidx).WeightedCentroid, priWC)
-            priIdx = pidx; break;
-        end
-    end
-end
+newFrame.accepted = pairAccepted;
 
-% Missing primary — use previous position
-if ~priFound && ~isnan(trackParams.prevPri(1))
-    priWC = trackParams.prevPri; priRad = NaN;
-end
-
-% Stage 5: Secondary CR selection (cone + soft-scored)
-secWC = [NaN NaN]; secRad = NaN;
-if ~isnan(priWC(1))
-    if priIdx > 0
-        secCandidates = validProps([1:priIdx-1, priIdx+1:end]);
-    else
-        secCandidates = validProps;
-    end
-    [secProp, ~, ~] = selectSecondaryCRfn( ...
-        secCandidates, priWC, trackParams.cameraSide, ...
-        trackParams.secConeHalfAngle, trackParams.secMarker, ...
-        trackParams.prevSec, trackParams.wPrev, trackParams.wMarker);
-    if ~isempty(secProp)
-        secWC = secProp.WeightedCentroid;
-        secRad = secProp.Radius;
-        trackParams.prevSec = secWC;
-    end
-end
-if all(isnan(secWC)) && ~isnan(trackParams.prevSec(1))
-    secWC = trackParams.prevSec; secRad = NaN;
-end
+% Determine if pupil detection should be skipped
+skipPupil = isnan(priWC(1)) && isnan(secWC(1));
 
 % Map primary/secondary to CR1(left)/CR2(right) for output compatibility
 if strcmp(trackParams.cameraSide, 'left')
@@ -176,61 +137,71 @@ else
     crr_out = [secRad; priRad];
 end
 
-%% Remove corneal reflection from pupil image
-if ~all(isnan(crx))
-    totalMask = imgPupil > 204;  % Remove any bright spots
-    InoCR = imgPupil;
+if ~skipPupil
+    %% Remove corneal reflection from pupil image
+    if ~all(isnan(crx))
+        totalMask = imgPupil > 204;  % Remove any bright spots
+        InoCR = imgPupil;
 
-    for i = 1:length(crx) % Remove each CR
-        if isnan(crx(i)) || isnan(cry(i)), continue; end
-        crMaskRadius = crr_out(i);
-        if isnan(crMaskRadius), crMaskRadius = mean(trackParams.radiiCR); end
-        [X, Y] = meshgrid(1:size(imgPupil,2), 1:size(imgPupil,1));
-        maskCurr = ((X-crx(i)).^2 + (Y-cry(i)).^2) < crMaskRadius.^2;
-        totalMask(maskCurr) = true;
+        for i = 1:length(crx) % Remove each CR
+            if isnan(crx(i)) || isnan(cry(i)), continue; end
+            crMaskRadius = crr_out(i);
+            if isnan(crMaskRadius), crMaskRadius = mean(trackParams.radiiCR); end
+            maskCurr = ((trackParams.gridX-crx(i)).^2 + (trackParams.gridY-cry(i)).^2) < crMaskRadius.^2;
+            totalMask(maskCurr) = true;
+        end
+
+        totalMaskDilate = imdilate(totalMask,strel('disk', trackParams.spotMaskRadius));
+        InoCR(totalMaskDilate) = NaN;
+
+        gaussian_smooth_image = @(I, sigma) imfilter(I, fspecial('gaussian',[ceil(2.5*sigma),ceil(2.5*sigma)],sigma), 'symmetric');
+        InoCR = gaussian_smooth_image(InoCR, 3);
+    else
+        InoCR = imgPupil;
     end
 
-    totalMaskDilate = imdilate(totalMask,strel('disk', trackParams.spotMaskRadius));
-    InoCR(totalMaskDilate) = NaN;
+    %% Find guess for pupil center using radial symmetry transform
+    if isempty(trackParams.pupilStart) || any(isnan(trackParams.pupilStart)) || trackParams.pupilStart(1)==0
+        alphaFRST = 0.5;  % Sensitivity to radial symmetry
+        imgRadialPupil = Radial_Sym_Transform(imgPupil, trackParams.radiiPupil, alphaFRST);
+        [pupilY, pupilX] = find(min(imgRadialPupil(:))==imgRadialPupil);
+        trackParams.pupilStart = [pupilX, pupilY];
+    end
 
-    gaussian_smooth_image = @(I, sigma) imfilter(I, fspecial('gaussian',[ceil(2.5*sigma),ceil(2.5*sigma)],sigma), 'symmetric');
-    InoCR = gaussian_smooth_image(InoCR, 3);
+    %% Detect pupil borders using starburst algorithm
+    [epx, epy, ~] = starburst_pupil_contour_detection(InoCR, trackParams.pupilStart(1),...
+        trackParams.pupilStart(2), trackParams.edgeThresh, round(trackParams.radiiPupil), trackParams.minfeatures);
+
+    [~, inliers] = fit_ellipse_ransac(epx(:), epy(:), trackParams.radiiPupil + [-15, 15]);
+
+    epx2 = epx(inliers);
+    epy2 = epy(inliers);
+
+    % Do better fit of resulting points
+    ellipseResult = fit_ellipse(epx2, epy2);
+
+    if isempty(ellipseResult.X0_in)
+        newFrame.pupil_x = nan;
+        newFrame.pupil_y = nan;
+        newFrame.pupil_r1 = nan;
+        newFrame.pupil_r2 = nan;
+        newFrame.pupil_angle = nan;
+    else
+        newFrame.pupil_x = ellipseResult.X0_in;
+        newFrame.pupil_y = ellipseResult.Y0_in;
+        newFrame.pupil_r1 = ellipseResult.a;
+        newFrame.pupil_r2 = ellipseResult.b;
+        newFrame.pupil_angle = -ellipseResult.phi;
+    end
+    points = [epx2(:), epy2(:)];
 else
-    InoCR = imgPupil;
-end
-
-%% Find guess for pupil center using radial symmetry transform
-if isempty(trackParams.pupilStart) || any(isnan(trackParams.pupilStart)) || trackParams.pupilStart(1)==0
-    alphaFRST = 0.5;  % Sensitivity to radial symmetry
-    imgRadialPupil = Radial_Sym_Transform(imgPupil, trackParams.radiiPupil, alphaFRST);
-    [pupilY, pupilX] = find(min(imgRadialPupil(:))==imgRadialPupil);
-    trackParams.pupilStart = [pupilX, pupilY];
-end
-
-%% Detect pupil borders using starburst algorithm
-[epx, epy, ~] = starburst_pupil_contour_detection(InoCR, trackParams.pupilStart(1),...
-    trackParams.pupilStart(2), trackParams.edgeThresh, round(trackParams.radiiPupil), trackParams.minfeatures);
-
-[~, inliers] = fit_ellipse_ransac(epx(:), epy(:), trackParams.radiiPupil + [-15, 15]);
-
-epx2 = epx(inliers);
-epy2 = epy(inliers);
-
-% Do better fit of resulting points
-ellipseResult = fit_ellipse(epx2, epy2);
-
-if isempty(ellipseResult.X0_in)
     newFrame.pupil_x = nan;
     newFrame.pupil_y = nan;
     newFrame.pupil_r1 = nan;
     newFrame.pupil_r2 = nan;
     newFrame.pupil_angle = nan;
-else
-    newFrame.pupil_x = ellipseResult.X0_in;
-    newFrame.pupil_y = ellipseResult.Y0_in;
-    newFrame.pupil_r1 = ellipseResult.a;
-    newFrame.pupil_r2 = ellipseResult.b;
-    newFrame.pupil_angle = -ellipseResult.phi;
+    points = [];
+    epx = []; epx2 = []; epy = []; epy2 = [];
 end
 
 newFrame.cr1_x = crx(1);
@@ -240,14 +211,19 @@ newFrame.cr2_x = crx(2);
 newFrame.cr2_y = cry(2);
 newFrame.cr2_r = crr_out(2);
 
-points = [epx2(:), epy2(:)];
-
 %% Add data to frameData object
 plotData.epx = epx;
 plotData.epx2 = epx2;
 plotData.epy = epy;
 plotData.epy2 = epy2;
 plotData.points = points;
+plotData.imgTopHat = imgTopHat;
+plotData.accum = accum;
+plotData.validProps = validProps;
+plotData.priWC = priWC;
+plotData.secWC = secWC;
+plotData.priRad = priRad;
+plotData.secRad = secRad;
 
 %% Plotting
 if plotOn
@@ -275,63 +251,4 @@ function [validProps, rejectedProps] = filterCandidatesCR(props, minArea, maxAre
     end
     validProps    = props(keep);
     rejectedProps = props(~keep);
-end
-
-function [secProp, inCone, outCone] = selectSecondaryCRfn( ...
-    candidates, priWC, camSide, coneHalfAngle, secMarker, ...
-    prevSec, wPrev, wMarker)
-% Selects secondary CR using cone constraint from primary + soft scoring.
-    secProp = []; inCone = []; outCone = [];
-    if isempty(candidates) || any(isnan(priWC)), return; end
-
-    if strcmp(camSide, 'left')
-        coneDir = [1 0];
-    else
-        coneDir = [-1 0];
-    end
-    cosThresh = cosd(coneHalfAngle);
-    isInCone  = false(numel(candidates), 1);
-
-    for k = 1:numel(candidates)
-        wc  = candidates(k).WeightedCentroid;
-        vec = [wc(1) - priWC(1), wc(2) - priWC(2)];
-        mag = sqrt(vec(1)^2 + vec(2)^2);
-        if mag < eps, continue; end
-        cosAngle = dot(vec, coneDir) / mag;
-        if cosAngle >= cosThresh
-            isInCone(k) = true;
-        end
-    end
-
-    inCone  = candidates(isInCone);
-    outCone = candidates(~isInCone);
-    if isempty(inCone), return; end
-
-    % Soft-scored selection among in-cone candidates
-    secProp = softScoreSelectCR(inCone, secMarker, prevSec, wPrev, wMarker);
-end
-
-function bestProp = softScoreSelectCR(candidates, marker, prev, wPrev, wMarker)
-% Selects the best candidate using a weighted score of distance to the
-% previous position (temporal continuity) and the fixed marker (spatial
-% prior). When no previous position exists, uses marker distance only.
-    bestProp = [];
-    if isempty(candidates), return; end
-
-    scores = zeros(numel(candidates), 1);
-    hasPrev = ~any(isnan(prev));
-
-    for k = 1:numel(candidates)
-        wc = candidates(k).WeightedCentroid;
-        distToMarker = sqrt((wc(1)-marker(1))^2 + (wc(2)-marker(2))^2);
-        if hasPrev
-            distToPrev = sqrt((wc(1)-prev(1))^2 + (wc(2)-prev(2))^2);
-            scores(k) = wPrev * distToPrev + wMarker * distToMarker;
-        else
-            scores(k) = distToMarker;
-        end
-    end
-
-    [~, bestIdx] = min(scores);
-    bestProp = candidates(bestIdx);
 end

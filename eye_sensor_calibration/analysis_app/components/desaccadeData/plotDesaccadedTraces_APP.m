@@ -98,10 +98,10 @@ if ~updateOnly
     timeLen = mag1.time_aligned(end);
     
     % Magnet 1 Threshold
-    plot(app.UIAxesMag1Threshold, mag1.time_aligned, mag1VelThreshSac, 'Color',sacColor, 'DisplayName','Removed saccades');
+    plot(app.UIAxesMag1Threshold, mag1.time_aligned, mag1VelThreshSac, 'Color',sacColor, 'DisplayName','Removed saccades', 'HitTest','off', 'PickableParts','none');
     hold(app.UIAxesMag1Threshold, 'on');
-    plot(app.UIAxesMag1Threshold, mag1.time_aligned, mag1VelThresh, 'Color',sigColor, 'DisplayName','Magnet 1');
-    plot(app.UIAxesMag1Threshold, mag1.time_aligned, mag1Thresh, 'Color',altColor, 'LineStyle',':', 'LineWidth',2, 'DisplayName','Saccade Threshold');
+    plot(app.UIAxesMag1Threshold, mag1.time_aligned, mag1VelThresh, 'Color',sigColor, 'DisplayName','Magnet 1', 'HitTest','off', 'PickableParts','none');
+    plot(app.UIAxesMag1Threshold, mag1.time_aligned, mag1Thresh, 'Color',altColor, 'LineStyle',':', 'LineWidth',2, 'DisplayName','Saccade Threshold', 'HitTest','off', 'PickableParts','none');
     xlim(app.UIAxesMag1Threshold, [0, timeLen]);
     try
         ylim(app.UIAxesMag1Threshold, [0, mag1ThreshYLim]);
@@ -113,9 +113,9 @@ if ~updateOnly
     hold(app.UIAxesMag1Threshold, 'off');
     
     % Magnet 1 Position
-    plot(app.UIAxesMag1Position, mag1.time_aligned, mag1.pos_data_aligned, 'Color',sacColor, 'DisplayName','Removed saccades');
+    plot(app.UIAxesMag1Position, mag1.time_aligned, mag1.pos_data_aligned, 'Color',sacColor, 'DisplayName','Removed saccades', 'HitTest','off', 'PickableParts','none');
     hold(app.UIAxesMag1Position, 'on');
-    plot(app.UIAxesMag1Position, mag1.time_aligned, mag1Pos, 'Color',sigColor, 'DisplayName','Magnet 1 Position');
+    plot(app.UIAxesMag1Position, mag1.time_aligned, mag1Pos, 'Color',sigColor, 'DisplayName','Magnet 1 Position', 'HitTest','off', 'PickableParts','none');
     xlim(app.UIAxesMag1Position, [0, timeLen]);
     try
         ylim(app.UIAxesMag1Position, [min(mag1.pos_data_aligned), max(mag1.pos_data_aligned)]);
@@ -126,10 +126,10 @@ if ~updateOnly
     hold(app.UIAxesMag1Position, 'off');
     
     % Magnet 1 Velocity  
-    plot(app.UIAxesMag1Velocity, mag1.time_aligned, mag1.vel_data_aligned, 'Color',sacColor, 'DisplayName','Removed saccades');
+    plot(app.UIAxesMag1Velocity, mag1.time_aligned, mag1.vel_data_aligned, 'Color',sacColor, 'DisplayName','Removed saccades', 'HitTest','off', 'PickableParts','none');
     hold(app.UIAxesMag1Velocity, 'on');
-    plot(app.UIAxesMag1Velocity, mag1.time_aligned, mag1Vel, 'Color',sigColor, 'DisplayName','Magnet 1 Velocity');
-    plot(app.UIAxesMag1Velocity, mag1.time_aligned, mag1.vel_fit, 'Color',altColor, 'LineWidth',2, 'DisplayName','Magnet 1 Velocity Fit');
+    plot(app.UIAxesMag1Velocity, mag1.time_aligned, mag1Vel, 'Color',sigColor, 'DisplayName','Magnet 1 Velocity', 'HitTest','off', 'PickableParts','none');
+    plot(app.UIAxesMag1Velocity, mag1.time_aligned, mag1.vel_fit, 'Color',altColor, 'LineWidth',2, 'DisplayName','Magnet 1 Velocity Fit', 'HitTest','off', 'PickableParts','none');
     xlim(app.UIAxesMag1Velocity, [0, timeLen]);
     try
         ylim(app.UIAxesMag1Velocity, [-mag1VelYLim, mag1VelYLim]);
@@ -155,10 +155,10 @@ if ~updateOnly
     cla(app.UIAxesMag2Velocity);
 
     % Magnet 2 Threshold
-    plot(app.UIAxesMag2Threshold, mag2.time_aligned, mag2VelThreshSac, 'Color',sacColor, 'DisplayName','Removed saccades');
+    plot(app.UIAxesMag2Threshold, mag2.time_aligned, mag2VelThreshSac, 'Color',sacColor, 'DisplayName','Removed saccades', 'HitTest','off', 'PickableParts','none');
     hold(app.UIAxesMag2Threshold, 'on');
-    plot(app.UIAxesMag2Threshold, mag2.time_aligned, mag2VelThresh, 'Color',sigColor, 'DisplayName','Magnet 2');
-    plot(app.UIAxesMag2Threshold, mag2.time_aligned, mag2Thresh, 'Color',altColor, 'LineStyle',':', 'LineWidth',2, 'DisplayName','Saccade Threshold');
+    plot(app.UIAxesMag2Threshold, mag2.time_aligned, mag2VelThresh, 'Color',sigColor, 'DisplayName','Magnet 2', 'HitTest','off', 'PickableParts','none');
+    plot(app.UIAxesMag2Threshold, mag2.time_aligned, mag2Thresh, 'Color',altColor, 'LineStyle',':', 'LineWidth',2, 'DisplayName','Saccade Threshold', 'HitTest','off', 'PickableParts','none');
     xlim(app.UIAxesMag2Threshold, [0, timeLen]);
     try
         ylim(app.UIAxesMag2Threshold, [0, mag2ThreshYLim]);
@@ -170,9 +170,9 @@ if ~updateOnly
     hold(app.UIAxesMag2Threshold, 'off');
     
     % Magnet 2 Position
-    plot(app.UIAxesMag2Position, mag2.time_aligned, mag2.pos_data_aligned, 'Color',sacColor, 'DisplayName','Removed saccades');
+    plot(app.UIAxesMag2Position, mag2.time_aligned, mag2.pos_data_aligned, 'Color',sacColor, 'DisplayName','Removed saccades', 'HitTest','off', 'PickableParts','none');
     hold(app.UIAxesMag2Position, 'on');
-    plot(app.UIAxesMag2Position, mag2.time_aligned, mag2Pos, 'Color',sigColor, 'DisplayName','Magnet 2 Position');
+    plot(app.UIAxesMag2Position, mag2.time_aligned, mag2Pos, 'Color',sigColor, 'DisplayName','Magnet 2 Position', 'HitTest','off', 'PickableParts','none');
     xlim(app.UIAxesMag2Position, [0, timeLen]);
     try
         ylim(app.UIAxesMag2Position, [min(mag2.pos_data_aligned), max(mag2.pos_data_aligned)]);
@@ -183,10 +183,10 @@ if ~updateOnly
     hold(app.UIAxesMag2Position, 'off');
     
     % Magnet 2 Velocity
-    plot(app.UIAxesMag2Velocity, mag2.time_aligned, mag2.vel_data_aligned, 'Color',sacColor, 'DisplayName','Removed saccades');
+    plot(app.UIAxesMag2Velocity, mag2.time_aligned, mag2.vel_data_aligned, 'Color',sacColor, 'DisplayName','Removed saccades', 'HitTest','off', 'PickableParts','none');
     hold(app.UIAxesMag2Velocity, 'on');
-    plot(app.UIAxesMag2Velocity, mag2.time_aligned, mag2Vel, 'Color',sigColor, 'DisplayName','Magnet 2 Velocity');
-    plot(app.UIAxesMag2Velocity, mag2.time_aligned, mag2.vel_fit, 'Color',altColor, 'LineWidth',2, 'DisplayName','Magnet 2 Velocity Fit');
+    plot(app.UIAxesMag2Velocity, mag2.time_aligned, mag2Vel, 'Color',sigColor, 'DisplayName','Magnet 2 Velocity', 'HitTest','off', 'PickableParts','none');
+    plot(app.UIAxesMag2Velocity, mag2.time_aligned, mag2.vel_fit, 'Color',altColor, 'LineWidth',2, 'DisplayName','Magnet 2 Velocity Fit', 'HitTest','off', 'PickableParts','none');
     xlim(app.UIAxesMag2Velocity, [0, timeLen]);
     ylim(app.UIAxesMag2Velocity, [-mag2VelYLim, mag2VelYLim]);
     ylabel(app.UIAxesMag2Velocity, 'Velocity (V/s)');
@@ -208,10 +208,10 @@ if ~updateOnly
     cla(app.UIAxesVidVelocity);
 
     % Video Threshold
-    plot(app.UIAxesVidThreshold, vid.time_upsampled_aligned, vidVelThreshSac, 'Color',sacColor, 'DisplayName','Removed saccades');
+    plot(app.UIAxesVidThreshold, vid.time_upsampled_aligned, vidVelThreshSac, 'Color',sacColor, 'DisplayName','Removed saccades', 'HitTest','off', 'PickableParts','none');
     hold(app.UIAxesVidThreshold, 'on');
-    plot(app.UIAxesVidThreshold, vid.time_upsampled_aligned, vidVelThresh, 'Color',sigColor, 'DisplayName','Video Squared Velocity');
-    plot(app.UIAxesVidThreshold, vid.time_upsampled_aligned, vidThresh, 'Color',altColor, 'LineStyle',':', 'LineWidth',2, 'DisplayName','Saccade Threshold');
+    plot(app.UIAxesVidThreshold, vid.time_upsampled_aligned, vidVelThresh, 'Color',sigColor, 'DisplayName','Video Squared Velocity', 'HitTest','off', 'PickableParts','none');
+    plot(app.UIAxesVidThreshold, vid.time_upsampled_aligned, vidThresh, 'Color',altColor, 'LineStyle',':', 'LineWidth',2, 'DisplayName','Saccade Threshold', 'HitTest','off', 'PickableParts','none');
     xlim(app.UIAxesVidThreshold, [0, timeLen]);
     ylim(app.UIAxesVidThreshold, [0, vidThreshYLim]);
     ylabel(app.UIAxesVidThreshold, threshYLabel);
@@ -219,19 +219,19 @@ if ~updateOnly
     hold(app.UIAxesVidThreshold, 'off');
     
     % Video Position
-    plot(app.UIAxesVidPosition, vid.time_upsampled_aligned, vid.pos_data_upsampled_aligned, 'Color',sacColor, 'DisplayName','Removed saccades');
+    plot(app.UIAxesVidPosition, vid.time_upsampled_aligned, vid.pos_data_upsampled_aligned, 'Color',sacColor, 'DisplayName','Removed saccades', 'HitTest','off', 'PickableParts','none');
     hold(app.UIAxesVidPosition, 'on');
-    plot(app.UIAxesVidPosition, vid.time_upsampled_aligned, vidPos, 'Color',sigColor, 'DisplayName','Video Position');
+    plot(app.UIAxesVidPosition, vid.time_upsampled_aligned, vidPos, 'Color',sigColor, 'DisplayName','Video Position', 'HitTest','off', 'PickableParts','none');
     xlim(app.UIAxesVidPosition, [0, timeLen]);
     ylim(app.UIAxesVidPosition, [min(vid.pos_data_upsampled_aligned), max(vid.pos_data_upsampled_aligned)]);
     ylabel(app.UIAxesVidPosition, 'Position (deg)');
     hold(app.UIAxesVidPosition, 'off');
     
     % Video Velocity
-    plot(app.UIAxesVidVelocity, vid.time_upsampled_aligned, vid.vel_data_upsampled_aligned, 'Color',sacColor, 'DisplayName','Removed saccades');
+    plot(app.UIAxesVidVelocity, vid.time_upsampled_aligned, vid.vel_data_upsampled_aligned, 'Color',sacColor, 'DisplayName','Removed saccades', 'HitTest','off', 'PickableParts','none');
     hold(app.UIAxesVidVelocity, 'on');
-    plot(app.UIAxesVidVelocity, vid.time_upsampled_aligned, vidVel, 'Color',sigColor, 'DisplayName','Video Velocity');
-    plot(app.UIAxesVidVelocity, vid.time_upsampled_aligned, vid.vel_fit, 'Color',altColor, 'LineWidth',2, 'DisplayName','Video Velocity Fit');
+    plot(app.UIAxesVidVelocity, vid.time_upsampled_aligned, vidVel, 'Color',sigColor, 'DisplayName','Video Velocity', 'HitTest','off', 'PickableParts','none');
+    plot(app.UIAxesVidVelocity, vid.time_upsampled_aligned, vid.vel_fit, 'Color',altColor, 'LineWidth',2, 'DisplayName','Video Velocity Fit', 'HitTest','off', 'PickableParts','none');
     xlim(app.UIAxesVidVelocity, [0, timeLen]);
     ylim(app.UIAxesVidVelocity, [-vidVelYLim, vidVelYLim]);
     ylabel(app.UIAxesVidVelocity, 'Velocity (deg/s)');

@@ -50,7 +50,7 @@ mag2.vel_lin_all = measureLinearity(mag2.vel_data_aligned_scaledInVel(~mag2.sacc
 % Measure linearity of non-saccades, split up into chunks
 mag1_pos_zeromean = mag1_pos;
 vid1_pos_zeromean = vid1_pos;
-for i = 1:length(mag1GoodStarts)
+for i = 1:min(length(mag1GoodStarts), length(mag1GoodStops))
     chunk = mag1GoodStarts(i):mag1GoodStops(i);
     magposchunk = mag1.pos_data_aligned_scaledInVel(chunk);
     vidposchunk = vid.pos_data_upsampled_aligned(chunk);
@@ -64,7 +64,7 @@ end
 
 mag2_pos_zeromean = mag2_pos;
 vid2_pos_zeromean = vid2_pos;
-for i = 1:length(mag2GoodStarts)
+for i = 1:min(length(mag2GoodStarts), length(mag2GoodStops))
     chunk = mag2GoodStarts(i):mag2GoodStops(i);
     magposchunk = mag2.pos_data_aligned_scaledInVel(chunk);
     vidposchunk = vid.pos_data_upsampled_aligned(chunk);
@@ -105,7 +105,7 @@ hold(ax8, 'on');
 allData = logical(ones(length(~mag1.saccades_all), 1));
 
 rsqs1 = [];
-for i = 1:length(mag1GoodStarts)
+for i = 1:min(length(mag1GoodStarts), length(mag1GoodStops))
     chunk = mag1GoodStarts(i)+1:mag1GoodStops(i);
     scatter(ax1, mag1_pos_zeromean(chunk), vid1_pos_zeromean(chunk), 50, c1(i,:), '.', 'HandleVisibility','off');
     scatter(ax3, mag1_pos(chunk), vid1_pos(chunk), 4, c1(i,:), '.', 'HandleVisibility','off');
@@ -119,7 +119,7 @@ rsq1_med = median(rsqs1);
 slopes = [];
 xylimit = max(max(abs(mag1_pos_zeromean)), max(abs(vid1_pos_zeromean)));
 coefficients = polyfit(mag1_pos_zeromean(~mag1.saccades_all), vid1_pos_zeromean(~mag1.saccades_all), 1);
-for i = 1:length(mag1GoodStarts)
+for i = 1:min(length(mag1GoodStarts), length(mag1GoodStops))
     chunk = mag1GoodStarts(i)+1:mag1GoodStops(i);
     coeffs = polyfit(mag1_pos_zeromean(chunk), vid1_pos_zeromean(chunk), 1);
     slopes(end+1) = coeffs(1) - coefficients(1);
@@ -199,7 +199,7 @@ hold(ax10, 'on');
 allData = logical(ones(length(~mag2.saccades_all), 1));
 
 rsqs2 = [];
-for i = 1:length(mag2GoodStarts)
+for i = 1:min(length(mag2GoodStarts), length(mag2GoodStops))
     chunk = mag2GoodStarts(i)+1:mag2GoodStops(i);
     scatter(ax4, mag2_pos_zeromean(chunk), vid2_pos_zeromean(chunk), 50, c2(i,:), '.', 'HandleVisibility','off');
     scatter(ax6, mag2_pos(chunk), vid2_pos(chunk), 4, c2(i,:), '.', 'HandleVisibility','off');
@@ -213,7 +213,7 @@ rsq2_med = median(rsqs2);
 slopes = [];
 xylimit = max(max(abs(mag2_pos_zeromean)), max(abs(vid2_pos_zeromean)));
 coefficients = polyfit(mag2_pos_zeromean(~mag2.saccades_all), vid2_pos_zeromean(~mag2.saccades_all), 1);
-for i = 1:length(mag2GoodStarts)
+for i = 1:min(length(mag2GoodStarts), length(mag2GoodStops))
     chunk = mag2GoodStarts(i)+1:mag2GoodStops(i);
     coeffs = polyfit(mag2_pos_zeromean(chunk), vid2_pos_zeromean(chunk), 1);
     slopes(end+1) = coeffs(1) - coefficients(1);

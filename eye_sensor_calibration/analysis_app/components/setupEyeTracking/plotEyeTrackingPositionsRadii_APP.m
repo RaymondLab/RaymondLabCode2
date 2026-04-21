@@ -21,7 +21,7 @@ if ~exist('plots', 'var')
     % Pupil position
     plots.plot1 = plot(app.UIAxesTab1PupilPos, ...
                        [frameData.pupil_x] - nanmean([frameData.pupil_x]), ...
-                       'r-');
+                       'r-', 'HitTest','off', 'PickableParts','none');
     ylabel(app.UIAxesTab1PupilPos, 'Pupil Position');
     yticks(app.UIAxesTab1PupilPos, -15:5:15);
     grid(app.UIAxesTab1PupilPos, 'on');
@@ -32,11 +32,11 @@ if ~exist('plots', 'var')
     % CR1 and CR2 positions
     plots.plot2 = plot(app.UIAxesTab1CRPos, ...
                        [frameData.cr1_x] - nanmean([frameData.cr1_x]), ...
-                       'b-');
+                       'b-', 'HitTest','off', 'PickableParts','none');
     hold(app.UIAxesTab1CRPos, 'on');
     plots.plot3 = plot(app.UIAxesTab1CRPos, ...
                        [frameData.cr2_x] - nanmean([frameData.cr2_x]), ...
-                       'c-');
+                       'c-', 'HitTest','off', 'PickableParts','none');
     ylabel(app.UIAxesTab1CRPos, 'CR Position');
     yticks(app.UIAxesTab1CRPos, -15:5:15);
     grid(app.UIAxesTab1CRPos, 'on');
@@ -46,10 +46,10 @@ if ~exist('plots', 'var')
     hold(app.UIAxesTab1CRPos, 'off');
     
     % Pupil, CR1, and CR2 radii
-    plots.plot4 = plot(app.UIAxesTab1Radii, pupilRadii, 'r-');
+    plots.plot4 = plot(app.UIAxesTab1Radii, pupilRadii, 'r-', 'HitTest','off', 'PickableParts','none');
     hold(app.UIAxesTab1Radii, 'on');
-    plots.plot5 = plot(app.UIAxesTab1Radii, [frameData.cr1_r],'b-');
-    plots.plot6 = plot(app.UIAxesTab1Radii, [frameData.cr2_r],'c-');
+    plots.plot5 = plot(app.UIAxesTab1Radii, [frameData.cr1_r],'b-', 'HitTest','off', 'PickableParts','none');
+    plots.plot6 = plot(app.UIAxesTab1Radii, [frameData.cr2_r],'c-', 'HitTest','off', 'PickableParts','none');
     ylabel(app.UIAxesTab1Radii, 'Radii');
     xlim(app.UIAxesTab1Radii, [0,timeLength]);
     ylim(app.UIAxesTab1Radii, [minr,maxr]);
