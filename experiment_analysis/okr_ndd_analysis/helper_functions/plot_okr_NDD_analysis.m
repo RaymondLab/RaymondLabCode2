@@ -76,8 +76,12 @@ for ii = 1:ntimepoints
         ydata = repmat([ylimits(1)+0.25*abs(ylimits(1)); ylimits(2)-0.25*abs(ylimits(2)); NaN], 1, length(xpts));
         plot(xdata(:), ydata(:), 'Color','m', 'LineWidth',0.2, 'DisplayName','Computed Cycle Segments', 'HitTest','off', 'PickableParts','none');
         hold off; 
-        title(sprintf('Block %d: %s (Gain = %.3f | Good Cycles = %d of %d | Saccade Fraction = %.3f)', ...
-            br_ii(jj).blockNumber, br_ii(jj).blockType, br_ii(jj).hevel_rel_gain, br_ii(jj).nGoodCycles, br_ii(jj).nTotalCycles, br_ii(jj).saccadeFrac));
+        bTxt = sprintf('Block %d: %s ', br_ii(jj).blockNumber, br_ii(jj).blockType);
+        fTxt = sprintf('Gain = %.3f | Good Cycles = %d of %d | Saccade Fraction = %.3f', ...
+            br_ii(jj).hevel_rel_gain, br_ii(jj).nGoodCycles, br_ii(jj).nTotalCycles, br_ii(jj).saccadeFrac);
+        mTxt = sprintf(' | amplitudeCV = %.4f | residualMAD = %.4f | etaSquared = %.4f', ...
+            br_ii(jj).amplitudeCV, br_ii(jj).residualMAD, br_ii(jj).etaSquared);
+        title(sprintf('%s (%s)', bTxt, [fTxt mTxt]));
         xlim([btimes(1), btimes(end)]);
         ylim(ylimits);
         ylabel('Velocity (deg/s)');

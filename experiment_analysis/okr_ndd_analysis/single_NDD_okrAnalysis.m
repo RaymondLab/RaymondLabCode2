@@ -49,7 +49,7 @@ params.fifSettings.minIMF = 4;
 
 % Saccade removal parameters
 params.saccadeMethod    = 'MAD';  % Saccade detection method (Default 'MAD' or 'SVT')
-params.saccadeThresh    = 7;   % Saccade detection threshold (Default 7 or 1000)
+params.saccadeThresh    = 6;   % Saccade detection threshold (Default 7 or 1000)
 params.saccadeLRPad     = 0.05;   % Padding in seconds to expand saccade candidates (Default 0.05)
 params.minGoodChunk_len = 200;     % Minimum allowed gap between saccades (Default 200)
 
@@ -59,7 +59,7 @@ params.cal_filepath    = '';  % Calibration file (.mat) path
 params.save_folderpath = '';  % Target save folder path
 
 % LPC x saccade-threshold comparison sweep (opt-in: needs >=2 values in BOTH)
-params.lowpass_cutoffs = [7, 15, 30];   % e.g. [9, 15, 30]; empty or scalar = no comparison
+params.lowpass_cutoffs = [9, 15, 30];   % e.g. [9, 15, 30]; empty or scalar = no comparison
 params.saccade_threshs = [2.5, 5, 9];   % e.g. [2.5, 5, 9];  empty or scalar = no comparison
 params.ntColor = [1 0 0];      % NT peak marker color (robustness tabs)
 params.tnColor = [0 0 1];      % TN peak marker color (robustness tabs)
@@ -158,6 +158,7 @@ clear blocks timepoints diffdata;
 fprintf('\nGenerating plots of analysis results:\n');
 fignum = plot_standard_subplots(analysis, params.save_folderpath);
 fignum = plot_okr_NDD_analysis(analysis, params.save_folderpath, fignum);
+close all;
 
 % Opt-in lowpass-cutoff x saccade-threshold comparison sweep
 if numel(params.lowpass_cutoffs) >= 2 && numel(params.saccade_threshs) >= 2
@@ -166,6 +167,7 @@ if numel(params.lowpass_cutoffs) >= 2 && numel(params.saccade_threshs) >= 2
     fignum = plot_lpcgcComparison(analysis, T_lpcgc, D_lpcgc, params.save_folderpath, fignum);
     clear T_lpcgc D_lpcgc;
 end
+close all;
 
 temp_analysis = analysis;
 if ~isequal(params.save_folderpath, 0) & isfield(params, 'save_filepath')
