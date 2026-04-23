@@ -11,7 +11,7 @@ addpath(genpath(params.script_folderpath));
 % General experiment parameters
 params.exp_stimfreq  = 1.0;    % Training stimulus frequency (Default 1.0)
 params.exp_traintype = 'OKR';  % Training type (Default 'OKR')
-% 
+
 % Define timepoint blocks and corresponding group ids
 % Do not adjust this for now as the group_NDD_okrAnalysis is not set up for this
 params.timepoint_ids    = [2, 3, 4, 14, 15, 16, 59, 60, 61];  % Default [2, 3, 4, 59, 60, 61]
@@ -37,8 +37,8 @@ params.customScaleChs = [];
 % Data preprocessing parameters
 params.filtering_options = {'Butter', 'FIF'};
 params.transientThresh   = 1;   % Transient "spike" removal threshold (Default 1)
-params.lowpassCutoff     = 15;  % Lowpass filter cutoff frequency (Default 11)
-params.filterWindow      = 11;  % SG filter window size (Default 30)
+params.lowpassCutoff     = 15;  % Lowpass filter cutoff frequency (Default 15)
+params.filterWindow      = 30;  % SG filter window size (Default 30)
 
 % FIF-specific settings
 params.fifSettings.delta = 0.1;  
@@ -49,7 +49,7 @@ params.fifSettings.minIMF = 4;
 
 % Saccade removal parameters
 params.saccadeMethod    = 'MAD';  % Saccade detection method (Default 'MAD' or 'SVT')
-params.saccadeThresh    = 6;   % Saccade detection threshold (Default 7 or 1000)
+params.saccadeThresh    = 6;   % Saccade detection threshold (Default 6 or 1000)
 params.saccadeLRPad     = 0.05;   % Padding in seconds to expand saccade candidates (Default 0.05)
 params.minGoodChunk_len = 200;     % Minimum allowed gap between saccades (Default 200)
 
@@ -59,7 +59,7 @@ params.cal_filepath    = '';  % Calibration file (.mat) path
 params.save_folderpath = '';  % Target save folder path
 
 % LPC x saccade-threshold comparison sweep (opt-in: needs >=2 values in BOTH)
-params.lowpass_cutoffs = [9, 15, 30];   % e.g. [9, 15, 30]; empty or scalar = no comparison
+params.lowpass_cutoffs = [15, 30, 100];   % e.g. [15, 30, 100]; empty or scalar = no comparison
 params.saccade_threshs = [2.5, 5, 9];   % e.g. [2.5, 5, 9];  empty or scalar = no comparison
 params.ntColor = [1 0 0];      % NT peak marker color (robustness tabs)
 params.tnColor = [0 0 1];      % TN peak marker color (robustness tabs)
