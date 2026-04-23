@@ -833,7 +833,7 @@ uiwait(fig);
             dt = datetime(edate, 'InputFormat', 'dd-MMM-yyyy HH:mm:ss');
             edate = datestr(dt, 'yyyymmdd');
         end
-        nout = sprintf('sub-%s_date-%s_cond-%s_task-%s_analysis', econd, etask, sid, edate);
+        nout = sprintf('sub-%s_cond-%s_task-%s_date-%s_analysis', sid, econd, etask, edate);
     end
 
     function nextButtonPushed()
