@@ -219,6 +219,8 @@ function figure_number = plot_lpcgcComparison(analysis, T, D, savepath, figure_n
         savefig(fig, fullfile(savepath, filename));
         fprintf('    Saved: %s\n', filename);
     end
+
+    close(fig);
 end
 
 
