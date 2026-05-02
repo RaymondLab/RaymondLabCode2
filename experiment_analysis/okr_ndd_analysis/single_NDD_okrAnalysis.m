@@ -60,7 +60,7 @@ params.save_folderpath = '';  % Target save folder path
 
 % LPC x saccade-threshold comparison sweep (opt-in: needs >=2 values in BOTH)
 params.lowpass_cutoffs = [15, 30, 100];   % e.g. [15, 30, 100]; empty or scalar = no comparison
-params.saccade_threshs = [2.5, 5, 9];   % e.g. [2.5, 5, 9];  empty or scalar = no comparison
+params.saccade_threshs = [3, 5, 9];   % e.g. [3, 5, 9];  empty or scalar = no comparison
 params.ntColor = [1 0 0];      % NT peak marker color (robustness tabs)
 params.tnColor = [0 0 1];      % TN peak marker color (robustness tabs)
 
@@ -174,6 +174,19 @@ if ~isequal(params.save_folderpath, 0) & isfield(params, 'save_filepath')
     fprintf('    Saving analysis parameters to: %s\n', params.save_filepath); 
     clear analysis;
     analysis.params = temp_analysis.params;
+    % Filter block fields to save for this analysis
+    keepfields = {'blockType', 'blockNumber', 'stimType', 'timePoint', ...
+        'saccadeFrac', 'nGoodCycles', 'nTotalCycles', 'startTime', 'endTime', ...
+        'rsquare', 'variance', 'amplitudeCV', 'residualMAD', 'etaSquared', ...
+        'good_cyclefit', 'good_cyclemat', 'good_cyclemean', 'stimvel_cyclemean', ...
+        'hevel_good_cyclecm'};
+    for i = 1:length(temp_analysis.blocks)
+        temp_analysis.blocks(i).good_cyclemean = temp_analysis.blocks(i).hevel_good_cyclecvd.cycleMean;
+        temp_analysis.blocks(i).stimvel_cyclemean = temp_analysis.blocks(i).stimvel_cyclecvd.cycleMean;
+    end
+    fn = fieldnames(temp_analysis.blocks);
+    fnmask = ismember(fn, keepfields);
+    analysis.blocks = rmfield(temp_analysis.blocks, fn(~fnmask));
     save(params.save_filepath, 'analysis');
     clear analysis;
     analysis = temp_analysis;

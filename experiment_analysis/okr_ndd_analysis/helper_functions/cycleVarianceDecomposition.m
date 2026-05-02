@@ -340,6 +340,15 @@ function results = cycleVarianceDecomposition(cycles, varargin)
     residualsAll    = NaN(nCycles, cycleLength);
     fitRsquaredAll  = NaN(nCycles, 1);
 
+    % Per-half sinusoidal-fit setup (additive)
+    halfLength = floor(cycleLength / 2);
+    idxH1 = 1:halfLength;
+    idxH2 = (halfLength + 1):(2 * halfLength);
+    X_h1  = X(idxH1, :);
+    X_h2  = X(idxH2, :);
+    fitCoeffsHalfAll   = NaN(nCycles, 3, 2);
+    fitRsquaredHalfAll = NaN(nCycles, 2);
+
     for k = 1:nCycles
         validK = validMask(k, :)';                                % [cycleLength x 1] logical
         nValidK = sum(validK);
@@ -369,10 +378,38 @@ function results = cycleVarianceDecomposition(cycles, varargin)
         else
             fitRsquaredAll(k) = NaN;
         end
+
+        % Per-half sinusoidal fits (additive; do not modify full-cycle outputs)
+        for hh = 1:2
+            if hh == 1
+                idxH = idxH1;  Xh = X_h1;
+            else
+                idxH = idxH2;  Xh = X_h2;
+            end
+            validKH = validMask(k, idxH)';
+            if sum(validKH) < 3
+                continue;
+            end
+            Xkh = Xh(validKH, :);
+            ykh = cycles(k, idxH(validKH))';
+            beta_kh = Xkh \ ykh;
+            fitCoeffsHalfAll(k, :, hh) = beta_kh';
+
+            ssResH = sum((ykh - Xkh * beta_kh).^2);
+            ssTotH = sum((ykh - mean(ykh)).^2);
+            if ssTotH > 0
+                fitRsquaredHalfAll(k, hh) = 1 - ssResH / ssTotH;
+            end
+        end
     end
 
     fitAmplitudeAll = sqrt(fitCoeffsAll(:,1).^2 + fitCoeffsAll(:,2).^2);
     fitPhaseAll_deg = atan2d(fitCoeffsAll(:,2), fitCoeffsAll(:,1));
+
+    fitAmplitudeHalfAll = reshape( ...
+        sqrt(fitCoeffsHalfAll(:,1,:).^2 + fitCoeffsHalfAll(:,2,:).^2), nCycles, 2);
+    fitPhaseHalfAll_deg = reshape( ...
+        atan2d(fitCoeffsHalfAll(:,2,:), fitCoeffsHalfAll(:,1,:)), nCycles, 2);
 
     %% Coefficient statistics across included cycles
     inclCoeffs = fitCoeffsAll(cycleIncluded, :);                   % [nIncl x 3]
@@ -422,6 +459,40 @@ function results = cycleVarianceDecomposition(cycles, varargin)
         amplitudeCV = semAmp / ampMean;
     else
         amplitudeCV = NaN;
+    end
+
+    %% Per-half coefficient aggregation and amplitude/phase (delta method)
+    amplitudeMeanHalf   = NaN(1, 2);
+    amplitudeSEMHalf    = NaN(1, 2);
+    phaseMeanHalf_deg   = NaN(1, 2);
+    phaseSEMHalf_deg    = NaN(1, 2);
+    fitRsquaredHalfMean = NaN(1, 2);
+
+    for hh = 1:2
+        inclCoeffsH = fitCoeffsHalfAll(cycleIncluded, :, hh);
+        nValidH     = sum(~isnan(inclCoeffsH(:, 1)));
+        if nValidH >= minValidCycles
+            coeffMeanH = mean(inclCoeffsH, 1, 'omitnan');
+            covH       = nancov(inclCoeffsH);
+            Ah   = coeffMeanH(1);
+            Bh   = coeffMeanH(2);
+            ampH = sqrt(Ah^2 + Bh^2);
+
+            amplitudeMeanHalf(hh) = ampH;
+            phaseMeanHalf_deg(hh) = atan2d(Bh, Ah);
+
+            if ampH > 0
+                covAB_h  = covH(1:2, 1:2);
+                gAmp_h   = [Ah; Bh] / ampH;
+                varAmp_h = gAmp_h' * (covAB_h / nValidH) * gAmp_h;
+                amplitudeSEMHalf(hh) = sqrt(max(varAmp_h, 0));
+
+                gPhi_h   = [-Bh; Ah] / ampH^2;
+                varPhi_h = gPhi_h' * (covAB_h / nValidH) * gPhi_h;
+                phaseSEMHalf_deg(hh) = rad2deg(sqrt(max(varPhi_h, 0)));
+            end
+        end
+        fitRsquaredHalfMean(hh) = mean(fitRsquaredHalfAll(cycleIncluded, hh), 'omitnan');
     end
 
     %% Variance decomposition (pointwise, using included cycles only)
@@ -613,6 +684,17 @@ function results = cycleVarianceDecomposition(cycles, varargin)
     results.phaseMean_deg    = phaseMean_deg;
     results.phaseSEM_deg     = semPhi_deg;
     results.phaseCI_deg      = phaseCI_deg;
+
+    % --- Per-half sinusoidal fits ---
+    results.fitCoeffsHalfAll     = fitCoeffsHalfAll;
+    results.fitAmplitudeHalfAll  = fitAmplitudeHalfAll;
+    results.fitPhaseHalfAll_deg  = fitPhaseHalfAll_deg;
+    results.fitRsquaredHalfAll   = fitRsquaredHalfAll;
+    results.amplitudeMeanHalf    = amplitudeMeanHalf;
+    results.amplitudeSEMHalf     = amplitudeSEMHalf;
+    results.phaseMeanHalf_deg    = phaseMeanHalf_deg;
+    results.phaseSEMHalf_deg     = phaseSEMHalf_deg;
+    results.fitRsquaredHalfMean  = fitRsquaredHalfMean;
 
     % --- Variance decomposition (pointwise) ---
     results.varTotal         = varTotal;

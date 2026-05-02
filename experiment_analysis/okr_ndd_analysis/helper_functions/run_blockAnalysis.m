@@ -171,6 +171,10 @@ function block = run_blockAnalysis(params, data, ii, lpc, saccThresh)
         block.stimvel_cyclecvd = struct;
         stimvel_amp = nan; stimvel_phase = nan;
     end
+    if ~isempty(fieldnames(block.stimvel_cyclecvd))
+        block.hevel_cyclecm      = calc_cycleMetrics(hevel_cyclecvd.cycleMean, block.stimvel_cyclecvd.cycleMean);
+        block.hevel_good_cyclecm = calc_cycleMetrics(hevel_good_cyclecvd.cycleMean, block.stimvel_cyclecvd.cycleMean);
+    end
     block.hevel_cyclecvd      = hevel_cyclecvd;
     block.hevel_good_cyclecvd = hevel_good_cyclecvd;
     block.stimvel_amp       = block.stimvel_cyclecvd.amplitudeMean;

@@ -42,14 +42,16 @@ function timepoints = run_timepointAnalysis(blocks, params, cycleLength, nPermut
             'Fs',params.fs, 'StimFreq',params.exp_stimfreq, ...
             'nPermutations',nPermutations);
 
+        good_cyclemean_cvd   = cycleVarianceDecomposition(good_cyclemean_mat);
+        good_cyclemedian_cvd = cycleVarianceDecomposition(good_cyclemedian_mat);
+
+        % Compute cycle averages via pooled good cycles from all blocks
         nPooledGoodCycles = size(timepoint_cyclemat, 1);
         pooled_drumvel_cyclemean_cvd = cycleVarianceDecomposition(drumvel_cyclemat);
         pooled_good_cyclemean_cvd    = cycleVarianceDecomposition(timepoint_cyclemat);
         pooled_good_cyclemedian      = median(timepoint_cyclemat, 1, 'omitnan');
 
-        good_cyclemean_cvd   = cycleVarianceDecomposition(good_cyclemean_mat);
-        good_cyclemedian_cvd = cycleVarianceDecomposition(good_cyclemedian_mat);
-
+        % Compute cycle averages via mean of block good cycle means weighted by respective nGoodCycles contribution
         nGoodCycles = [blocks(tp_ii_ids).nGoodCycles];
         good_nGoodCyclesWeighted_cyclemean = ...
             sum(good_cyclemean_mat.*nGoodCycles', 1) / sum(nGoodCycles');
@@ -57,6 +59,29 @@ function timepoints = run_timepointAnalysis(blocks, params, cycleLength, nPermut
         check_valuesApproxEqual(pooled_good_cyclemean_cvd.cycleMean, ...
             good_nGoodCyclesWeighted_cyclemean, ...
             [char(tp_ii), ' cycle-means']);
+
+        % Metric: Per-block residual MAD relative to pooled residual MAD
+        goodResidualMADRatio = goodResidualMAD ./ pooled_good_cyclemean_cvd.residualMAD;
+        
+        % Metric: Leave-one-out peer correlation of per-block mean residual cycle
+        residualsAll      = pooled_good_cyclemean_cvd.residualsAll;
+        blockResidualMean = nan(nids, cycleLength);
+        for jj = 1:nids
+            blockMask = (timepoint_cyclelabels == tp_ii_ids(jj));
+            blockResidualMean(jj, :) = mean(residualsAll(blockMask, :), 1, 'omitnan');
+        end
+        
+        goodResidualPeerCorr = nan(nids, 1);
+        for jj = 1:nids
+            peerIdx   = setdiff(1:nids, jj);  % Exclude self
+            peerMean  = mean(blockResidualMean(peerIdx, :), 1, 'omitnan');
+            bothValid = ~isnan(blockResidualMean(jj, :)) & ~isnan(peerMean);
+            if sum(bothValid) >= 3
+                goodResidualPeerCorr(jj) = corr( ...
+                    blockResidualMean(jj, bothValid).', ...
+                    peerMean(bothValid).');
+            end
+        end
 
         timepoints(ii).timePoint       = char(tp_ii);
         timepoints(ii).blockType       = blocks(tp_ii_ids(1)).blockType;
@@ -69,10 +94,12 @@ function timepoints = run_timepointAnalysis(blocks, params, cycleLength, nPermut
         good_cyclemedian_cm              = calc_cycleMetrics(good_cyclemedian_cvd.cycleMean,       pooled_drumvel_cyclemean_cvd.cycleMean);
         nGoodCyclesWeighted_cyclemean_cm = calc_cycleMetrics(good_nGoodCyclesWeighted_cyclemean,  pooled_drumvel_cyclemean_cvd.cycleMean);
 
-        timepoints(ii).nGoodCycles     = nGoodCycles;
-        timepoints(ii).goodAmplitudeCV = goodAmplitudeCV;
-        timepoints(ii).goodResidualMAD = goodResidualMAD;
-        timepoints(ii).goodEtaSquared  = goodEtaSquared;
+        timepoints(ii).nGoodCycles          = nGoodCycles;
+        timepoints(ii).goodAmplitudeCV      = goodAmplitudeCV;
+        timepoints(ii).goodResidualMAD      = goodResidualMAD;
+        timepoints(ii).goodEtaSquared       = goodEtaSquared;
+        timepoints(ii).goodResidualMADRatio = goodResidualMADRatio;
+        timepoints(ii).goodResidualPeerCorr = goodResidualPeerCorr;
 
         timepoints(ii).nPooledGoodCycles     = nPooledGoodCycles;
         timepoints(ii).pooledGoodAmplitudeCV = pooled_good_cyclemean_cvd.amplitudeCV;

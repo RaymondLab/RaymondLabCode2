@@ -45,7 +45,21 @@ plot_number = 0;
 filename = {};
 
 
-%% Figure: Blocks (Saccades and Cycle Segmentation)
+%% Figure 1: Blocks (Saccades and Cycle Segmentation)
+subplot_description = {['Shows the full block time course — ' ...
+    'stimulus velocity, raw eye velocity (with saccades), and the filtered & desaccaded eye velocity with its sinusoidal fit — ' ...
+    'with magenta vertical lines marking the cycle boundaries used for cycle-based analyses.'], ' ', ...
+    'Gain — Eye velocity amplitude relative to stimulus velocity amplitude (from the block sinusoidal fit).', ' ', ...
+    'Good Cycles = X of Y — Number of cycles free of detected saccades, out of the total cycles segmented from the block.', ' ', ...
+    'Saccade Fraction — Fraction of block samples flagged as saccades.', ' ', ...
+    ['amplitudeCV — Relative standard error of the mean cycle-fit amplitude (amplitudeSEM / amplitudeMean). ' ...
+    'Low values = consistent cycle-to-cycle amplitude; high values = variable/unreliable amplitude. Lower is better.'], ' ', ...
+    ['residualMAD — Robust scale (1.4826 × MAD) of residuals (per-cycle data minus its own sinusoidal fit), pooled across all included cycles; ' ...
+    'matches SD for Gaussian noise but is outlier-resistant. Low values = clean, well-fit data; high values = noisier data or non-sinusoidal deviations. Lower is better.'], ' ', ...
+    ['etaSquared — Fraction of the cycle-to-cycle variance (pointwise variance across cycles, averaged over time) ' ...
+    'explained by the per-cycle sinusoidal fits versus residual non-sinusoidal variability. ' ...
+    'High values = variability is mostly sinusoidal in nature; low values = noise dominates. Higher generally indicates cleaner, more sinusoidal responses.']
+    };
 for ii = 1:ntimepoints
     figure_number = figure_number + 1;
     plot_number = plot_number + 1;
@@ -63,7 +77,7 @@ for ii = 1:ntimepoints
     for jj = 1:nblocks
         btimes = (0:length(br_ii(jj).stimvel)-1) / fs;
         ax = nexttile;
-        axesCustomToolbarButtons(ax);
+        axesCustomToolbarButtons(ax,[],subplot_description);
         hold on;
         yline(0, 'Color',[0 0 0]+0.7, 'LineWidth',0.1, 'HandleVisibility','off', 'HitTest','off', 'PickableParts','none');
         plot(btimes, br_ii(jj).stimvel, '--k', 'DisplayName',sprintf('%s Velocity',br_ii(jj).stimType), 'HitTest','off', 'PickableParts','none'); 
@@ -96,7 +110,7 @@ for ii = 1:ntimepoints
 end
 
 
-%% Figure: Cycles (Saccades and Cycle Segmentation)
+%% Figure 2: Cycles (Saccades and Cycle Segmentation)
 
 for ii = 1:ntimepoints
     figure_number = figure_number + 1;
@@ -168,7 +182,7 @@ for ii = 1:ntimepoints
             plot(cycleTimes, br_ii(jj).stimvel_cyclecvd.cycleMean, '--k', 'LineWidth',2, 'DisplayName',sprintf('%s Velocity Cycle-Mean',br_ii(jj).stimType), 'HitTest','off', 'PickableParts','none'); 
         end
         plot(cycleTimes, br_ii(jj).hevel_good_cyclecvd.fitMean, '-k', 'LineWidth',2, 'DisplayName','Fit of Eye Velocity', 'HitTest','off', 'PickableParts','none');
-        plot(cycleTimes, br_ii(jj).hevel_good_cyclecvd.cycleMean, '-b', 'LineWidth',2.5, 'DisplayName','Eye Velocity Cycle-Mean', 'HitTest','off', 'PickableParts','none');
+        plot(cycleTimes, br_ii(jj).hevel_good_cyclecvd.cycleMean, '-b', 'LineWidth',2.5, 'DisplayName','Pooled Eye Velocity Cycle-Mean', 'HitTest','off', 'PickableParts','none');
         hold off;
         title(sprintf('Block %d: %s "Good" Cycle-Mean & SEM (mean = %.3f, std = %.3f)', ...
             br_ii(jj).blockNumber, br_ii(jj).blockType, semMean, semStd));
@@ -217,6 +231,7 @@ for ii = 1:ntimepoints
         box on;
     end
     set(axs, 'YLim', [minval, maxval]);
+    linkaxes(axs, 'xy');
 
     if ~isequal(savepath, 0) && isfolder(savepath)
         savefig(fig(plot_number), fullfile(savepath, filename{end}));
@@ -228,7 +243,18 @@ clear cycleSubMat_mean cycleSubMat_median linename minval maxval mseMaxValues nb
 clear attempt rankIds rowNumber subplot_description timeData tp_ids tp_ii;
 
 
-%% Figure: Mean of Cycle-Means Timepoint Differences
+%% Figure 3: Mean of Cycle-Means Timepoint Differences
+MADratio_description = ['MADRatio (goodResidualMADRatio) — Ratio of the block residualMAD to the timepoint-pooled residualMAD. ' ...
+    '~1 = the block residual noise level matches its peers; ' ...
+    '>1 = the block is noisier than the timepoint average; ' ...
+    '<1 = it is cleaner. Closer to 1 is typical; ' ...
+    'large deviations flag the block as an outlier in noise level.'];
+PeerCorr_description = ['PeerCorr (goodResidualPeerCorr) — Pearson correlation between the block mean residual cycle and ' ...
+    'the leave-one-out mean of the other block mean residual cycles within the same timepoint. ' ...
+    'High positive = the block residual structure matches the shared residual pattern of its peers (consistent); ' ...
+    'near 0 = the block residual is idiosyncratic / uncorrelated with peers; ' ...
+    'negative = the block residual moves opposite to peers, suggesting systematic timing or shape deviation. ' ...
+    'Higher is better as a peer-consistency check.'];
 nTimePointDiffs = length(diffdata);
 for ii = 1:nTimePointDiffs
     figure_number = figure_number + 1;
@@ -283,6 +309,8 @@ for ii = 1:nTimePointDiffs
         ax = nexttile([5 1]);
         subplot_description = [string(sprintf('Compares the mean and median of all POOLED "good" cycles of timepoint %s. ', tr_ii(jj).timePoint)) ...
         + "Various metrics to characterize 'peak' timing, lag time, and skew were computed on the pooled cycle-mean.", ...
+        ' ', MADratio_description, ...
+        ' ', PeerCorr_description, ...
         resjj.metadata.description];
         axesCustomToolbarButtons(ax,[],subplot_description);
         hold on;
@@ -290,20 +318,43 @@ for ii = 1:nTimePointDiffs
         xline(medCenAdj, 'k', medTxt, 'LineStyle','--', 'LineWidth',0.001, 'LabelVerticalAlignment','bottom', 'LabelOrientation','horizontal', 'Color',color2, 'HandleVisibility','off');
         xline(meanCenAdj, color1, 'LineStyle',':', 'LineWidth',1.5, 'HandleVisibility','off');
         xline(medCenAdj, color1, 'LineStyle','--', 'LineWidth',1, 'HandleVisibility','off');
-        [nCycles, ~] = size(tr_ii(jj).good_cyclemean_mat);
-        cycleData = [tr_ii(jj).good_cyclemean_mat'; nan(1, nCycles)];
-        timeData = [repmat(cycleTimes(:), 1, nCycles); nan(1, nCycles)];
-        plot(timeData(:), cycleData(:), 'Color',[1 0.6 1], 'LineWidth',1, 'DisplayName','Individual "Good" Eye Velocity Cycle-Means', 'HitTest','off', 'PickableParts','none');
         yline(0, 'Color',[0 0 0]+0.7, 'LineWidth',0.1, 'HandleVisibility','off', 'HitTest','off', 'PickableParts','none');
         plot(cycleTimes, tr_ii(jj).pooled_drumvel_cyclemean_cvd.cycleMean, '--k', 'LineWidth',2, 'DisplayName',sprintf('Drum Velocity MoCM (Mean-Median Skew = %.3f)', stimMeanMedSkew), 'HitTest','off', 'PickableParts','none');
+        % Plot interactive block cycle-mean lines
+        bitpColors = [1 0.6 1; 0.8 0.5 0.9; 0.6 0.4 0.8];
+        [nCycles, ~] = size(tr_ii(jj).good_cyclemean_mat);
+        cycleData = [tr_ii(jj).good_cyclemean_mat'; nan(1, nCycles)];
+        nBlocksInTp = size(tr_ii(jj).good_cyclemean_mat, 1);
+        hLines = gobjects(nBlocksInTp, 1);
+        for kk = 1:nBlocksInTp
+            blockNum = blocks(tr_ii(jj).blockResultsIds(kk)).blockNumber;
+            madRatio = tr_ii(jj).goodResidualMADRatio(kk);
+            peerCorr = tr_ii(jj).goodResidualPeerCorr(kk);
+            hLines(kk) = plot(cycleTimes, tr_ii(jj).good_cyclemean_mat(kk,:), ...
+                'Color', bitpColors(kk,:), 'LineWidth', 1, ...
+                'DisplayName', sprintf('Block %d Cycle-Mean (MADRatio = %.2f, PeerCorr = %.2f)', ...
+                    blockNum, madRatio, peerCorr), ...
+                'HitTest','off', 'PickableParts','none');
+        end
+        % Plot cycle means and medians
         plot(cycleTimes, tr_ii(jj).pooled_good_cyclemean_cvd.cycleMean, color1, 'LineWidth',2, 'DisplayName',sprintf('Pooled Eye Velocity Cycle-mean'), 'HitTest','off', 'PickableParts','none');
         plot(cycleTimes, tr_ii(jj).pooled_good_cyclemedian, 'Color',[0 0.9 0.9], 'LineStyle',':', 'LineWidth',2.5, 'DisplayName','Pooled Eye Velocity Cycle-median', 'HitTest','off', 'PickableParts','none');
+        % Plot absolute peak markers
+        pk1 = [resjj.eye.peak1Val(1), resjj.eye.peak2Val(1)];
+        locs1 = (round([resjj.eye.peak1TimeMs(1), resjj.eye.peak2TimeMs(1)]) + 1) / fs;
+        pk2 = [resjj.eye.peak1Val(2), resjj.eye.peak2Val(2)];
+        locs2 = (round([resjj.eye.peak1TimeMs(2), resjj.eye.peak2TimeMs(2)]) + 1 + round(halfCycle)) / fs;
+        plot(locs1, pk1, 'm.', 'MarkerSize',20, 'DisplayName','Peaks');
+        plot(locs2, pk2, 'm.', 'MarkerSize',20, 'HandleVisibility','off');
+        text(locs1, pk1, cellstr(" "+string(round(locs1*fs)))+"ms", 'Color','m', 'VerticalAlignment','bottom');
+        text(locs2, pk2, cellstr(" "+string(round(locs2*fs)))+"ms", 'Color','m', 'VerticalAlignment','top');
         hold off;
         title(sprintf('%s Blocks %s: Mean vs Median of POOLED "Good" Cycles (F-test FSP = %.3f)', tr_ii(jj).timePoint, tr_ii(jj).blockNumbers, tr_ii(jj).ftestFracSigPoints));
         xlim([0, cycleTimes(end)]);
         xlabel('Time (s)');
         if isequal(jj,1), ylabel('Velocity (deg/s)'); end
-        legend;
+        lgd = legend;
+        lgd.ItemHitFcn = @(src, evt) toggleCycleHighlight(evt, hLines);
         box on;
         [cmin,cmax] = bounds(cycleData, 'all');
         if cmin < minval, minval = cmin; end
@@ -329,12 +380,6 @@ for ii = 1:nTimePointDiffs
     meanTxt = cellstr(compose("MEAN (dotted):\n    Centroid = %.1f ms\n    Lag = %.1f ms\n    Skew = %.3f\n    MeanMedSkew = %.3f", meanCen(:), meanLag(:), meanSkew(:), meanmedSkew(:)));
     medTxt = cellstr(compose("MEDIAN (dashed):\n    Centroid = %.1f ms\n    Lag = %.1f ms\n    Skew = %.3f\n    BowleySkew = %.3f", medCen(:), medLag(:), medSkew(:), bowleySkew(:)));
 
-    % Find the two tallest peaks in the cycle-mean difference data
-    pk1 = [resjj.eye.peak1Val(1), resjj.eye.peak2Val(1)];
-    locs1 = (round([resjj.eye.peak1TimeMs(1), resjj.eye.peak2TimeMs(1)]) + 1) / fs;
-    pk2 = [resjj.eye.peak1Val(2), resjj.eye.peak2Val(2)];
-    locs2 = (round([resjj.eye.peak1TimeMs(2), resjj.eye.peak2TimeMs(2)]) + 1 + round(halfCycle)) / fs;
-
     ax = nexttile([5 1]);
     subplot_description = [string(sprintf('Compares the %s (blue), %s (red), and the diff of means %s-%s (green) of pooled "good" cycle-means. ', tr_ii(1).timePoint, tr_ii(2).timePoint, tr_ii(2).timePoint, tr_ii(1).timePoint)) ...
         + string(sprintf('Various metrics to characterize "peak" timing, lag time, and skew were computed on the diff of means %s-%s:', tr_ii(2).timePoint, tr_ii(1).timePoint)), ...
@@ -349,7 +394,12 @@ for ii = 1:nTimePointDiffs
     plot(cycleTimes, tr_ii(1).pooled_drumvel_cyclemean_cvd.cycleMean, '--k', 'LineWidth',2, 'DisplayName','Drum Velocity MoCM', 'HitTest','off', 'PickableParts','none');
     plot(cycleTimes, tr_ii(1).pooled_good_cyclemean_cvd.cycleMean, '-b', 'LineWidth',2, 'DisplayName',sprintf('%s Pooled Cycle-mean',tr_ii(1).timePoint), 'HitTest','off', 'PickableParts','none');
     plot(cycleTimes, tr_ii(2).pooled_good_cyclemean_cvd.cycleMean, '-r', 'LineWidth',2, 'DisplayName',sprintf('%s Pooled Cycle-mean',tr_ii(2).timePoint), 'HitTest','off', 'PickableParts','none');
-    plot(cycleTimes, cyclemeanDiff, '-g', 'LineWidth',2, 'DisplayName',sprintf('%s-%s Pooled Cycle-mean Diff',tr_ii(2).timePoint,tr_ii(1).timePoint), 'HitTest','off', 'PickableParts','none');  
+    plot(cycleTimes, cyclemeanDiff, '-g', 'LineWidth',2, 'DisplayName',sprintf('%s-%s Pooled Cycle-mean Diff',tr_ii(2).timePoint,tr_ii(1).timePoint), 'HitTest','off', 'PickableParts','none'); 
+    % Find the two tallest peaks in the cycle-mean difference data
+    pk1 = [resjj.eye.peak1Val(1), resjj.eye.peak2Val(1)];
+    locs1 = (round([resjj.eye.peak1TimeMs(1), resjj.eye.peak2TimeMs(1)]) + 1) / fs;
+    pk2 = [resjj.eye.peak1Val(2), resjj.eye.peak2Val(2)];
+    locs2 = (round([resjj.eye.peak1TimeMs(2), resjj.eye.peak2TimeMs(2)]) + 1 + round(halfCycle)) / fs;
     plot(locs1, pk1, 'm.', 'MarkerSize',20, 'DisplayName','Peaks');
     plot(locs2, pk2, 'm.', 'MarkerSize',20, 'HandleVisibility','off');
     text(locs1, pk1, cellstr(" "+string(round(locs1*fs)))+"ms", 'Color','m', 'VerticalAlignment','bottom');
@@ -395,81 +445,102 @@ end
 clear tp_ii tp_ids br_ii minval maxval nblocks stimin stimax subplot_description;
 
 
-%% Figure: Cycle Characterization of All Blocks  (TODO)
+%% Figure 4: Cycle Characterization of All Blocks  (TODO)
 figure_number = figure_number + 1;
 plot_number = plot_number + 1;
 
 fig(plot_number) = figure('WindowState','maximized');
-h(plot_number) = tiledlayout(fig(plot_number), 2, 3, 'TileSpacing','compact', 'Padding','compact');
-title(h(plot_number), sprintf('%s: All Block "Good" Cycle-Means Analysis', params.exp_filename), 'FontSize',14, 'Interpreter','none');
+h(plot_number) = tiledlayout(fig(plot_number), 3, 3, 'TileSpacing','compact', 'Padding','compact');
+title(h(plot_number), sprintf('%s: All Block "Good" OKR Cycle-Means Analysis', params.exp_filename), 'FontSize',14, 'Interpreter','none');
 filename{end+1} = sprintf('%02d_all_block_goodcycles_analysis.fig', figure_number);
 
 nblocks = length(blocks);
-ncycles = length(blocks(1).good_cyclefit);
-good_cyclemeans = zeros(nblocks-2, ncycles);
-stimvel_cyclemeans = zeros(nblocks-2, ncycles);
+nsamples = length(blocks(1).good_cyclefit);
+good_cyclemeans = zeros(nblocks-2, nsamples);
+stimvel_cyclemeans = zeros(nblocks-2, nsamples);
+block_gains = zeros(nblocks-2, 2);
+block_phases = zeros(nblocks-2, 2);
 for ii = 1:nblocks-2
     good_cyclemeans(ii,:) = mean(blocks(ii+1).good_cyclemat, 1, 'omitnan');
     if ~isempty(fieldnames(blocks(ii+1).stimvel_cyclecvd))
         stimvel_cyclemeans(ii,:) = blocks(ii+1).stimvel_cyclecvd.cycleMean;
     end
+    block_gains(ii,:) = blocks(ii+1).hevel_good_cyclecvd.amplitudeMeanHalf ./ blocks(ii+1).stimvel_amp;
+    block_phases(ii,:) = blocks(ii+1).hevel_good_cyclecvd.phaseMeanHalf_deg;
 end
-
 res = calc_cycleMetrics(good_cyclemeans, stimvel_cyclemeans);
 blocknumbers = 2:nblocks-1;
 
+% Peak time block analysis
 ax = nexttile;
-subplot_description = ['Measure of the temporal shift between response and stimulus centers of mass.', ...
-    ' Positive values indicate the eye response lags the stimulus; negative values indicate the eye response leads.'];
+subplot_description = 'Absolute peak time.';
 axesCustomToolbarButtons(ax,[],subplot_description);
 hold on;
 yline(0, 'Color','k', 'LineStyle','--', 'LineWidth',1, 'HandleVisibility','off', 'HitTest','off', 'PickableParts','none');
-scatter(blocknumbers, res.centroidMeanDiff(:,1), 25, 'b', 'filled', 'DisplayName','NT Half-Cycles');
-scatter(blocknumbers, res.centroidMeanDiff(:,2), 25, 'r', 'DisplayName','TN Half-Cycles');
+stimPeakTimeMs = mean(res.stim.centroidMedian, 'all');
+ntPeakTimeMs = res.eye.peak1TimeMs(:,1) - stimPeakTimeMs;
+tnPeakTimeMs = res.eye.peak1TimeMs(:,2) - stimPeakTimeMs;
+[~,blueFit,~,blueTxt] = fitBestModel(blocknumbers, ntPeakTimeMs);
+[~,redFit,~,redTxt] = fitBestModel(blocknumbers, tnPeakTimeMs);
+scatter(blocknumbers, ntPeakTimeMs, 25, 'b', 'filled', 'DisplayName','Nasal-Temporal');
+plot(blocknumbers, blueFit, 'b-', 'DisplayName',blueTxt);
+scatter(blocknumbers, tnPeakTimeMs, 25, 'r', 'DisplayName','Temporal-Nasal');
+plot(blocknumbers, redFit, 'r-', 'DisplayName',redTxt);
 hold off;
 xlim(ax, [1, blocknumbers(end)+1]);
-title(ax, 'Centroid Mean Difference (Lead/Lag)', 'FontSize',14);
-legend(ax);
+title(ax, 'Absolute Peak Difference (Lead/Lag)', 'FontSize',14);
+legend(ax, 'Location','best');
 grid on;
 
 ax = nexttile;
-subplot_description = ['Measures where the center-of-mass falls relative to the temporal midpoint of the half-cycle.', ...
-    ' Positive or negative values correspond to early or late mass concentration.'];
+subplot_description = [];
 axesCustomToolbarButtons(ax,[],subplot_description);
 hold on;
-yline(0, 'Color','k', 'LineStyle','--', 'LineWidth',1, 'HandleVisibility','off', 'HitTest','off', 'PickableParts','none');
-scatter(blocknumbers, res.eye.skewFromCentroidMean(:,1), 25, 'b', 'filled');
-scatter(blocknumbers, res.eye.skewFromCentroidMean(:,2), 25, 'r');
+[~,blueFit,~,blueTxt] = fitBestModel(blocknumbers, block_gains(:,1));
+[~,redFit,~,redTxt] = fitBestModel(blocknumbers, block_gains(:,2));
+scatter(blocknumbers, block_gains(:,1), 25, 'b', 'filled', 'DisplayName','Nasal-Temporal');
+plot(blocknumbers, blueFit, 'b-', 'DisplayName',blueTxt);
+scatter(blocknumbers, block_gains(:,2), 25, 'r', 'DisplayName','Temporal-Nasal');
+plot(blocknumbers, redFit, 'r-', 'DisplayName',redTxt);
 hold off;
 xlim(ax, [1, blocknumbers(end)+1]);
-title(ax, 'Skew via Centroid Mean', 'FontSize',14);
+title(ax, 'OKR Gain', 'FontSize',14);
+legend(ax, 'Location','best');
 grid on;
 
 ax = nexttile;
-subplot_description = ['Quantifies how much tails pull the mean away from the median, normalized by the spread of the distribution.', ...
-    ' Positive = mean is later than median, Negative = mean is earlier than median.'];
+subplot_description = [];
 axesCustomToolbarButtons(ax,[],subplot_description);
 hold on;
-yline(0, 'Color','k', 'LineStyle','--', 'LineWidth',1, 'HandleVisibility','off', 'HitTest','off', 'PickableParts','none');
-scatter(blocknumbers, res.eye.skewMeanMedian(:,1), 25, 'b', 'filled');
-scatter(blocknumbers, res.eye.skewMeanMedian(:,2), 25, 'r');
+[~,blueFit,~,blueTxt] = fitBestModel(blocknumbers, block_phases(:,1));
+[~,redFit,~,redTxt] = fitBestModel(blocknumbers, block_phases(:,2));
+scatter(blocknumbers, block_phases(:,1), 25, 'b', 'filled', 'DisplayName','Nasal-Temporal');
+plot(blocknumbers, blueFit, 'b-', 'DisplayName',blueTxt);
+scatter(blocknumbers, block_phases(:,2), 25, 'r', 'DisplayName','Temporal-Nasal');
+plot(blocknumbers, redFit, 'r-', 'DisplayName',redTxt);
 hold off;
 xlim(ax, [1, blocknumbers(end)+1]);
-title(ax, 'Mean-Median Skew', 'FontSize',14);
+title(ax, 'OKR Phase', 'FontSize',14);
+legend(ax, 'Location','best');
 grid on;
 
+% Median-related block analysis
 ax = nexttile;
 subplot_description = ['Same as for centroid mean but using the median-based centroid. More robust to waveform distortions.', ...
     ' Positive = lag, Negative = lead.'];
 axesCustomToolbarButtons(ax,[],subplot_description);
 hold on;
 yline(0, 'Color','k', 'LineStyle','--', 'LineWidth',1, 'HandleVisibility','off', 'HitTest','off', 'PickableParts','none');
-scatter(blocknumbers, res.centroidMedianDiff(:,1), 25, 'b', 'filled');
-scatter(blocknumbers, res.centroidMedianDiff(:,2), 25, 'r');
+[~,blueFit,~,blueTxt] = fitBestModel(blocknumbers, res.centroidMedianDiff(:,1));
+[~,redFit,~,redTxt] = fitBestModel(blocknumbers, res.centroidMedianDiff(:,2));
+scatter(blocknumbers, res.centroidMedianDiff(:,1), 25, 'b', 'filled', 'DisplayName','Nasal-Temporal');
+plot(blocknumbers, blueFit, 'b-', 'DisplayName',blueTxt);
+scatter(blocknumbers, res.centroidMedianDiff(:,2), 25, 'r', 'DisplayName','Temporal-Nasal');
+plot(blocknumbers, redFit, 'r-', 'DisplayName',redTxt);
 hold off;
 xlim(ax, [1, blocknumbers(end)+1]);
-xlabel(ax, 'Block Number');
 title(ax, 'Centroid Median Difference (Lead/Lag)', 'FontSize',14);
+legend(ax, 'Location','best');
 grid on;
 
 ax = nexttile;
@@ -478,12 +549,16 @@ subplot_description = ['Same as for centroid mean but using the median-based cen
 axesCustomToolbarButtons(ax,[],subplot_description);
 hold on;
 yline(0, 'Color','k', 'LineStyle','--', 'LineWidth',1, 'HandleVisibility','off', 'HitTest','off', 'PickableParts','none');
-scatter(blocknumbers, res.eye.skewFromCentroidMedian(:,1), 25, 'b', 'filled');
-scatter(blocknumbers, res.eye.skewFromCentroidMedian(:,2), 25, 'r');
+[~,blueFit,~,blueTxt] = fitBestModel(blocknumbers, res.eye.skewFromCentroidMedian(:,1));
+[~,redFit,~,redTxt] = fitBestModel(blocknumbers, res.eye.skewFromCentroidMedian(:,2));
+scatter(blocknumbers, res.eye.skewFromCentroidMedian(:,1), 25, 'b', 'filled', 'DisplayName','Nasal-Temporal');
+plot(blocknumbers, blueFit, 'b-', 'DisplayName',blueTxt);
+scatter(blocknumbers, res.eye.skewFromCentroidMedian(:,2), 25, 'r', 'DisplayName','Temporal-Nasal');
+plot(blocknumbers, redFit, 'r-', 'DisplayName',redTxt);
 hold off;
 xlim(ax, [1, blocknumbers(end)+1]);
-xlabel(ax, 'Block Number');
 title(ax, 'Skew via Centroid Median', 'FontSize',14);
+legend(ax, 'Location','best');
 grid on;
 
 ax = nexttile;
@@ -492,12 +567,155 @@ subplot_description = ['Measures asymmetry in the spread around the median.', ..
 axesCustomToolbarButtons(ax,[],subplot_description);
 hold on;
 yline(0, 'Color','k', 'LineStyle','--', 'LineWidth',1, 'HandleVisibility','off', 'HitTest','off', 'PickableParts','none');
-scatter(blocknumbers, res.eye.skewQuantile(:,1), 25, 'b', 'filled');
-scatter(blocknumbers, res.eye.skewQuantile(:,2), 25, 'r');
+[~,blueFit,~,blueTxt] = fitBestModel(blocknumbers, res.eye.skewQuantile(:,1));
+[~,redFit,~,redTxt] = fitBestModel(blocknumbers, res.eye.skewQuantile(:,2));
+scatter(blocknumbers, res.eye.skewQuantile(:,1), 25, 'b', 'filled', 'DisplayName','Nasal-Temporal');
+plot(blocknumbers, blueFit, 'b-', 'DisplayName',blueTxt);
+scatter(blocknumbers, res.eye.skewQuantile(:,2), 25, 'r', 'DisplayName','Temporal-Nasal');
+plot(blocknumbers, redFit, 'r-', 'DisplayName',redTxt);
+hold off;
+xlim(ax, [1, blocknumbers(end)+1]);
+title(ax, 'Bowley Skewness (Quantile Skew)', 'FontSize',14);
+legend(ax, 'Location','best');
+grid on;
+
+% Mean-related block analysis
+ax = nexttile;
+subplot_description = ['Measure of the temporal shift between response and stimulus centers of mass.', ...
+    ' Positive values indicate the eye response lags the stimulus; negative values indicate the eye response leads.'];
+axesCustomToolbarButtons(ax,[],subplot_description);
+hold on;
+yline(0, 'Color','k', 'LineStyle','--', 'LineWidth',1, 'HandleVisibility','off', 'HitTest','off', 'PickableParts','none');
+[~,blueFit,~,blueTxt] = fitBestModel(blocknumbers, res.centroidMeanDiff(:,1));
+[~,redFit,~,redTxt] = fitBestModel(blocknumbers, res.centroidMeanDiff(:,2));
+scatter(blocknumbers, res.centroidMeanDiff(:,1), 25, 'b', 'filled', 'DisplayName','Nasal-Temporal');
+plot(blocknumbers, blueFit, 'b-', 'DisplayName',blueTxt);
+scatter(blocknumbers, res.centroidMeanDiff(:,2), 25, 'r', 'DisplayName','Temporal-Nasal');
+plot(blocknumbers, redFit, 'r-', 'DisplayName',redTxt);
 hold off;
 xlim(ax, [1, blocknumbers(end)+1]);
 xlabel(ax, 'Block Number');
-title(ax, 'Bowley Skewness (Quantile Skew)', 'FontSize',14);
+title(ax, 'Centroid Mean Difference (Lead/Lag)', 'FontSize',14);
+legend(ax, 'Location','best');
+grid on;
+
+ax = nexttile;
+subplot_description = ['Measures where the center-of-mass falls relative to the temporal midpoint of the half-cycle.', ...
+    ' Positive or negative values correspond to early or late mass concentration.'];
+axesCustomToolbarButtons(ax,[],subplot_description);
+hold on;
+yline(0, 'Color','k', 'LineStyle','--', 'LineWidth',1, 'HandleVisibility','off', 'HitTest','off', 'PickableParts','none');
+[~,blueFit,~,blueTxt] = fitBestModel(blocknumbers, res.eye.skewFromCentroidMean(:,1));
+[~,redFit,~,redTxt] = fitBestModel(blocknumbers, res.eye.skewFromCentroidMean(:,2));
+scatter(blocknumbers, res.eye.skewFromCentroidMean(:,1), 25, 'b', 'filled', 'DisplayName','Nasal-Temporal');
+plot(blocknumbers, blueFit, 'b-', 'DisplayName',blueTxt);
+scatter(blocknumbers, res.eye.skewFromCentroidMean(:,2), 25, 'r', 'DisplayName','Temporal-Nasal');
+plot(blocknumbers, redFit, 'r-', 'DisplayName',redTxt);
+hold off;
+xlim(ax, [1, blocknumbers(end)+1]);
+xlabel(ax, 'Block Number');
+title(ax, 'Skew via Centroid Mean', 'FontSize',14);
+legend(ax, 'Location','best');
+grid on;
+
+ax = nexttile;
+subplot_description = ['Quantifies how much tails pull the mean away from the median, normalized by the spread of the distribution.', ...
+    ' Positive = mean is later than median, Negative = mean is earlier than median.'];
+axesCustomToolbarButtons(ax,[],subplot_description);
+hold on;
+yline(0, 'Color','k', 'LineStyle','--', 'LineWidth',1, 'HandleVisibility','off', 'HitTest','off', 'PickableParts','none');
+[~,blueFit,~,blueTxt] = fitBestModel(blocknumbers, res.eye.skewMeanMedian(:,1));
+[~,redFit,~,redTxt] = fitBestModel(blocknumbers, res.eye.skewMeanMedian(:,2));
+scatter(blocknumbers, res.eye.skewMeanMedian(:,1), 25, 'b', 'filled', 'DisplayName','Nasal-Temporal');
+plot(blocknumbers, blueFit, 'b-', 'DisplayName',blueTxt);
+scatter(blocknumbers, res.eye.skewMeanMedian(:,2), 25, 'r', 'DisplayName','Temporal-Nasal');
+plot(blocknumbers, redFit, 'r-', 'DisplayName',redTxt);
+hold off;
+xlim(ax, [1, blocknumbers(end)+1]);
+xlabel(ax, 'Block Number');
+title(ax, 'Mean-Median Skew', 'FontSize',14);
+legend(ax, 'Location','best');
+grid on;
+
+if ~isequal(savepath, 0) && isfolder(savepath)
+    savefig(fig(plot_number), fullfile(savepath, filename{end}));
+    fprintf('    Figure %d saved as: %s\n', figure_number, filename{end});
+end
+
+
+%% Figure 5: Noise Characterization of all Blocks
+figure_number = figure_number + 1;
+plot_number = plot_number + 1;
+
+fig(plot_number) = figure('WindowState','maximized');
+h(plot_number) = tiledlayout(fig(plot_number), 2, 3, 'TileSpacing','compact', 'Padding','compact');
+title(h(plot_number), sprintf('%s: All Block Noise Analysis', params.exp_filename), 'FontSize',14, 'Interpreter','none');
+filename{end+1} = sprintf('%02d_all_block_noise_analysis.fig', figure_number);
+
+ax = nexttile;
+axesCustomToolbarButtons(ax,[],'Fraction of cycles free of detected saccades out of the total cycles segmented from each block.');
+hold on;
+bar(blocknumbers, [blocks(2:end-1).nGoodCycles] ./ [blocks(2:end-1).nTotalCycles], 0.7, 'FaceColor',[0 0 0]+0.3);
+hold off;
+xlim(ax, [1, blocknumbers(end)+1]);
+title(ax, 'Good Cycle Fraction (nGoodCycles/nTotalCycles)', 'FontSize',14);
+grid on;
+
+ax = nexttile;
+axesCustomToolbarButtons(ax,[],'Fraction of samples from each block flagged as saccades.');
+hold on;
+yvals = [blocks(2:end-1).saccadeFrac];
+bar(blocknumbers, yvals, 0.7, 'FaceColor',[0 0 0]+0.3);
+hold off;
+xlim(ax, [1, blocknumbers(end)+1]);
+title(ax, 'Saccade Fraction', 'FontSize',14);
+grid on;
+
+ax = nexttile;
+axesCustomToolbarButtons(ax);
+hold on;
+yvals = [blocks(2:end-1).rsquare];
+bar(blocknumbers, yvals, 0.7, 'FaceColor',[0 0 0]+0.3);
+hold off;
+xlim(ax, [1, blocknumbers(end)+1]);
+title(ax, 'R-Square of Desaccaded Fit', 'FontSize',14);
+grid on;
+
+ax = nexttile;
+subplot_description = ['Relative standard error of the mean cycle-fit amplitude (amplitudeSEM / amplitudeMean). ' ...
+    'Low values = consistent cycle-to-cycle amplitude; high values = variable/unreliable amplitude. Lower is better.'];
+axesCustomToolbarButtons(ax,[],subplot_description);
+hold on;
+yvals = [blocks(2:end-1).amplitudeCV];
+bar(blocknumbers, yvals, 0.7, 'FaceColor',[0 0 0]+0.3);
+hold off;
+xlim(ax, [1, blocknumbers(end)+1]);
+title(ax, 'Amplitude CV', 'FontSize',14);
+grid on;
+
+ax = nexttile;
+subplot_description = ['Robust scale (1.4826 × MAD) of residuals (per-cycle data minus its own sinusoidal fit), pooled across all included cycles; ' ...
+    'matches SD for Gaussian noise but is outlier-resistant. Low values = clean, well-fit data; high values = noisier data or non-sinusoidal deviations. Lower is better.'];
+axesCustomToolbarButtons(ax,[],subplot_description);
+hold on;
+yvals = [blocks(2:end-1).residualMAD];
+bar(blocknumbers, yvals, 0.7, 'FaceColor',[0 0 0]+0.3);
+hold off;
+xlim(ax, [1, blocknumbers(end)+1]);
+title(ax, 'Residual MAD', 'FontSize',14);
+grid on;
+
+ax = nexttile;
+subplot_description = ['Fraction of the cycle-to-cycle variance (pointwise variance across cycles, averaged over time) ' ...
+    'explained by the per-cycle sinusoidal fits versus residual non-sinusoidal variability. ' ...
+    'High values = variability is mostly sinusoidal in nature; low values = noise dominates. Higher generally indicates cleaner, more sinusoidal responses.'];
+axesCustomToolbarButtons(ax,[],subplot_description);
+hold on;
+yvals = [blocks(2:end-1).etaSquared];
+bar(blocknumbers, yvals, 0.7, 'FaceColor',[0 0 0]+0.3);
+hold off;
+xlim(ax, [1, blocknumbers(end)+1]);
+title(ax, 'Eta Squared', 'FontSize',14);
 grid on;
 
 if ~isequal(savepath, 0) && isfolder(savepath)
