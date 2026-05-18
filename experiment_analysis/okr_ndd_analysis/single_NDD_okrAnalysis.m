@@ -161,11 +161,15 @@ fignum = plot_okr_NDD_analysis(analysis, params.save_folderpath, fignum);
 close all;
 
 % Opt-in lowpass-cutoff x saccade-threshold comparison sweep
-if numel(params.lowpass_cutoffs) >= 2 && numel(params.saccade_threshs) >= 2
-    fprintf('    Running LPC x saccade-threshold comparison sweep...\n');
-    [T_lpcgc, D_lpcgc] = run_lpcgcComparison(params, data);
-    fignum = plot_lpcgcComparison(analysis, T_lpcgc, D_lpcgc, params.save_folderpath, fignum);
-    clear T_lpcgc D_lpcgc;
+try
+    if numel(params.lowpass_cutoffs) >= 2 && numel(params.saccade_threshs) >= 2
+        fprintf('    Running LPC x saccade-threshold comparison sweep...\n');
+        [T_lpcgc, D_lpcgc] = run_lpcgcComparison(params, data);
+        fignum = plot_lpcgcComparison(analysis, T_lpcgc, D_lpcgc, params.save_folderpath, fignum);
+        clear T_lpcgc D_lpcgc;
+    end
+catch
+    warning('Attempt to perform a saccade-threshold comparison sweep resulted in an error. Skipping...\n');
 end
 close all;
 
@@ -178,7 +182,7 @@ if ~isequal(params.save_folderpath, 0) & isfield(params, 'save_filepath')
     keepfields = {'blockType', 'blockNumber', 'stimType', 'timePoint', ...
         'saccadeFrac', 'nGoodCycles', 'nTotalCycles', 'startTime', 'endTime', ...
         'rsquare', 'variance', 'amplitudeCV', 'residualMAD', 'etaSquared', ...
-        'good_cyclefit', 'good_cyclemat', 'good_cyclemean', 'stimvel_cyclemean', ...
+        'good_cyclefit', 'good_cyclemat', 'good_cyclemean', 'stimvel_cyclemat', 'stimvel_cyclemean', ...
         'hevel_good_cyclecm'};
     for i = 1:length(temp_analysis.blocks)
         temp_analysis.blocks(i).good_cyclemean = temp_analysis.blocks(i).hevel_good_cyclecvd.cycleMean;
