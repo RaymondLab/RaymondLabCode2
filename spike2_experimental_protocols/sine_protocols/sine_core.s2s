@@ -62,7 +62,7 @@ var blockFlag%;     'Flag which defines whether a block is actively running or n
 var blockMarkers$;  'Provides the SampleKey commands for the currently active block
 var runFlag%;       'Flag which denotes whether the experiment is activately running or not
 var lowerSampleKey$, upperSampleKey$;
-var pretestBlockNum%, trainBlockNum%, posttestBlockNum%;
+var pretestBlockNum%, trainBlockNum%, posttestBlockNum%, midtestBlockNum%;
 var blockStartTime, blockEndTime;
 
 ' Set initial number of test and train block cyles
@@ -154,6 +154,11 @@ End
 
 ' Function that defines what happens during idle times (in computer cycles) while actively sampling
 Func ToolbarIdle%()
+    ' Allow "Run Expmt" button only while sampling is actually running
+    if runFlag% = 0 then
+        ToolbarEnable(40, SampleStatus()=2);
+    endif;
+
     ' Check whether a valid sampling view is currently running before continuing
     if ViewKind() <> 0 then
         return 1;
@@ -204,7 +209,8 @@ Func ToolbarNewFile%()
     WindowUpdate();        'Updates sampling window with protocol-specific configuration
     WindowVisible(3);      'Maximizes the new sampling window to fit the screen
     ToolbarEnable(-1, 1);  'Enables buttons that require a new sampling window
-    ToolbarEnable(2, 0); 
+    ToolbarEnable(2, 0);   'Disables "New File" button to prevent duplicate windows
+    ToolbarEnable(40, 0);   'Disables "Run Expmt" button (until sampling is started)
     SetSequencerValues(); Yield();
     SampleKey("R");  'Ensures that sequencer is set to its default configuration prior to sampling
     return 1;
@@ -216,6 +222,10 @@ Func ToolbarRunExpmt%()
     SetSequencerValues();
     SampleText("START", -1, 0); 
     ToolbarSet(40, "Stop Expmt", ToolbarStopExpmt%);
+    ToolbarEnable(-1, 0);  ' Disable all buttons
+    ToolbarEnable(1, 1);  ' Re-enable Quit button
+    ToolbarEnable(3, 1);  ' Re-enable File Comments button
+    ToolbarEnable(40, 1);  ' Re-enable Start/Stop Expmt button
     Yield(2);
     runFlag% := 1;
     return 1;
@@ -242,8 +252,8 @@ End
 
 ' Set number of test and train block cyles based on block duration and stim frequency
 Proc SetNumTestTrainCycles()
-    nDrumTestCycles%   := Round(testBlockDuration / drumFreq);    'Number of drum TEST block cycles
-    nDrumTrainCycles%  := Round(trainBlockDuration / drumFreq);   'Number of drum TRAIN block cycles
-    nChairTestCycles%  := Round(testBlockDuration / chairFreq);   'Number of drum TEST block cycles
-    nChairTrainCycles% := Round(trainBlockDuration / chairFreq);  'Number of drum TRAIN block cycles
+    nDrumTestCycles%   := Round(testBlockDuration * drumFreq);    'Number of drum TEST block cycles
+    nDrumTrainCycles%  := Round(trainBlockDuration * drumFreq);   'Number of drum TRAIN block cycles
+    nChairTestCycles%  := Round(testBlockDuration * chairFreq);   'Number of drum TEST block cycles
+    nChairTrainCycles% := Round(trainBlockDuration * chairFreq);  'Number of drum TRAIN block cycles
 End
