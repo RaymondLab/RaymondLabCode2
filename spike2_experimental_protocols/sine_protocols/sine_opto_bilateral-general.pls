@@ -57,6 +57,7 @@
             VAR    V33,DelValF=-99
             VAR    V36,StimType=0
             VAR    V37,CyclCtr=0
+            VAR    V38,NoOpto=0    ;1 = Suppress opto stims
 
 
 ;-----------------------------------------------------------------------------
@@ -229,17 +230,18 @@ OPTOON: 'T  MOVI   BlockFlg,1      ;Start opto stim trials >TRAINING
             DIGOUT [.......0]      ;Start opto stim trials >"
             SZ     1,ChairAmp      ;Set cosine amplitude >"
             OFFSET 1,ChairOff      ;Set cosine offset  >"
-            PHASE  1,-90            ;Standard cosine phase (no shift) >"
+            PHASE  1,-90           ;Standard cosine phase (no shift) >"
             ANGLE  1,0             ;Standard cosine angle (no shift) >"
             RATE   1,ChairFrq      ;Set cosine frequency >"
 
 OPTO0:      MOV    CyclCtr,EveryNth ;Set cycle interval between stims >"
-        CLRC   1               ;Discard any stale new-cycle flag >"
+            CLRC   1               ;Discard any stale new-cycle flag >"
 
 OPTO1:      OFFSET 1,ChairOff      ;Adjust cosine offset >"
             WAITC  1,OPTO1         ;Wait for 0 phase   >"
             DBNZ   CyclCtr,OPTO1   ;Repeat until cycle counter hits zero >"
             BGE    DelIdx,NDelays,OPTOOFF ;End block if index exceeds number of trials >"
+            BEQ    NoOpto,1,OPTO2  ;Skip all opto pulses (chair sine only) >"
             BEQ    StimType,0,CLA  ;Skip to contra version if StimType is 1 >"
 
 ILA:        DELAY  DelValA         ;                   >"

@@ -33,6 +33,7 @@ SetNumTestTrainCycles();
 var optoDuration%, nrepeats%;
 var optoStimType%      := 0;  'Defines stimulation type as being "ipsi" (0) or "contra" (1) [default 0]
 var optoEveryNthCycle% := 1;  'Sets opto timing to occur every Nth cycle [default 1]
+var noOpto%            := 0;  'Suppress opto pulses during TRAIN blocks (chair sine only) [default 0]
 var optoXTicks%[8]     := {125, 250, 375, 500, 625, 750, 875, 1000};  'Initial x-tick values show on figure
 
 ' N-th Cycle Opto (Raw) Timings A through D (relative to the start of each cycle)
@@ -265,7 +266,9 @@ Func UpdateOptoSettings%(item%)
     var temp_digpsCycleCount% := DlgValue(10);
     var temp_digpsDuration%   := DlgValue(11);
     var temp_digpsInterval%   := DlgValue(12);
+    var temp_noOpto% := DlgValue(22);
     DlgEnable(0, 7, 8, 9, 13, 14, 15, 16, 17, 18, 19, 20, 21);
+    DlgEnable(1 - temp_noOpto%, 2, 3, 4, 5, 6, 10, 11, 12);
 
     ' Re-calculate values required for validating provided stim times
     var temp_stimDur%     := Round(temp_digpsCycleCount% * temp_digpsInterval%) + 5;
@@ -366,6 +369,7 @@ Func ToolbarOptoSettings%()
     DlgInteger(5, 5, -1, 9999, col2box%, 2, 0);
     DlgText("C:", col2txt%, 3);
     DlgInteger(6, 5, -1, 9999, col2box%, 3, 0);
+    DlgCheck(22, "No opto", col2box%+5, 4);
 
     var col3txt% := col2box% + 12; 
     var col3box% := col3txt% + 5;
@@ -403,7 +407,7 @@ Func ToolbarOptoSettings%()
             optoA%, optoB%, optoC%, 
             optoD%, optoE%, optoF%, 
             digpsCycleCount%, digpsDuration%, digpsInterval%, 
-            drumFreq, optoXTicks%[]);
+            drumFreq, optoXTicks%[], noOpto%);
 
     ' Re-calculate values for quarter and half cycles
     period% := Round(sampleRate / chairFreq);
@@ -527,6 +531,7 @@ Proc SetSequencerValues()
     SampleSeqVar(24, digpsInterval%);           'PulInt
     SampleSeqVar(25, digpsCycleCount%);         'PulNCycl
     SampleSeqVar(26, optoEveryNthCycle%);       'EveryNth
+    SampleSeqVar(38, noOpto%);                  'NoOpto
 End
 
 '--------------------------------------------------------------------------------
