@@ -1,0 +1,206 @@
+' ------------------------------------------------------------------------------
+' SINE - CALIBRATION PROTOCOL (REQUIRES SPIKE2 VERSION 10)
+'
+' Values for local (rig-specific) variables are stored in the system registry: 
+' HKEY_CURRENT_USER\Software\CED\Spike2\RigParams
+' 
+' ------------------------------------------------------------------------------
+
+' Set the sequencer file to use for the protocol
+const sequencerFile$ := "sine_protocols/sine_calibration.pls";
+
+' This file is the same for all SINE protocols
+#include "sine_core.s2s"
+
+' Calibration block parameters
+var calBlockDuration := 135;  'Total duration (s) to run calibration block [default 135]
+var calTargetFPS := 30;  'Target frames-per-second to generate TTL5 pulses [default 30]
+
+' Calculate number of cycles needed for calibration block
+var nCalBlockCycles% := Round(calBlockDuration * chairFreq) + 1;
+
+'Convert FPS to sequencer tick values
+var calTargetTicks% := fpsToSequencerTicksMs(calTargetFPS); 
+
+' Generate the simple calibration block list
+blockList$[0] := "Pp";
+blockLabelList$[0] := "CAL";
+nBlocks% := Len(blockList$[]);
+PrintLog("\nBlock list generated:  ", blockList$[]);
+PrintLog("Block labels:          ", blockLabelList$[], "\n");
+
+ToolbarStartup();
+
+
+'--------------------------------------------------------------------------------
+' PROTOCOL-SPECIFIC TOOLBAR FUNCTIONS
+'--------------------------------------------------------------------------------
+' Updates sampling window with protocol-specific configuration
+Proc WindowUpdate()
+    'ChanShow("12");
+End
+
+' Initializes and enables our toolbar functions
+Proc ToolbarStartup()
+    const initialDisabled%[] := {40}; 
+    ToolbarClear();
+    ToolbarSet(0, "Idle", ToolbarIdle%);
+    ToolbarSet(1, "Quit", ToolbarQuit%);
+    ToolbarSet(2, "New File", ToolbarNewFile%);
+    ToolbarSet(3, "File Comments", ToolbarFileComments%);
+    ToolbarSet(5, "Calib Settings", ToolbarCalibSettings%);
+    ToolbarSet(40, "Run Expmt", ToolbarRunExpmt%);
+    ToolbarEnable(initialDisabled%, 0); 
+    Toolbar("", 231);
+End
+
+' Updates settings values whenever another value is changed
+Func UpdateCalibSettings%(item%) 
+    var trainingType_value% := DlgValue(1);
+    var calBlockDuration_value := DlgValue(2);
+    var calTargetFPS_value := DlgValue(3);
+    var drumAmp_value := DlgValue(4);
+    var drumFreq_value := DlgValue(5);
+    var chairAmp_value := DlgValue(6);
+    var chairFreq_value := DlgValue(7);
+
+    ' Ensure drumAmp and chairAmp are valid values
+    if (item% = 4 and drumAmp_value = 0) or (item% = 6 and chairAmp_value = 0) then
+        Message("Zero deg/s is not a valid value for experiments.\nVelocities wil be reset to default values.");
+        drumAmp_value := 10.0;
+        chairAmp_value := -10.0;
+        DlgValue(4, drumAmp_value);
+        DlgValue(6, chairAmp_value);
+    endif;
+
+    docase
+        case item% = 4 then 
+            DlgValue(6, (-1) * drumAmp_value);
+        case item% = 5 then 
+            DlgValue(7, drumFreq_value);
+        case item% = 6 then
+            DlgValue(4, (-1) * chairAmp_value);
+        case item% = 7 then 
+            DlgValue(5, chairFreq_value);
+    endcase;
+
+    return 1;
+End
+
+' Settings window for modifying general experimental parameters
+Func ToolbarCalibSettings%()
+    var width% := 85;
+    DlgCreate("CALIBRATION SETTINGS", 0, 0, width%, 10);  'Initialize new dialog window
+
+    var col1box% := 31;
+    var col1width% := col1box% + 12;
+    DlgText("Stimulus type:", 4, 2);
+    DlgList(1, 20, "VORD|VORx2-GainUp|OKR", 9, col1box%-9, 2);
+    DlgText("Calibration duration (s):", 4, 3);
+    DlgReal(2, 11, 0.001, 9999.0, col1box%, 3, 0);
+    DlgText("Target FPS:", 4, 4);
+    DlgReal(3, 11, 1.0, 999.0, col1box%, 4, 0);
+
+    ' Drum parameters boxes
+    var col2txt% := col1width% + 6; 
+    var col2box% := col2txt% + 21;
+    var col2width% := 36;
+    DlgText("Velocity (deg/s):", col2txt%, 2);
+    DlgReal(4, 11, -50.0, 50.0, col2box%, 2, 0);
+    DlgText("Frequency (Hz):", col2txt%, 3);
+    DlgReal(5, 11, 0.1, 10.0, col2box%, 3, 0);
+
+    ' Chair parameters boxes
+    DlgText("Velocity (deg/s):", col2txt%, 6);
+    DlgReal(6, 11, -50.0, 50.0, col2box%, 6, 0);
+    DlgText("Frequency (Hz):", col2txt%, 7);
+    DlgReal(7, 11, 0.1, 10.0, col2box%, 7, 0);
+     
+    DlgAllow(0x3ff, ToolbarIdle%, UpdateCalibSettings%);  'Allow all, no idle, update settings function
+    var gp1% := DlgGroup("General Parameters", 2, 1, col1width%, 4.5);
+    var gp2% := DlgGroup("Drum Parameters", col2txt%-2, 1, col2width%, 3.5);
+    var gp3% := DlgGroup("Chair Parameters", col2txt%-2, 5, col2width%, 3.5);
+
+    DlgShow(trainingType%, calBlockDuration, calTargetFPS, drumAmp, drumFreq, chairAmp, chairFreq);
+
+    ' Re-calculate number of calibration block cyles
+    nCalBlockCycles% := Round(calBlockDuration * chairFreq) + 1;
+
+    ' Re-calculate FPS in sequencer ticks
+    calTargetTicks% := fpsToSequencerTicksMs(calTargetFPS);
+
+    ' Re-compute sine_core values
+    period% := Round(sampleRate / chairFreq);
+    halfCycle := (sampleRate/chairFreq) / 2;
+    quarterCycle := halfCycle / 2;
+
+    drumSinPosMean := (-1 * drumAmp / (2 * _pi * drumFreq)) * sin(drumPhase * (_pi / 180));
+    chairSinPosMean := (-1 * chairAmp / (2 * _pi * chairFreq)) * sin(chairPhase * (_pi / 180));
+    PrintLog("New Drum Sine Mean Target Amplitude:  ", drumSinPosMean);
+    PrintLog("New Chair Sine Mean Target Amplitude:  ", chairSinPosMean);
+
+    ' Send new variable values to the sequencer
+    SetSequencerValues();
+
+    ' Save settings metadata to File Comment 5 for reference
+    SaveExpSettingsToFileCommentFive();
+    return 1;
+End
+
+
+'--------------------------------------------------------------------------------
+' SEND CURRENT SPIKE2 VARIABLE VALUES TO SEQUENCER
+'--------------------------------------------------------------------------------
+Proc SetSequencerValues()
+    ' Drum parameters
+    SampleSeqVar(2, Amp2Int32%(drumVelocityOffset, drumVelocity2Voltage));  'DrumOff
+    SampleSeqVar(3, Amp2Int16%(drumAmp, drumVelocity2Voltage));             'DrumAmp
+    SampleSeqVar(4, Hz2Int32%(drumFreq));                                   'DrumFrq
+    SampleSeqVar(5, Angle2Int32%(drumPhase));                               'DrumPhs
+    SampleSeqVar(7, nCalBlockCycles%);                                      'NdrumP
+    SampleSeqVar(8, nCalBlockCycles%);                                      'NdrumT
+
+    ' Chair parameters
+    SampleSeqVar(10, Amp2Int32%(chairVelocityOffset, chairVelocity2Voltage));  'ChairOff
+    SampleSeqVar(11, Amp2Int16%(chairAmp, chairVelocity2Voltage));             'ChairAmp
+    SampleSeqVar(12, Hz2Int32%(chairFreq));                                    'ChairFrq
+    SampleSeqVar(13, Angle2Int32%(chairPhase));                                'ChairPhs
+    SampleSeqVar(15, nCalBlockCycles%);                                        'NchairP
+    SampleSeqVar(16, nCalBlockCycles%);                                        'NchairT
+
+    ' Protocol-specific parameters
+    SampleSeqVar(22, trainingType%);  'TrainTyp
+    SampleSeqVar(23, calTargetTicks%);  'CamFps
+End
+
+Func AddTextMark(samplekey$, blocknumber%)
+    ' Search Index "Marker codes, Colour for" for more info on marker code colors
+    var text$, code%;
+    var label$ := blockLabelList$[blocknumber%];   ' semantic label set in GenerateBlockList
+    if label$ = "CAL" then
+        text$ := "CAL";
+        code% := 2;
+    endif;
+    return SampleText(text$, -1, code%);
+End
+
+Proc SaveExpSettingsToFileCommentFive() 
+    fileComments$[4] := Print$("exp=sine-calibration" + 
+        ";stimType=%d;calDur=%g;calFPS=%g" + 
+        ";drumAmp=%g;drumFreq=%g;drumPhs=%g" +
+        ";chairAmp=%g;chairFreq=%g;chairPhs=%g",
+        trainingType%, calBlockDuration, calTargetFPS,
+        drumAmp, drumFreq, drumPhase,
+        chairAmp, chairFreq, chairPhase);
+End
+
+Func fpsToSequencerTicksMs(fps)
+    const seqTickMs := 1.0; 'This MUST match SET directive in sine_calibration.pls
+    var t;
+    if (fps <= 0) or (seqTickMS <= 0) then return 0 endif;
+    t := 1000.0 / (fps * seqTickMs);
+    if t < 4.0 then t := 4.0 endif;  'Floor: keeps S-option duty within reasonable limits
+    if t > 2147483647.0 then t := 2147483647.0 endif;
+    PrintLog("Camera Target Sequencer Ticks per Second:  ", t);
+    return Round(t);
+End

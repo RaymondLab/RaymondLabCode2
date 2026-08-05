@@ -1,0 +1,336 @@
+' ------------------------------------------------------------------------------
+' SINE - STANDARD PROTOCOL (REQUIRES SPIKE2 VERSION 10)
+'
+' Values for local (rig-specific) variables are stored in the system registry: 
+' HKEY_CURRENT_USER\Software\CED\Spike2\RigParams
+' 
+' ------------------------------------------------------------------------------
+
+' Set the sequencer file to use for the protocol
+const sequencerFile$ := "sine_protocols/sine_standard.pls";
+
+' This file is the same for all SINE protocols
+#include "sine_core.s2s"
+
+' Compute number of sequencer steps for GAP1, GAP2, and GAP3 in the sequencer file
+var halfgapSeqSteps, gap1SeqSteps, gap2SeqSteps, gap3SeqSteps;  'Initialize sequencer file variables
+CalculateGapSeqSteps();
+  
+' Compute total experiment duration for settings window text information
+var textStepPeriod%, textMinutes%;
+var blockdurationTestGap      := gapDur + testBlockDuration;
+var blockdurationTestTrainGap := gapDur + testBlockDuration + gapDur + trainBlockDuration;
+var totalExperimentDuration   := (5.0 * blockdurationTestGap) + (1.0 * nTrainingBlocks% * blockdurationTestTrainGap);
+
+' Initial block list generated from default parameter values
+GenerateBlockList(nTestBlocks%, nTrainingBlocks%);
+
+ToolbarStartup();
+
+
+'--------------------------------------------------------------------------------
+' PROTOCOL-SPECIFIC TOOLBAR FUNCTIONS
+'--------------------------------------------------------------------------------
+' Updates sampling window with protocol-specific configuration
+Proc WindowUpdate()
+    ' None
+End
+
+Func ToolbarSineOn%()
+    ' TODO: Implement regular sine on button
+    return 1;
+end
+
+' Initializes and enables our toolbar functions
+Proc ToolbarStartup()
+    const initialDisabled%[] := {40}; 
+    ToolbarClear();
+    ToolbarSet(0, "Idle", ToolbarIdle%);
+    ToolbarSet(1, "Quit", ToolbarQuit%);
+    ToolbarSet(2, "New File", ToolbarNewFile%);
+    ToolbarSet(3, "File Comments", ToolbarFileComments%);
+    ToolbarSet(5, "Expmt Settings", ToolbarExpmtSettings%);
+    'TODO: ToolbarSet(9, "Sine On", ToolbarSineOn%);
+    ToolbarSet(40, "Run Expmt", ToolbarRunExpmt%);
+    ToolbarEnable(initialDisabled%, 0); 
+    Toolbar("", 231);
+End
+
+' Updates settings values whenever another value is changed
+Func UpdateExpmtSettings%(item%) 
+    var trainingType_value% := DlgValue(1);
+    var nTrainingBlocks_value% := DlgValue(2);
+    var trainBlockDuration_value := DlgValue(3);
+    var nTestBlocks_value% := DlgValue(4);
+    var testBlockDuration_value := DlgValue(5);
+    var gapDur_value := DlgValue(6);
+    var flashDur_value := DlgValue(7);
+    var drumAmp_value := DlgValue(8);
+    var drumFreq_value := DlgValue(9);
+    var drumPhase_value := DlgValue(10);
+    var chairAmp_value := DlgValue(11);
+    var chairFreq_value := DlgValue(12);
+    var chairPhase_value := DlgValue(13);
+    DlgEnable(0, 10, 13);
+    DlgEnable((nTrainingBlocks_value% > 1), 3, 14);
+    DlgEnable((trainingType_value% <> 4), 2, 3, 14);
+
+    ' Ensure drumAmp and chairAmp are valid values
+    if (item% = 8 and drumAmp_value = 0) or (item% = 11 and chairAmp_value = 0) then
+        Message("Zero deg/s is not a valid value for experiments.\nVelocities wil be reset to default values.");
+        drumAmp_value := 10.0;
+        chairAmp_value := -10.0;
+        DlgValue(8, drumAmp_value);
+        DlgValue(11, chairAmp_value);
+    endif;
+
+    docase
+        case item% = 1 then
+            if trainingType_value% = 3 then
+                DlgValue(2, 60);
+                DlgValue(3, 50);
+                DlgValue(4, 1);
+                DlgValue(5, 50);
+                DlgValue(8, 20.0);
+                DlgValue(11, -20.0);
+                DlgValue(14, 0);
+            else
+                DlgValue(2, 3);
+                DlgValue(3, 600);
+                DlgValue(4, 3);
+                DlgValue(5, 45);
+                DlgValue(8, 10.0);
+                DlgValue(11, -10.0);
+                DlgValue(14, 1);
+            endif;
+        case item% = 2 then
+            if nTrainingBlocks_value% = 1 then
+                DlgValue(14, 0);
+            else
+                DlgValue(14, 1);
+            endif;
+        case item% = 7 then
+            if flashDur_value >= gapDur_value then
+                Message("TTL flash duration must be less than Gap duration.");
+                DlgValue(7, 0.1 * gapDur_value);
+            endif;
+        case item% = 8 then 
+            DlgValue(11, (-1) * drumAmp_value);
+        case item% = 9 then 
+            DlgValue(12, drumFreq_value);
+        case item% = 11 then
+            DlgValue(8, (-1) * chairAmp_value);
+        case item% = 12 then 
+            DlgValue(9, chairFreq_value);
+    endcase;
+
+    return 1;
+End
+
+' Settings window for modifying general experimental parameters
+Func ToolbarExpmtSettings%()
+    var width% := 85;
+    DlgCreate("EXPERIMENT SETTINGS", 0, 0, width%, 14);  'Initialize new dialog window
+
+    var col1box% := 31;
+    var col1width% := col1box% + 12;
+    DlgText("Training type:", 4, 2);
+    DlgList(1, 20, "VORx2-GainUp|VORx1|VORx0-GainDown|OKR|Pretest-Only", 9, col1box%-9, 2);
+    DlgText("Number of train blocks:", 4, 3);
+    DlgInteger(2, 11, 1, 99999, col1box%, 3, 0);
+    DlgText("Train block duration (s):", 4, 4);
+    DlgReal(3, 11, 0.001, 99999.0, col1box%, 4, 0);
+    DlgText("Number of test blocks:", 4, 6);
+    DlgInteger(4, 11, 1, 99999, col1box%, 6, 0);
+    DlgText("Test block duration (s):", 4, 7);
+    DlgReal(5, 11, 0.001, 99999.0, col1box%, 7, 0);
+    DlgCheck(14, "Include MID tests between TRAIN blocks|Insert a test block between consecutive training blocks", 5, 8);
+    DlgText("Gap block duration (s):|Total duration of each Gap block.", 4, 10);
+    DlgReal(6, 11, 0.001, 100.0, col1box%, 10, 0);
+    DlgText("Gap flash duration (s):|Duration of light flash in the middle of each Gap block.", 4, 11);
+    DlgReal(7, 11, 0.000, 50.0, col1box%, 11, 0);
+
+    ' Drum parameters boxes
+    var col2txt% := col1width% + 6; 
+    var col2box% := col2txt% + 21;
+    var col2width% := 36;
+    DlgText("Velocity (deg/s):", col2txt%, 2);
+    DlgReal(8, 11, -50.0, 50.0, col2box%, 2, 0);
+    DlgText("Frequency (Hz):", col2txt%, 3);
+    DlgReal(9, 11, 0.1, 10.0, col2box%, 3, 0);
+    DlgText("Phase (deg):", col2txt%, 4);
+    DlgReal(10, 11, -360, 360, col2box%, 4, 0);
+
+    ' Chair parameters boxes
+    DlgText("Velocity (deg/s):", col2txt%, 7);
+    DlgReal(11, 11, -50.0, 50.0, col2box%, 7, 0);
+    DlgText("Frequency (Hz):", col2txt%, 8);
+    DlgReal(12, 11, 0.1, 10.0, col2box%, 8, 0);
+    DlgText("Phase (deg):", col2txt%, 9);
+    DlgReal(13, 11, -360, 360, col2box%, 9, 0);
+     
+    DlgAllow(0x3ff, ToolbarIdle%, UpdateExpmtSettings%);  'Allow all, no idle, update settings function
+    var gp1% := DlgGroup("General Parameters", 2, 1, col1width%, 11.5);
+    var gp2% := DlgGroup("Drum Parameters", col2txt%-2, 1, col2width%, 4.5);
+    var gp3% := DlgGroup("Chair Parameters", col2txt%-2, 6, col2width%, 4.5);
+
+    DlgShow(trainingType%, nTrainingBlocks%, trainBlockDuration, nTestBlocks%, testBlockDuration, 
+            gapDur, flashDur, drumAmp, drumFreq, drumPhase, chairAmp, chairFreq, chairPhase, includeMidTests%);
+
+    ' Re-calculate number of test and train block cyles
+    SetNumTestTrainCycles();
+
+    ' Re-compute number of cycle steps for GAP1, GAP2, and GAP3 in sequencer file
+    CalculateGapSeqSteps();
+
+    ' Re-generate the block list
+    GenerateBlockList(nTestBlocks%, nTrainingBlocks%);
+
+    ' Re-compute sine_core values
+    period% := Round(sampleRate / chairFreq);
+    halfCycle := (sampleRate/chairFreq) / 2;
+    quarterCycle := halfCycle / 2;
+
+    drumSinPosMean := (-1 * drumAmp / (2 * _pi * drumFreq)) * sin(drumPhase * (_pi / 180));
+    chairSinPosMean := (-1 * chairAmp / (2 * _pi * chairFreq)) * sin(chairPhase * (_pi / 180));
+    PrintLog("New Drum Sine Mean Target Amplitude:  ", drumSinPosMean);
+    PrintLog("New Chair Sine Mean Target Amplitude:  ", chairSinPosMean);
+
+    ' Send new variable values to the sequencer
+    SetSequencerValues();
+
+    ' Save settings metadata to File Comment 5 for reference
+    SaveExpSettingsToFileCommentFive();
+    return 1;
+End
+
+
+'--------------------------------------------------------------------------------
+' COMPUTE NUMBER OF SEQUENCER STEPS FOR GAP1, GAP2, GAP3 IN SEQUENCER FILE
+'--------------------------------------------------------------------------------
+Proc CalculateGapSeqSteps()
+    halfgapSeqSteps := (gapDur - flashDur) / 2.0;
+    gap1SeqSteps := Round((halfgapSeqSteps * sampleRate / 3.0) - 2.0);
+    gap2SeqSteps := Round((flashDur * sampleRate / 3.0));
+    gap3SeqSteps := Round((halfgapSeqSteps * sampleRate / 3.0) - 1.0);
+End
+
+
+'--------------------------------------------------------------------------------
+' GENERATE/UPDATE BLOCK LIST FOR A GIVEN NUMBER OF TEST/TRAINING BLOCKS
+'--------------------------------------------------------------------------------
+Proc GenerateBlockList(m%, n%)
+    var i%;
+    var w% := 0;  ' running write index
+    var midCount%;
+
+    ' One MID test block sits between each pair of TRAIN blocks
+    if (includeMidTests% = 1) and (n% > 1) then
+        midCount% := n% - 1;
+    else
+        midCount% := 0;
+    endif;
+
+    ' Each content block (test/train) is preceded by a GAP -> list length = 2 * content
+    var nContent%;
+    if trainingType% = 4 then
+        nContent% := m%;                        ' pretest-only
+    else
+        nContent% := (2 * m%) + n% + midCount%; ' PRE + POST + TRAIN + MID
+    endif;
+    var experimentTotalListLen% := Round(2 * nContent%);
+
+    resize blockList$[experimentTotalListLen%];
+    resize blockLabelList$[experimentTotalListLen%];
+
+    ' PRE test blocks
+    for i% := 1 to m% do
+        blockList$[w%] := "Gg"; blockLabelList$[w%] := "GAP"; w% += 1;
+        blockList$[w%] := "Pp"; blockLabelList$[w%] := "PRE"; w% += 1;
+    next;
+
+    if trainingType% <> 4 then
+        ' TRAIN blocks, with optional MID tests interleaved 
+        for i% := 1 to n% do
+            blockList$[w%] := "Gg"; blockLabelList$[w%] := "GAP";   w% += 1;
+            blockList$[w%] := "Tt"; blockLabelList$[w%] := "TRAIN"; w% += 1;
+            if (midCount% > 0) and (i% < n%) then     ' not after the last TRAIN
+                blockList$[w%] := "Gg"; blockLabelList$[w%] := "GAP"; w% += 1;
+                blockList$[w%] := "Pp"; blockLabelList$[w%] := "MID"; w% += 1;
+            endif;
+        next;
+
+        ' POST test blocks
+        for i% := 1 to m% do
+            blockList$[w%] := "Gg"; blockLabelList$[w%] := "GAP";  w% += 1;
+            blockList$[w%] := "Pp"; blockLabelList$[w%] := "POST"; w% += 1;
+        next;
+    endif;
+
+    nBlocks% := Len(blockList$[]);
+    PrintLog("\nBlock list generated:  ", blockList$[]);
+    PrintLog("Block labels:          ", blockLabelList$[], "\n");
+End
+
+
+'--------------------------------------------------------------------------------
+' SEND CURRENT SPIKE2 VARIABLE VALUES TO SEQUENCER
+'--------------------------------------------------------------------------------
+Proc SetSequencerValues()
+    ' Drum parameters
+    SampleSeqVar(2, Amp2Int32%(drumVelocityOffset, drumVelocity2Voltage));  'DrumOff
+    SampleSeqVar(3, Amp2Int16%(drumAmp, drumVelocity2Voltage));             'DrumAmp
+    SampleSeqVar(4, Hz2Int32%(drumFreq));                                   'DrumFrq
+    SampleSeqVar(5, Angle2Int32%(drumPhase));                               'DrumPhs
+    SampleSeqVar(7, nDrumTestCycles%);                                      'NdrumP
+    SampleSeqVar(8, nDrumTrainCycles%);                                     'NdrumT
+
+    ' Chair parameters
+    SampleSeqVar(10, Amp2Int32%(chairVelocityOffset, chairVelocity2Voltage));  'ChairOff
+    SampleSeqVar(11, Amp2Int16%(chairAmp, chairVelocity2Voltage));             'ChairAmp
+    SampleSeqVar(12, Hz2Int32%(chairFreq));                                    'ChairFrq
+    SampleSeqVar(13, Angle2Int32%(chairPhase));                                'ChairPhs
+    SampleSeqVar(15, nChairTestCycles%);                                       'NchairP
+    SampleSeqVar(16, nChairTrainCycles%+1);                                    'NchairT
+
+    ' Gap block parameters
+    SampleSeqVar(18, gap1SeqSteps);  'Gap1Dur
+    SampleSeqVar(19, gap2SeqSteps);  'FlashDur
+    SampleSeqVar(20, gap3SeqSteps);  'Gap3Dur
+
+    ' Protocol-specific parameters
+    SampleSeqVar(22, trainingType%);  'TrainTyp
+End
+
+Func AddTextMark(samplekey$, blocknumber%)
+    ' Search Index "Marker codes, Colour for" for more info on marker code colors
+    var text$, code%;
+    var label$ := blockLabelList$[blocknumber%];   ' semantic label set in GenerateBlockList
+    docase
+        case label$ = "GAP" then
+            text$ := "GAP";                            code% := 1;
+        case label$ = "PRE" then
+            pretestBlockNum%  := pretestBlockNum% + 1;
+            text$ := "PRE#"+Str$(pretestBlockNum%);    code% := 2;
+        case label$ = "MID" then
+            midtestBlockNum%  := midtestBlockNum% + 1;
+            text$ := "MID#"+Str$(midtestBlockNum%);    code% := 16;   ' pick any distinct marker code
+        case label$ = "POST" then
+            posttestBlockNum% := posttestBlockNum% + 1;
+            text$ := "POST#"+Str$(posttestBlockNum%);  code% := 8;
+        case label$ = "TRAIN" then
+            trainBlockNum%    := trainBlockNum% + 1;
+            text$ := "TRAIN#"+Str$(trainBlockNum%);    code% := 4;
+    endcase;
+    return SampleText(text$, -1, code%);
+End
+
+Proc SaveExpSettingsToFileCommentFive()
+    fileComments$[4] := Print$("exp=sine-standard" + 
+        ";trainType=%d;trainDur=%g;testDur=%g" + 
+        ";drumAmp=%g;drumFreq=%g;drumPhs=%g" +
+        ";chairAmp=%g;chairFreq=%g;chairPhs=%g",
+        trainingType%, trainBlockDuration, testBlockDuration,
+        drumAmp, drumFreq, drumPhase,
+        chairAmp, chairFreq, chairPhase);
+End

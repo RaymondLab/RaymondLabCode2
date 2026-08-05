@@ -23,6 +23,8 @@ var TTL2_ch% := 12;
 var TTL3_ch% := 13; 
 var TTL4_ch% := 14; 
 var TTL5_ch% := 15;
+var htposTalk_ch% := 16;
+var hhposTalk_ch% := 17;
 
 ' Initialize sampling window variable
 var sampling_window%;
@@ -124,10 +126,10 @@ Proc WindowSetup()
     docase
         case htpos_port% >= 0 then
             AddWaveformChannel(htpos_ch%, htpos_port%, "deg", htpos_chScaling, htpos_chOffset, "htpos", "Drum position feedback from motor encoder");
-        case htpos_port% = -1 then
-            AddTalkerChannel(htpos_ch%, "LS7366", "htpos", "Drum position feedback from motor encoder (talker)");
+        case htpos_port% = -1 then 
+            AddTalkerChannel(htposTalk_ch%, "LS7366", "htposTalker", "Drum position feedback from motor encoder (talker)");
         case htpos_port% = -2 then
-            AddTalkerChannel(htpos_ch%, "LS7366-3", "htpos", "Drum position feedback from motor encoder (talker)");
+            AddTalkerChannel(htposTalk_ch%, "LS7366-3", "htposTalker", "Drum position feedback from motor encoder (talker)");
     endcase
 
     ' Ch 8: hhpos - Horizontal Head Position (feedback from chair motor)
@@ -135,9 +137,9 @@ Proc WindowSetup()
         case hhpos_port% >= 0 then
             AddWaveformChannel(hhpos_ch%, hhpos_port%, "deg", hhpos_chScaling, hhpos_chOffset, "hhpos", "Chair position feedback from motor encoder");
         case hhpos_port% = -1 then
-            AddTalkerChannel(hhpos_ch%, "LS7366", "hhpos", "Chair position feedback from motor encoder (talker)");
+            AddTalkerChannel(hhposTalk_ch%, "LS7366", "hhposTalker", "Chair position feedback from motor encoder (talker)");
         case hhpos_port% = -2 then
-            AddTalkerChannel(hhpos_ch%, "LS7366-3", "hhpos", "Chair position feedback from motor encoder (talker)");
+            AddTalkerChannel(hhposTalk_ch%, "LS7366-3", "hhposTalker", "Chair position feedback from motor encoder (talker)");
     endcase
 
     ' Ch 9: htvel - Horizontal Target Velocity (feedback from drum motor)
@@ -155,10 +157,10 @@ Proc WindowSetup()
     SampleTitle$(TTL1_ch%, "TTL1");
     SampleComment$(TTL1_ch%, "TTL1: Shutter");
 
-    ' TTL 2: IR LED
+    ' TTL 2: Rising Trigger
     SampleEvent(TTL2_ch%, TTL2_port%, 2, sampleRate);
     SampleTitle$(TTL2_ch%, "TTL2");
-    SampleComment$(TTL2_ch%, "TTL2: IR LED");
+    SampleComment$(TTL2_ch%, "TTL2");
     
     ' TTL 3: L Laser
     SampleEvent(TTL3_ch%, TTL3_port%, 2, sampleRate);
@@ -187,65 +189,29 @@ Proc WindowSetup()
 
     ' Adjust scaling, offset, and units of htpos channel if necessary
     if (htpos_port% = -1) or (htpos_port% = -2) then
-        ChanScale(htpos_ch%, htpos_chScaling);
-        ChanOffset(htpos_ch%, htpos_chOffset);
+        htpos_ch% := VirtualChan(0, "", 0, 1.0/sampleRate);
+        VirtualChan(htpos_ch%, Str$(htpos_chScaling)+"*rm("+Str$(htposTalk_ch%)+")+("+Str$(htpos_chOffset)+")", 0, 1.0/sampleRate);
         ChanUnits$(htpos_ch%, "deg");
+        ChanTitle$(htpos_ch%, "htpos"); 
+        ChanComment$(htpos_ch%, "Drum position feedback from motor encoder (talker)");
     endif
 
     ' Adjust scaling, offset, and units of hhpos channel if necessary
     if (hhpos_port% = -1) or (hhpos_port% = -2) then
-        ChanScale(hhpos_ch%, hhpos_chScaling);
-        ChanOffset(hhpos_ch%, hhpos_chOffset);
+        hhpos_ch% := VirtualChan(0, "", 0, 1.0/sampleRate);
+        VirtualChan(hhpos_ch%, Str$(hhpos_chScaling)+"*rm("+Str$(hhposTalk_ch%)+")+("+Str$(hhpos_chOffset)+")", 0, 1.0/sampleRate);
         ChanUnits$(hhpos_ch%, "deg");
+        ChanTitle$(hhpos_ch%, "hhpos"); 
+        ChanComment$(hhpos_ch%, "Chair position feedback from motor encoder (talker)");
     endif
 
-    ' Ch v1: HTVEL - Horizontal Target Velocity (Virtual Channel derived from HTPOS)
-    if HTVELcom_port% = -3 then 
-        HTVELcom_ch% := VirtualChan(0, "", 0, 0.001);
-        VirtualChan(HTVELcom_ch%, Str$(HTVELcom_chScaling)+"*ch("+Str$(HTPOScom_ch%)+")");
-        ChanProcessAdd(HTVELcom_ch%, 1, 0.011);
-        ChanProcessAdd(HTVELcom_ch%, 3, 0.003);
-        ChanUnits$(HTVELcom_ch%, "deg/s");
-        ChanTitle$(HTVELcom_ch%, "HTVEL"); 
-        ChanComment$(HTVELcom_ch%, "Drum velocity derived from HTPOS");
-    endif
-
-    ' Ch v2: HHVEL - Horizontal Head Velocity (Virtual Channel derived from HHPOS)
-    if HHVELcom_port% = -3 then 
-        HHVELcom_ch% := VirtualChan(0, "", 0, 0.001);
-        VirtualChan(HHVELcom_ch%, Str$(HHVELcom_chScaling)+"*ch("+Str$(HHPOScom_ch%)+")");
-        ChanProcessAdd(HHVELcom_ch%, 1, 0.011);
-        ChanProcessAdd(HHVELcom_ch%, 3, 0.003);
-        ChanUnits$(HHVELcom_ch%, "deg/s");
-        ChanTitle$(HHVELcom_ch%, "HHVEL"); 
-        ChanComment$(HHVELcom_ch%, "Chair velocity derived from HHPOS");
-    endif
-
-    ' Ch v3: HTPOS - Horizontal Target Position (Virtual Channel derived from htpos)
-    if HTPOScom_port% = -3 then 
-        HTPOScom_ch% := VirtualChan(0, "", 0, 0.001);
-        VirtualChan(HTPOScom_ch%, "ch("+Str$(htpos_ch%)+")", 0, 1.0/sampleRate);
-        ChanUnits$(HTPOScom_ch%, "deg");
-        ChanTitle$(HTPOScom_ch%, "HTPOS"); 
-        ChanComment$(HTPOScom_ch%, "Target Position for driftFix derived from htpos");
-    endif
-
-    ' Ch v4: HHPos - Horizontal Head Position (Virtual Channel derived from hhpos)
-    if HHPOScom_port% = -3 then 
-        HHPOScom_ch% := VirtualChan(0, "", 0, 0.001);
-        VirtualChan(HHPOScom_ch%, "ch("+Str$(hhpos_ch%)+")", 0, 1.0/sampleRate);
-        ChanUnits$(HHPOScom_ch%, "deg");
-        ChanTitle$(HHPOScom_ch%, "HHPOS"); 
-        ChanComment$(HHPOScom_ch%, "Head Position for driftFix derived from hhpos");
-    endif
-
-    ' Ch v9: htvel - Horizontal Target Velocity (feedback derived from htpos)
+    ' Virtual Channel: htvel - Horizontal Target Velocity (feedback derived from htpos)
     if (htvel_port% = -3) or (htvel_port% = -4) then 
         htvel_ch% := VirtualChan(0, "", 0, 0.001);
         if (htvel_port% = -4) then
-            VirtualChan(htvel_ch%, Str$(htvel_chScaling)+"*rm("+Str$(htpos_ch%)+")");
+            VirtualChan(htvel_ch%, Str$(htvel_chScaling)+"*rm("+Str$(htposTalk_ch%)+")", 0, 1.0/sampleRate);
         else
-            VirtualChan(htvel_ch%, Str$(htvel_chScaling)+"*ch("+Str$(htpos_ch%)+")");
+            VirtualChan(htvel_ch%, Str$(htvel_chScaling)+"*ch("+Str$(htpos_ch%)+")", 0, 1.0/sampleRate);
         endif
         ChanProcessAdd(htvel_ch%, 1, 0.011);
         ChanProcessAdd(htvel_ch%, 3, 0.003);
@@ -254,13 +220,13 @@ Proc WindowSetup()
         ChanComment$(htvel_ch%, "Drum velocity feedback derived from htpos");
     endif
 
-    ' Ch v10: hhvel - Horizontal Head Velocity (feedback derived from hhpos)
+    ' Virtual Channel: hhvel - Horizontal Head Velocity (feedback derived from hhpos)
     if (hhvel_port% = -3) or (hhvel_port% = -4) then 
         hhvel_ch% := VirtualChan(0, "", 0, 0.001);
         if (hhvel_port% = -4) then
-            VirtualChan(hhvel_ch%, Str$(hhvel_chScaling)+"*rm("+Str$(hhpos_ch%)+")");
+            VirtualChan(hhvel_ch%, Str$(hhvel_chScaling)+"*rm("+Str$(hhposTalk_ch%)+")", 0, 1.0/sampleRate);
         else
-            VirtualChan(hhvel_ch%, Str$(hhvel_chScaling)+"*ch("+Str$(hhpos_ch%)+")");
+            VirtualChan(hhvel_ch%, Str$(hhvel_chScaling)+"*ch("+Str$(hhpos_ch%)+")", 0, 1.0/sampleRate);
         endif
         ChanProcessAdd(hhvel_ch%, 1, 0.011);
         ChanProcessAdd(hhvel_ch%, 3, 0.003);
@@ -268,11 +234,51 @@ Proc WindowSetup()
         ChanTitle$(hhvel_ch%, "hhvel"); 
         ChanComment$(hhvel_ch%, "Chair velocity feedback derived from hhpos");
     endif
+
+        ' Virtual Channel: HTPOS - Horizontal Target Position (derived from htpos)
+    if HTPOScom_port% = -3 then 
+        HTPOScom_ch% := VirtualChan(0, "", 0, 0.001);
+        VirtualChan(HTPOScom_ch%, "ch("+Str$(htpos_ch%)+")", 0, 1.0/sampleRate);
+        ChanUnits$(HTPOScom_ch%, "deg");
+        ChanTitle$(HTPOScom_ch%, "HTPOS"); 
+        ChanComment$(HTPOScom_ch%, "Target Position for driftFix derived from htpos");
+    endif
+
+    ' Virtual Channel: HHPos - Horizontal Head Position (derived from hhpos)
+    if HHPOScom_port% = -3 then 
+        HHPOScom_ch% := VirtualChan(0, "", 0, 0.001);
+        VirtualChan(HHPOScom_ch%, "ch("+Str$(hhpos_ch%)+")", 0, 1.0/sampleRate);
+        ChanUnits$(HHPOScom_ch%, "deg");
+        ChanTitle$(HHPOScom_ch%, "HHPOS"); 
+        ChanComment$(HHPOScom_ch%, "Head Position for driftFix derived from hhpos");
+    endif
+
+    ' Virtual Channel: HTVEL - Horizontal Target Velocity (derived from HTPOS)
+    if HTVELcom_port% = -3 then 
+        HTVELcom_ch% := VirtualChan(0, "", 0, 0.001);
+        VirtualChan(HTVELcom_ch%, Str$(HTVELcom_chScaling)+"*ch("+Str$(HTPOScom_ch%)+")", 0, 1.0/sampleRate);
+        ChanProcessAdd(HTVELcom_ch%, 1, 0.011);
+        ChanProcessAdd(HTVELcom_ch%, 3, 0.003);
+        ChanUnits$(HTVELcom_ch%, "deg/s");
+        ChanTitle$(HTVELcom_ch%, "HTVEL"); 
+        ChanComment$(HTVELcom_ch%, "Drum velocity derived from HTPOS");
+    endif
+
+    ' Virtual Channel: HHVEL - Horizontal Head Velocity (derived from HHPOS)
+    if HHVELcom_port% = -3 then 
+        HHVELcom_ch% := VirtualChan(0, "", 0, 0.001);
+        VirtualChan(HHVELcom_ch%, Str$(HHVELcom_chScaling)+"*ch("+Str$(HHPOScom_ch%)+")", 0, 1.0/sampleRate);
+        ChanProcessAdd(HHVELcom_ch%, 1, 0.011);
+        ChanProcessAdd(HHVELcom_ch%, 3, 0.003);
+        ChanUnits$(HHVELcom_ch%, "deg/s");
+        ChanTitle$(HHVELcom_ch%, "HHVEL"); 
+        ChanComment$(HHVELcom_ch%, "Chair velocity derived from HHPOS");
+    endif
     
     ' Ensure the standard channels are visible and in default order
     ChanShow(-1);
-    ChanOrder(0, -1, "11, 12, 13, 14, 15, 30, 31");
-    ChanHide("12..15");  'Hide TTL channels 2-5 (not used for most protocols)
+    ChanOrder(0, -1, "5,6,"+Str$(htpos_ch%)+","+Str$(hhpos_ch%)+","+Str$(htvel_ch%)+","+Str$(hhvel_ch%)+","+Str$(htposTalk_ch%)+","+Str$(hhposTalk_ch%)+",11,12,13,14,15,30,31");
+    ChanHide("16,17");  'Hide Talker channels (not used for protocols)
     
     ' Initial y-ranges for all channels
     YRange(HTVELcom_ch%, -10.25, 10.25);
@@ -290,9 +296,9 @@ Proc WindowSetup()
     XRange(0, 60);
 
     ' Set channel colors
-    var drumChannels$ := Str$(HTVELcom_ch%)+","+Str$(HTPOScom_ch%)+","+Str$(htpos_ch%)+","+Str$(htvel_ch%);
-    var chairChannels$ := Str$(HHVELcom_ch%)+","+Str$(HHPOScom_ch%)+","+Str$(hhpos_ch%)+","+Str$(hhvel_ch%);
-    ChanColourSet("1..15", 1, 0, 0, 0);
+    var drumChannels$ := Str$(HTVELcom_ch%)+","+Str$(HTPOScom_ch%)+","+Str$(htpos_ch%)+","+Str$(htvel_ch%)+","+Str$(htposTalk_ch%);
+    var chairChannels$ := Str$(HHVELcom_ch%)+","+Str$(HHPOScom_ch%)+","+Str$(hhpos_ch%)+","+Str$(hhvel_ch%)+","+Str$(hhposTalk_ch%);
+    ChanColourSet("1..17", 1, 0, 0, 0);
     ChanColourSet(drumChannels$, 1, 0.15, 0.15, 0.6);
     ChanColourSet(chairChannels$, 1, 0.6, 0.15, 0.15);
 

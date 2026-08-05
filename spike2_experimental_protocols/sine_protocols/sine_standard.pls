@@ -1,5 +1,5 @@
 ;-----------------------------------------------------------------------------
-; SINE - TEST BATTERY PROTOCOL OUTPUT SEQUENCER SCRIPT (SPIKE2 VERSION 10)
+; SINE - STANDARD PROTOCOL OUTPUT SEQUENCER SCRIPT (SPIKE2 VERSION 10)
 ;-----------------------------------------------------------------------------
 ; Initial Parameters
 ;-----------------------------------------------------------------------------
@@ -38,6 +38,9 @@
             VAR    V19,FlashDur=39 ;(FlashDur*rate/5)-1
             VAR    V20,Gap3Dur=479 ;(Gap3Dur*rate/5)-1
             VAR    V21,GapCtr=0    ;Counter for gap block
+
+            ; --- Protocol-specific Sequencer Variables ---
+            VAR    V22,TrainTyp=0  ;Training Block Type
 
             ; Variables for storing dynamic drum/chair amp values
             VAR    V100,DrumTmp=0  ;Variable drum amplitude
@@ -78,18 +81,18 @@ RESET:  'R  DIGOUT [.......0]      ;Reset to initial state >=
 ;-----------------------------------------------------------------------------
 ; DRUM SINE: Turn sinusoidal drum only stimulus on/off
 ;-----------------------------------------------------------------------------
-DSINEON: 'D MOV    DrumTmp,DrumAmp ;Set drum amplitude >"
+DSINEON: 'D MOV    DrumTmp,DrumAmp ;Start Drum Sine    >"
             MOVI   ChairTmp,0      ;Set chair amplitude >"
-            SZ     0,DrumAmp       ;Start drum cosine >"
-            OFFSET 0,DrumOff       ;Set cosine offset >"
+            SZ     0,DrumAmp       ;Start drum cosine  >"
+            OFFSET 0,DrumOff       ;Set cosine offset  >"
             PHASE  0,DrumPhs       ;Set cosine relative phase >"
-            ANGLE  0,0             ;Set cosine angle >"
+            ANGLE  0,0             ;Set cosine angle   >"
             RATE   0,DrumFrq       ;Set cosine frequency >"
 DSINE1:     WAITC  0,DSINE1        ;Wait for 0 drum phase >"
             OFFSET 0,DrumOff       ;                   >"
             JUMP   DSINE1          ;Set cosine loop    > Drum running
 
-DSINEOFF: 'd CLRC  0               ;Stop drum sine at phase 0 >"
+DSINEOFF: 'd CLRC  0               ;Stop Drum Sine     >"
 DSINE2:     OFFSET 0,DrumOff       ;Adjust cosine offset >"
             WAITC  0,DSINE2        ;Wait for end of cycle >"
             MOVI   DrumTmp,0       ;Set drum amplitude >"
@@ -99,18 +102,18 @@ DSINE2:     OFFSET 0,DrumOff       ;Adjust cosine offset >"
 ;-----------------------------------------------------------------------------
 ; CHAIR SINE: Turn sinusoidal chair only stimulus on/off
 ;-----------------------------------------------------------------------------
-CSINEON: 'C MOVI   DrumTmp,0       ;Set drum amplitude >"
-            MOV    ChairTmp,ChairAmp ;Set chair amplitude >"
+CSINEON: 'C MOV    ChairTmp,ChairAmp ;Start Chair Sine >"
+            MOVI   DrumTmp,0       ;Set drum amplitude >"
             SZ     1,ChairAmp      ;Start chair cosine >"
-            OFFSET 1,ChairOff      ;Set cosine offset >"
+            OFFSET 1,ChairOff      ;Set cosine offset  >"
             PHASE  1,ChairPhs      ;Set cosine relative phase >"
-            ANGLE  1,0             ;Set cosine angle >"
+            ANGLE  1,0             ;Set cosine angle   >"
             RATE   1,ChairFrq      ;Set cosine frequency >"
 CSINE1:     WAITC  1,CSINE1        ;Wait for 0 chair phase >"
             OFFSET 1,ChairOff      ;                   >"
             JUMP   CSINE1          ;Set cosine loop    > Chair running
 
-CSINEOFF: 'c CLRC  1               ;Stop chair sine at phase 0 >"
+CSINEOFF: 'c CLRC  1               ;Stop Chair Sine    >"
 CSINE2:     OFFSET 1,ChairOff      ;Adjust cosine offset >"
             WAITC  1,CSINE2        ;Wait for end of cycle >"
             MOVI   ChairTmp,0      ;Set chair amplitude >"
@@ -120,7 +123,7 @@ CSINE2:     OFFSET 1,ChairOff      ;Adjust cosine offset >"
 ;-----------------------------------------------------------------------------
 ; SINE: Turn sinusoidal drum and chair stimulus on/off
 ;-----------------------------------------------------------------------------
-SINEON: 'S  MOV    DrumTmp,DrumAmp ;Set drum amplitude >"
+SINEON: 'S  MOV    DrumTmp,DrumAmp ;Start x2 Sine      >"
             MOV    ChairTmp,ChairAmp ;Set chair amplitude >"
             SZ     0,DrumAmp       ;Start sine stimulus >"
             SZ     1,ChairAmp      ;Start chair cosine >"
@@ -137,7 +140,7 @@ SINE1:      OFFSET 0,DrumOff       ;Adjust drum cosine offset >"
             WAITC  1,SINE1         ;Wait for 0 chair phase >"
             JUMP   SINE1           ;Set cosine loop    > Sine running
 
-SINEOFF: 's CLRC   1               ;Stop sines at phase 0 of chair
+SINEOFF: 's CLRC   1               ;Stop x2 Sine       >"
 SINE2:      OFFSET 0,DrumOff       ;Adjust drum cosine offset >"
             OFFSET 1,ChairOff      ;Adjust chair cosine offset >"
             WAITC  1,SINE2         ;Wait for end of cycle >"
@@ -151,7 +154,7 @@ SINE2:      OFFSET 0,DrumOff       ;Adjust drum cosine offset >"
 ;-----------------------------------------------------------------------------
 ; GAP: No stimuli for Gap1Dur+Gap3Dur ms and FlashDur ms light pulse halfway
 ;-----------------------------------------------------------------------------
-GAP:    'G  MOVI   BlockFlg,1      ;Start Gap block    >GAP BLOCK
+GAP:    'G  MOVI   BlockFlg,1      ;Start GAP block    >GAP BLOCK
             DIGOUT [.......0]      ;Reset to initial state >"
             RATE   0,0             ;Stop cosine on drum >"
             RATE   1,0             ;Stop cosine on chair >"
@@ -177,65 +180,39 @@ GAP3:       DAC    0,DrumOff       ;Apply drum and chair drift correction >"
 
 
 ;-----------------------------------------------------------------------------
-; VORx0 Block (Light On, Drum & Chair In-Phase)
+; TEST: pre/mid/post test VORD (chair only) block
 ;-----------------------------------------------------------------------------
-VOR0ON: 'V  MOVI   BlockFlg,1      ;Start VORx0 block  >VORx0
-            NEG    DrumTmp,DrumAmp ;Set drum amplitude >"
-            MOV    ChairTmp,ChairAmp ;Set chair amplitude >"
-            MOV    ChairCtr,NchairP ;Set number of cycles to run >"
-            DIGOUT [.......1]      ;Turn on light      >"
-            SZ     0,DrumTmp       ;Start drum cosine  >"
-            SZ     1,ChairAmp      ;Start chair cosine >"
-            OFFSET 0,DrumOff       ;Set drum cosine offset >"
-            OFFSET 1,ChairOff      ;Set chair cosine offset >"
-            PHASE  0,DrumPhs       ;Set drum cosine relative phase >"
-            PHASE  1,ChairPhs      ;Set chair cosine relative phase >"
-            ANGLE  0,0             ;Set drum cosine angle >"
-            ANGLE  1,0             ;Set chair cosine angle >"
-            RATE   0,DrumFrq       ;Set drum cosine frequency >"
-            RATE   1,ChairFrq      ;Set chair cosine frequency >"
-VOR01:      OFFSET 0,DrumOff       ;Adjust drum cosine offset >"
-            OFFSET 1,ChairOff      ;Adjust chair cosine offset >"
-            WAITC  1,VOR01         ;Wait for 0 chair phase >"
-            DBNZ   ChairCtr,VOR01  ;Run cycles until counter hits zero >"
-
-VOR0OFF: 'v CLRC   1               ;Stop chair sine at 0 phase >"
-VOR02:      OFFSET 0,DrumOff       ;Adjust drum cosine offset >"
-            OFFSET 1,ChairOff      ;Adjust chair cosine offset >"
-            WAITC  1,VOR02         ;Wait for end of cycle >"
-            RATE   0,0             ;Stop drum cosine   >"
-            RATE   1,0             ;Stop chair cosine  >"
-            MOVI   DrumTmp,0       ;Set drum amplitude to zero >"
-            MOVI   ChairTmp,0      ;Set chair amplitude to zero >"
-            MOVI   BlockFlg,0      ;Set block as inactive >"
-            JUMP   TTL1OFF
-
-
-;-----------------------------------------------------------------------------
-; VORx1 Block (Light on, Chair only)
-;-----------------------------------------------------------------------------
-VOR1ON: 'W  MOVI   BlockFlg,1      ;Start VORx1 block  >VORx1
+TEST:   'P  MOVI   BlockFlg,1      ;Start TEST block   >TESTING
             MOVI   DrumTmp,0       ;Set drum amplitude >"
             MOV    ChairTmp,ChairAmp ;Set chair amplitude >"
             MOV    ChairCtr,NchairP ;Set number of cycles to run >"
-            DIGOUT [.......1]      ;Turn on light      >"
+            DIGOUT [.......0]      ;Ensure light is off >"
             SZ     1,ChairAmp      ;Start chair cosine >"
             OFFSET 1,ChairOff      ;Set cosine offset  >"
-            PHASE  1,ChairPhs      ;Set cosine relative phase >"
+            PHASE  1,-90           ;Set cosine relative phase >"
             ANGLE  1,0             ;Set cosine angle   >"
             RATE   1,ChairFrq      ;Set cosine frequency >"
-VOR11:      OFFSET 1,ChairOff      ;Adjust cosine offset >"
-            WAITC  1,VOR11         ;Wait for 0 phase   >"
-            DBNZ   ChairCtr,VOR11  ;Run cycles until counter hits zero >"
-
-VOR1OFF: 'w CLRC   1               ;Stop chair sine at 0 phase >"
-VOR12:      OFFSET 1,ChairOff      ;Adjust cosine offset >"
-            WAITC  1,VOR12         ;Wait for end of cycle >"
+TEST1:      OFFSET 1,ChairOff      ;Adjust cosine offset >"
+            WAITC  1,TEST1         ;Wait for 0 phase   >"
+            DBNZ   ChairCtr,TEST1  ;Run cycles until counter hits zero >"
+            CLRC   1               ;Stop chair sine at 0 phase >"
+TEST2:      OFFSET 1,ChairOff      ;Adjust cosine offset >"
+            WAITC  1,TEST2         ;Wait for end of cycle >"
             RATE   1,0             ;Stop chair cosine  >"
             MOVI   DrumTmp,0       ;Set drum amplitude to zero >"
             MOVI   ChairTmp,0      ;Set chair amplitude to zero >"
             MOVI   BlockFlg,0      ;Set block as inactive >"
-            JUMP   TTL1OFF
+            JUMP   IDLELOOP
+
+
+;-----------------------------------------------------------------------------
+; TRAIN: training block (T)
+;-----------------------------------------------------------------------------
+TRAIN: 'T  BEQ TrainTyp,0,VOR2ON  ;Start TRAIN block >TRAINING
+           BEQ TrainTyp,1,VOR1ON  ;Branch to VORx1 block >"
+           BEQ TrainTyp,2,VOR0ON  ;Branch to VORx0 block >"
+           BEQ TrainTyp,3,OKRON  ;Branch to OKR block >"
+           JUMP IDLELOOP
 
 
 ;-----------------------------------------------------------------------------
@@ -244,7 +221,7 @@ VOR12:      OFFSET 1,ChairOff      ;Adjust cosine offset >"
 VOR2ON: 'X  MOVI   BlockFlg,1      ;Start VORx2 block  >VORx2
             MOV    DrumTmp,DrumAmp ;Set drum amplitude >"
             MOV    ChairTmp,ChairAmp ;Set chair amplitude >"
-            MOV    ChairCtr,NchairP ;Set number of cycles to run >"
+            MOV    ChairCtr,NchairT ;Set number of cycles to run >"
             DIGOUT [.......1]      ;Turn on light      >"
             SZ     0,DrumTmp       ;Start drum cosine  >"
             SZ     1,ChairAmp      ;Start chair cosine >"
@@ -274,12 +251,74 @@ VOR22:      OFFSET 0,DrumOff       ;Adjust drum cosine offset >"
 
 
 ;-----------------------------------------------------------------------------
+; VORx1 Block (Light on, Chair only)
+;-----------------------------------------------------------------------------
+VOR1ON: 'W  MOVI   BlockFlg,1      ;Start VORx1 block  >VORx1
+            MOVI   DrumTmp,0       ;Set drum amplitude >"
+            MOV    ChairTmp,ChairAmp ;Set chair amplitude >"
+            MOV    ChairCtr,NchairT ;Set number of cycles to run >"
+            DIGOUT [.......1]      ;Turn on light      >"
+            SZ     1,ChairAmp      ;Start chair cosine >"
+            OFFSET 1,ChairOff      ;Set cosine offset  >"
+            PHASE  1,ChairPhs      ;Set cosine relative phase >"
+            ANGLE  1,0             ;Set cosine angle   >"
+            RATE   1,ChairFrq      ;Set cosine frequency >"
+VOR11:      OFFSET 1,ChairOff      ;Adjust cosine offset >"
+            WAITC  1,VOR11         ;Wait for 0 phase   >"
+            DBNZ   ChairCtr,VOR11  ;Run cycles until counter hits zero >"
+
+VOR1OFF: 'w CLRC   1               ;Stop chair sine at 0 phase >"
+VOR12:      OFFSET 1,ChairOff      ;Adjust cosine offset >"
+            WAITC  1,VOR12         ;Wait for end of cycle >"
+            RATE   1,0             ;Stop chair cosine  >"
+            MOVI   DrumTmp,0       ;Set drum amplitude to zero >"
+            MOVI   ChairTmp,0      ;Set chair amplitude to zero >"
+            MOVI   BlockFlg,0      ;Set block as inactive >"
+            JUMP   TTL1OFF
+
+
+;-----------------------------------------------------------------------------
+; VORx0 Block (Light On, Drum & Chair In-Phase)
+;-----------------------------------------------------------------------------
+VOR0ON: 'V  MOVI   BlockFlg,1      ;Start VORx0 block  >VORx0
+            NEG    DrumTmp,DrumAmp ;Set drum amplitude >"
+            MOV    ChairTmp,ChairAmp ;Set chair amplitude >"
+            MOV    ChairCtr,NchairT ;Set number of cycles to run >"
+            DIGOUT [.......1]      ;Turn on light      >"
+            SZ     0,DrumTmp       ;Start drum cosine  >"
+            SZ     1,ChairAmp      ;Start chair cosine >"
+            OFFSET 0,DrumOff       ;Set drum cosine offset >"
+            OFFSET 1,ChairOff      ;Set chair cosine offset >"
+            PHASE  0,DrumPhs       ;Set drum cosine relative phase >"
+            PHASE  1,ChairPhs      ;Set chair cosine relative phase >"
+            ANGLE  0,0             ;Set drum cosine angle >"
+            ANGLE  1,0             ;Set chair cosine angle >"
+            RATE   0,DrumFrq       ;Set drum cosine frequency >"
+            RATE   1,ChairFrq      ;Set chair cosine frequency >"
+VOR01:      OFFSET 0,DrumOff       ;Adjust drum cosine offset >"
+            OFFSET 1,ChairOff      ;Adjust chair cosine offset >"
+            WAITC  1,VOR01         ;Wait for 0 chair phase >"
+            DBNZ   ChairCtr,VOR01  ;Run cycles until counter hits zero >"
+
+VOR0OFF: 'v CLRC   1               ;Stop chair sine at 0 phase >"
+VOR02:      OFFSET 0,DrumOff       ;Adjust drum cosine offset >"
+            OFFSET 1,ChairOff      ;Adjust chair cosine offset >"
+            WAITC  1,VOR02         ;Wait for end of cycle >"
+            RATE   0,0             ;Stop drum cosine   >"
+            RATE   1,0             ;Stop chair cosine  >"
+            MOVI   DrumTmp,0       ;Set drum amplitude to zero >"
+            MOVI   ChairTmp,0      ;Set chair amplitude to zero >"
+            MOVI   BlockFlg,0      ;Set block as inactive >"
+            JUMP   TTL1OFF
+
+
+;-----------------------------------------------------------------------------
 ; VORD Block (Light off, Chair only)
 ;-----------------------------------------------------------------------------
 VORDON: 'Y  MOVI   BlockFlg,1      ;Start VORD block   >VORD
             MOVI   DrumTmp,0       ;Set drum amplitude >"
             MOV    ChairTmp,ChairAmp ;Set chair amplitude >"
-            MOV    ChairCtr,NchairP ;Set number of cycles to run >"
+            MOV    ChairCtr,NchairT ;Set number of cycles to run >"
             DIGOUT [.......0]      ;Ensure light is off >"
             SZ     1,ChairAmp      ;Start chair cosine >"
             OFFSET 1,ChairOff      ;Set cosine offset  >"
@@ -306,7 +345,7 @@ VORD2:      OFFSET 1,ChairOff      ;Adjust cosine offset >"
 OKRON:  'Z  MOVI   BlockFlg,1      ;Start OKR block    >OKR
             MOV    DrumTmp,DrumAmp ;Set drum amplitude >"
             MOVI   ChairTmp,0      ;Set chair amplitude >"
-            MOV    DrumCtr,NdrumP  ;Set number of cycles to run >"
+            MOV    DrumCtr,NdrumT  ;Set number of cycles to run >"
             DIGOUT [.......1]      ;Turn light on      >"
             SZ     0,DrumAmp       ;Start chair cosine >"
             OFFSET 0,DrumOff       ;Set cosine offset  >"
