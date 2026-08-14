@@ -103,7 +103,7 @@ Func driftFix%()
     endif;
 
     var dt := currentTime - lastDriftFixTime;
-    if dt < chairPeriod then 
+    if dt < sampleStepsize then 
         ' Limit drift correction to only once per stimulus cycle period (previously was "dt < sampleStepsize")
         return 1;  
     endif;
@@ -225,6 +225,13 @@ Func ToolbarNewFile%()
     return 1;
 End
 
+Func LockFileComments%(item%)
+    if item% = 0 then         '0 = initial function call, before window display
+        DlgEnable(0, 4, 5);  'Grey out comments 4 and 5
+    endif;
+    return 1;
+End
+
 ' Function that allows embedding comments into Spike2 file itself
 Func ToolbarFileComments%()
     var ii%;
@@ -235,7 +242,7 @@ Func ToolbarFileComments%()
     DlgString(4, "Comment 4:", 2000, "", 17, 4);
     DlgString(5, "Comment 5:", 2000, "", 17, 5);
 
-    DlgAllow(0x3ff, ToolbarIdle%);  'Allow all, no idle
+    DlgAllow(0x3ff, ToolbarIdle%, LockFileComments%);  'Allow all, no idle
     DlgShow(fileComments$[0], fileComments$[1], fileComments$[2], fileComments$[3], fileComments$[4]);
 
     SetFileComments();

@@ -23,6 +23,7 @@ var nCalBlockCycles% := Round(calBlockDuration * chairFreq) + 1;
 var calTargetTicks% := fpsToSequencerTicksMs(calTargetFPS); 
 
 ' Generate the simple calibration block list
+trainingType% := 1;  'Change default stimulus type to VORx2
 blockList$[0] := "Pp";
 blockLabelList$[0] := "CAL";
 nBlocks% := Len(blockList$[]);
@@ -95,7 +96,7 @@ Func ToolbarCalibSettings%()
     var col1box% := 31;
     var col1width% := col1box% + 12;
     DlgText("Stimulus type:", 4, 2);
-    DlgList(1, 20, "VORD|VORx2-GainUp|OKR", 9, col1box%-9, 2);
+    DlgList(1, 20, "VOR-Dark|VORx2-GainUp|OKR", 9, col1box%-9, 2);
     DlgText("Calibration duration (s):", 4, 3);
     DlgReal(2, 11, 0.001, 9999.0, col1box%, 3, 0);
     DlgText("Target FPS:", 4, 4);

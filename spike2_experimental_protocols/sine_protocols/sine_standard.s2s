@@ -73,7 +73,7 @@ Func UpdateExpmtSettings%(item%)
     var chairPhase_value := DlgValue(13);
     DlgEnable(0, 10, 13);
     DlgEnable((nTrainingBlocks_value% > 1), 3, 14);
-    DlgEnable((trainingType_value% <> 4), 2, 3, 14);
+    DlgEnable((trainingType_value% <> 5), 2, 3, 14);
 
     ' Ensure drumAmp and chairAmp are valid values
     if (item% = 8 and drumAmp_value = 0) or (item% = 11 and chairAmp_value = 0) then
@@ -86,7 +86,7 @@ Func UpdateExpmtSettings%(item%)
 
     docase
         case item% = 1 then
-            if trainingType_value% = 3 then
+            if trainingType_value% = 4 then
                 DlgValue(2, 60);
                 DlgValue(3, 50);
                 DlgValue(4, 1);
@@ -135,7 +135,7 @@ Func ToolbarExpmtSettings%()
     var col1box% := 31;
     var col1width% := col1box% + 12;
     DlgText("Training type:", 4, 2);
-    DlgList(1, 20, "VORx2-GainUp|VORx1|VORx0-GainDown|OKR|Pretest-Only", 9, col1box%-9, 2);
+    DlgList(1, 20, "VORx2-GainUp|VORx1|VORx0-GainDown|VORD|OKR|Pretest-Only", 9, col1box%-9, 2);
     DlgText("Number of train blocks:", 4, 3);
     DlgInteger(2, 11, 1, 99999, col1box%, 3, 0);
     DlgText("Train block duration (s):", 4, 4);

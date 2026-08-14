@@ -208,11 +208,12 @@ TEST2:      OFFSET 1,ChairOff      ;Adjust cosine offset >"
 ;-----------------------------------------------------------------------------
 ; TRAIN: training block (T)
 ;-----------------------------------------------------------------------------
-TRAIN: 'T  BEQ TrainTyp,0,VOR2ON  ;Start TRAIN block >TRAINING
-           BEQ TrainTyp,1,VOR1ON  ;Branch to VORx1 block >"
-           BEQ TrainTyp,2,VOR0ON  ;Branch to VORx0 block >"
-           BEQ TrainTyp,3,OKRON  ;Branch to OKR block >"
-           JUMP IDLELOOP
+TRAIN:  'T  BEQ    TrainTyp,0,VOR2ON ;Start TRAIN block >TRAINING
+            BEQ    TrainTyp,1,VOR1ON ;Branch to VORx1 block >"
+            BEQ    TrainTyp,2,VOR0ON ;Branch to VORx0 block >"
+            BEQ    TrainTyp,3,VORDON ;Branch to VORD block >"
+            BEQ    TrainTyp,4,OKRON ;Branch to OKR block >"
+            JUMP   IDLELOOP
 
 
 ;-----------------------------------------------------------------------------
@@ -336,7 +337,7 @@ VORD2:      OFFSET 1,ChairOff      ;Adjust cosine offset >"
             MOVI   DrumTmp,0       ;Set drum amplitude to zero >"
             MOVI   ChairTmp,0      ;Set chair amplitude to zero >"
             MOVI   BlockFlg,0      ;Set block as inactive >"
-            JUMP   IDLELOOP
+            JUMP   TTL1OFF
 
 
 ;-----------------------------------------------------------------------------
