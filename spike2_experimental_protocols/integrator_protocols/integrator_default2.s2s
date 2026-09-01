@@ -65,10 +65,9 @@ Proc ToolbarStartup()
     ToolbarSet(0, "Idle", ToolbarIdle%);
     ToolbarSet(1, "Quit", ToolbarQuit%);
     ToolbarSet(2, "New File", ToolbarNewFile%);
-    ToolbarSet(3, "File Comments", ToolbarFileComments%);
-    ToolbarSet(4, "Expmt Settings", ToolbarExpmtSettings%);
-    ToolbarSet(5, "Train Settings", ToolbarTrainingSettings%);
-    ToolbarSet(6, "Calc Eye Sign", ToolbarCalcEyeSign%);
+    ToolbarSet(3, "Expmt Settings", ToolbarExpmtSettings%);
+    ToolbarSet(4, "Train Settings", ToolbarTrainingSettings%);
+    ToolbarSet(5, "Calc Eye Sign", ToolbarCalcEyeSign%);
     ToolbarSet(40, "Run Expmt", ToolbarRunExpmt%);
     ToolbarEnable(initialDisabled%, 0); 
     Toolbar("", 231);
@@ -149,12 +148,12 @@ Func AddTextMark(samplekey$, blocknumber%)
                 preBlockNum% := preBlockNum% + 1;
                 text$ := "PRE#"+Str$(preBlockNum%);
                 code% := 2;
-                fileComments$[2] := fileComments$[2] + "PRE,";
+                'fileComments$[2] := fileComments$[2] + "PRE,";
             else
                 postBlockNum% := postBlockNum% + 1;
                 text$ := "POST#"+Str$(postBlockNum%);
                 code% := 8;
-                fileComments$[2] := fileComments$[2] + "POST,";
+                'fileComments$[2] := fileComments$[2] + "POST,";
             endif;
         case samplekey$ = "T" then
             nullCalcStartTime := MaxTime();

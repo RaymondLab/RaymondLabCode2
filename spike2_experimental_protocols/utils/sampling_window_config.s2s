@@ -23,8 +23,9 @@ var TTL2_ch% := 12;
 var TTL3_ch% := 13; 
 var TTL4_ch% := 14; 
 var TTL5_ch% := 15;
-var htposTalk_ch% := 16;
-var hhposTalk_ch% := 17;
+var TTL6_ch% := 16;
+var htposTalk_ch% := 17;
+var hhposTalk_ch% := 18;
 
 ' Initialize sampling window variable
 var sampling_window%;
@@ -32,24 +33,6 @@ var sampling_window%;
 ' Initialize filepath variables for an optional waveform
 var waveFilePath$;
 var wavefile_error%;
-
-' Initialize array to hold file comments
-var fileComments$[5];
-
-
-' Sets the file comments into the .smrx/.smr file
-Proc SetFileComments()
-    var ii%;
-    for ii% := 1 to 5 do
-        FileComment$(ii%, fileComments$[ii%-1]);
-        if ii% = 5 then
-            PrintLog("\nAdded file comment %d: %s\n", ii%, fileComments$[ii%-1]);
-        else
-            PrintLog("\nAdded file comment %d: %s", ii%, fileComments$[ii%-1]);
-        endif;
-        
-    next;
-End
 
 ' Gets the file path of a selected waveform file to add online
 Proc LoadWaveform()
@@ -172,10 +155,15 @@ Proc WindowSetup()
     SampleTitle$(TTL4_ch%, "TTL4");
     SampleComment$(TTL4_ch%, "TTL4: R Laser");
 
-    ' TTL 5
-    SampleEvent(TTL5_ch%, TTL5_port%, 2, sampleRate);
-    SampleTitle$(TTL5_ch%, "TTL5");
-    SampleComment$(TTL5_ch%, "TTL5");
+    ' TTL 5: Camera 1 Strobe
+    SampleEvent(TTL5_ch%, TTL5_port%, 1, sampleRate);
+    SampleTitle$(TTL5_ch%, "TTL5+");
+    SampleComment$(TTL5_ch%, "TTL5: Camera Strobe");
+
+    ' TTL 6: Camera 2 Strobe
+    SampleEvent(TTL6_ch%, TTL6_port%, 1, sampleRate);
+    SampleTitle$(TTL6_ch%, "TTL6+");
+    SampleComment$(TTL6_ch%, "TTL6+: Camera Strobe");
     
     ' TextMark: Event keyboard markers
     SampleTextMark(200);
@@ -277,8 +265,7 @@ Proc WindowSetup()
     
     ' Ensure the standard channels are visible and in default order
     ChanShow(-1);
-    ChanOrder(0, -1, "5,6,"+Str$(htpos_ch%)+","+Str$(hhpos_ch%)+","+Str$(htvel_ch%)+","+Str$(hhvel_ch%)+","+Str$(htposTalk_ch%)+","+Str$(hhposTalk_ch%)+",11,12,13,14,15,30,31");
-    ChanHide("16,17");  'Hide Talker channels (not used for protocols)
+    ChanOrder(0, -1, "5,6,"+Str$(htpos_ch%)+","+Str$(hhpos_ch%)+","+Str$(htvel_ch%)+","+Str$(hhvel_ch%)+","+Str$(htposTalk_ch%)+","+Str$(hhposTalk_ch%)+",11,12,13,14,15,16,30,31");
     
     ' Initial y-ranges for all channels
     YRange(HTVELcom_ch%, -10.25, 10.25);
@@ -298,7 +285,7 @@ Proc WindowSetup()
     ' Set channel colors
     var drumChannels$ := Str$(HTVELcom_ch%)+","+Str$(HTPOScom_ch%)+","+Str$(htpos_ch%)+","+Str$(htvel_ch%)+","+Str$(htposTalk_ch%);
     var chairChannels$ := Str$(HHVELcom_ch%)+","+Str$(HHPOScom_ch%)+","+Str$(hhpos_ch%)+","+Str$(hhvel_ch%)+","+Str$(hhposTalk_ch%);
-    ChanColourSet("1..17", 1, 0, 0, 0);
+    ChanColourSet("1..18", 1, 0, 0, 0);
     ChanColourSet(drumChannels$, 1, 0.15, 0.15, 0.6);
     ChanColourSet(chairChannels$, 1, 0.6, 0.15, 0.15);
 

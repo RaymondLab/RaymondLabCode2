@@ -67,7 +67,6 @@ Func ToolbarNewFile%()
     SetSequencerValues();  'Sends current parameter values to 1401
     Yield();
     SampleKey("R");        'Ensures that sequencer is set to its default configuration prior to sampling
-    SetFileComments();
     return 1;
 End
 
@@ -207,13 +206,6 @@ Func AddTextMark(samplekey$, blocknumber%)
             code% := 4;
     endcase;
     return SampleText(text$, -1, code%); 
-End
-
-Proc SetFileComments()
-    var i%;
-    for i% := 1 to 5 do
-        FileComment$(i%, "Test, comment: "+Str$(i%));
-    next;
 End
 
 

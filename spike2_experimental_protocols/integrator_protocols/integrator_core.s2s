@@ -106,16 +106,16 @@ Func ToolbarIdle%()
                         CalculateNullPosition();
                         CalculateNullExclusionShift();
                         UpdateHeposNull();
-                        fileComments$[3] := fileComments$[3] + Print$("(%.3f,%.3f),", blockStartTime, blockEndTime);
+                        'fileComments$[3] := fileComments$[3] + Print$("(%.3f,%.3f),", blockStartTime, blockEndTime);
                     case lowerSampleKey$ = "t" then
                         if trainBlockNum% < nTrainingBlocks% then
                             CalculateNullExclusionShift();
                         endif;
                         CalculateFracPos();
                         UpdateHeposNull();
-                        fileComments$[3] := fileComments$[3] + Print$("(%.3f,%.3f),", blockStartTime, blockEndTime);
+                        'fileComments$[3] := fileComments$[3] + Print$("(%.3f,%.3f),", blockStartTime, blockEndTime);
                     case (blockNum% > preLastBlockNum%) and (lowerSampleKey$ = "p") then
-                        fileComments$[3] := fileComments$[3] + Print$("(%.3f,%.3f),", blockStartTime, blockEndTime);
+                        'fileComments$[3] := fileComments$[3] + Print$("(%.3f,%.3f),", blockStartTime, blockEndTime);
                 endcase;
             endif; 
             if blockNum% < nBlocks% then  'Check whether current block number is not greater than or equal to maximum number of blocks
@@ -146,7 +146,6 @@ Func ToolbarQuit%()
     SampleKey("R");
     SampleKey("a");
     SampleStop();
-    SetFileComments();
     return 0;
 End
 
@@ -160,22 +159,6 @@ Func ToolbarNewFile%()
     SetSequencerValues(); 
     Yield();
     SampleKey("R");  'Ensures that sequencer is set to its default configuration prior to sampling
-    return 1;
-End
-
-Func ToolbarFileComments%()
-    var ii%;
-    DlgCreate("FILE COMMENTS", 0, 0, 85, 7);  'Initialize new dialog window
-    DlgString(1, "Comment 1:", 2000, "", 20, 1);
-    DlgString(2, "Comment 2:", 2000, "", 20, 2);
-    DlgString(3, "Block Labels:", 2000, "", 20, 3);
-    DlgString(4, "Start/End Times:", 2000, "", 20, 4);
-    DlgString(5, "Null Pos/Excls:", 2000, "", 20, 5);
-
-    DlgAllow(0x3ff, ToolbarIdle%);  'Allow all, no idle
-    DlgShow(fileComments$[0], fileComments$[1], fileComments$[2], fileComments$[3], fileComments$[4]);
-    
-    SetFileComments();
     return 1;
 End
 

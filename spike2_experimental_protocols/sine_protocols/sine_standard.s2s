@@ -48,9 +48,7 @@ Proc ToolbarStartup()
     ToolbarSet(0, "Idle", ToolbarIdle%);
     ToolbarSet(1, "Quit", ToolbarQuit%);
     ToolbarSet(2, "New File", ToolbarNewFile%);
-    ToolbarSet(3, "File Comments", ToolbarFileComments%);
-    ToolbarSet(5, "Expmt Settings", ToolbarExpmtSettings%);
-    'TODO: ToolbarSet(9, "Sine On", ToolbarSineOn%);
+    ToolbarSet(3, "Expmt Settings", ToolbarExpmtSettings%);
     ToolbarSet(40, "Run Expmt", ToolbarRunExpmt%);
     ToolbarEnable(initialDisabled%, 0); 
     Toolbar("", 231);
@@ -199,8 +197,6 @@ Func ToolbarExpmtSettings%()
     ' Send new variable values to the sequencer
     SetSequencerValues();
 
-    ' Save settings metadata to File Comment 5 for reference
-    SaveExpSettingsToFileCommentFive();
     return 1;
 End
 
@@ -323,14 +319,4 @@ Func AddTextMark(samplekey$, blocknumber%)
             text$ := "TRAIN#"+Str$(trainBlockNum%);    code% := 4;
     endcase;
     return SampleText(text$, -1, code%);
-End
-
-Proc SaveExpSettingsToFileCommentFive()
-    fileComments$[4] := Print$("exp=sine-standard" + 
-        ";trainType=%d;trainDur=%g;testDur=%g" + 
-        ";drumAmp=%g;drumFreq=%g;drumPhs=%g" +
-        ";chairAmp=%g;chairFreq=%g;chairPhs=%g",
-        trainingType%, trainBlockDuration, testBlockDuration,
-        drumAmp, drumFreq, drumPhase,
-        chairAmp, chairFreq, chairPhase);
 End

@@ -73,10 +73,9 @@ Proc ToolbarStartup()
     ToolbarSet(0, "Idle", ToolbarIdle%);
     ToolbarSet(1, "Quit", ToolbarQuit%);
     ToolbarSet(2, "New File", ToolbarNewFile%);
-    ToolbarSet(3, "File Comments", ToolbarFileComments%);
-    ToolbarSet(4, "Expmt Settings", ToolbarExpmtSettings%);
-    ToolbarSet(5, "Train Settings", ToolbarTrainingSettings%);
-    ToolbarSet(6, "Calc Eye Sign", ToolbarCalcEyeSign%);
+    ToolbarSet(3, "Expmt Settings", ToolbarExpmtSettings%);
+    ToolbarSet(4, "Train Settings", ToolbarTrainingSettings%);
+    ToolbarSet(5, "Calc Eye Sign", ToolbarCalcEyeSign%);
     ToolbarSet(40, "Run Expmt", ToolbarRunExpmt%);
     ToolbarEnable(initialDisabled%, 0); 
     Toolbar("", 231);
@@ -138,20 +137,20 @@ Func AddTextMark(samplekey$, blocknumber%)
                 pretestBlockNum% := pretestBlockNum% + 1;
                 text$ := "PRE#"+Str$(pretestBlockNum%);
                 code% := 2;
-                fileComments$[2] := fileComments$[2] + "PRE,";
+                'fileComments$[2] := fileComments$[2] + "PRE,";
             else
                 posttestBlockNum% := posttestBlockNum% + 1;
                 text$ := "POST#"+Str$(posttestBlockNum%);
                 code% := 8;
-                fileComments$[2] := fileComments$[2] + "POST,";
+                'fileComments$[2] := fileComments$[2] + "POST,";
             endif;
-            fileComments$[4] := fileComments$[4] + "(nan,nan),";
+            'fileComments$[4] := fileComments$[4] + "(nan,nan),";
         case samplekey$ = "T" then
             trainBlockNum% := trainBlockNum% + 1;
             text$ := "TRAIN#"+Str$(trainBlockNum%)+" (g="+Str$(trainingGain)+", "+"null="+Str$(nullEyePos)+", "+"excl="+Str$(nullExclusion)+")";
             code% := 4;
-            fileComments$[2] := fileComments$[2] + "TRAIN,";
-            fileComments$[4] := fileComments$[4] + Print$("(%.6f,%.6f),",nullEyePos,nullExclusion);
+            'fileComments$[2] := fileComments$[2] + "TRAIN,";
+            'fileComments$[4] := fileComments$[4] + Print$("(%.6f,%.6f),",nullEyePos,nullExclusion);
     endcase;
     return SampleText(text$, -1, code%); 
 End

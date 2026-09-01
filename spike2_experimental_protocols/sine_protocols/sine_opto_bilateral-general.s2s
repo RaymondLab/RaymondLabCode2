@@ -79,11 +79,9 @@ Proc ToolbarStartup()
     ToolbarSet(0, "Idle", ToolbarIdle%);
     ToolbarSet(1, "Quit", ToolbarQuit%);
     ToolbarSet(2, "New File", ToolbarNewFile%);
-    ToolbarSet(3, "File Comments", ToolbarFileComments%);
-    ToolbarSet(4, "Opto Settings", ToolbarOptoSettings%);
-    ToolbarSet(5, "Expmt Settings", ToolbarExpmtSettings%);
+    ToolbarSet(3, "Opto Settings", ToolbarOptoSettings%);
+    ToolbarSet(4, "Expmt Settings", ToolbarExpmtSettings%);
     ToolbarSet(40, "Run Expmt", ToolbarRunExpmt%);
-    SaveExpSettingsToFileCommentFive();
     ToolbarEnable(initialDisabled%, 0); 
     Toolbar("", 231);
 End
@@ -211,8 +209,6 @@ Func ToolbarExpmtSettings%()
     ' Send new variable values to the sequencer
     SetSequencerValues();
 
-    ' Save settings metadata to File Comment 5 for reference
-    SaveExpSettingsToFileCommentFive();
     return 1;
 End
 
@@ -391,8 +387,6 @@ Func ToolbarOptoSettings%()
     ' Send new variable values to the sequencer
     SetSequencerValues();
 
-    ' Save settings metadata to File Comment 5 for reference
-    SaveExpSettingsToFileCommentFive();
     return 1;
 End
 
@@ -604,20 +598,4 @@ Func AddTextMark(samplekey$, blocknumber%)
             text$ := "TRAIN#"+Str$(trainBlockNum%);    code% := 4;
     endcase;
     return SampleText(text$, -1, code%);
-End
-
-Proc SaveExpSettingsToFileCommentFive()
-    fileComments$[4] := Print$("exp=bilateral-general" + 
-        ";trainType=%d;trainDur=%g;testDur=%g" + 
-        ";drumAmp=%g;drumFreq=%g;drumPhs=%g" +
-        ";chairAmp=%g;chairFreq=%g;chairPhs=%g" +
-        ";stimType=%d;everyNth=%d" +
-        ";A=%d;B=%d;C=%d" +
-        ";pulCyc=%d;pulDur=%d;pulInt=%d",
-        trainingType%, trainBlockDuration, testBlockDuration,
-        drumAmp, drumFreq, drumPhase,
-        chairAmp, chairFreq, chairPhase,
-        optoStimType%, optoEveryNthCycle%,
-        optoA%, optoB%, optoC%,
-        digpsCycleCount%, digpsDuration%, digpsInterval%);
 End

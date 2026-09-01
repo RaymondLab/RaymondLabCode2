@@ -17,7 +17,7 @@ var rigID$, rigparam_error%, voltageMax;
 
 ' Initialize general toolbar-related variables
 var HHVELcom_port%, HTVELcom_port%, HHPOScom_port%, HTPOScom_port%, hhpos_port%, htpos_port%, hepos1_port%, hepos2_port%, hhvel_port%, htvel_port%;
-var TTL1_port%, TTL2_port%, TTL3_port%, TTL4_port%, TTL5_port%;
+var TTL1_port%, TTL2_port%, TTL3_port%, TTL4_port%, TTL5_port%, TTL6_port%;
 
 
 ' Retrieves rig parameters from local registry
@@ -110,6 +110,7 @@ Proc LoadRigParams()
     TTL3_port%     := Val(ReadRigParam$("RigParams\\ChannelNumbers", "TTL3_port"));
     TTL4_port%     := Val(ReadRigParam$("RigParams\\ChannelNumbers", "TTL4_port"));
     TTL5_port%     := Val(ReadRigParam$("RigParams\\ChannelNumbers", "TTL5_port"));
+    TTL6_port%     := Val(ReadRigParam$("RigParams\\ChannelNumbers", "TTL6_port"));
 
     if rigparam_error% then
         Message("Invalid RigParam values were found. Please correct the values described in the Log and try again.");

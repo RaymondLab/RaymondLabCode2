@@ -1,0 +1,28 @@
+{
+  "_comment": "Defaults for eye-calibration-recording.py. Anything here can be overridden on the command line; Spike2 should normally pass only --session-id (and --seconds if it varies). Unknown keys are an error, not a shrug.",
+
+  "camera": "ov2311",
+  "devices": [1, 2],
+  "format": null,
+  "exposure": null,
+
+  "seconds": 30.0,
+  "out": "C:/Temp/test",
+  "rotate180": false,
+  "first_frame_tiff": true,
+
+  "align_preview_hz": 25.0,
+  "rec_preview_hz": 10.0,
+  "downsample": 2,
+  "rec_downsample": 4,
+  "rec_window_scale": 0.5,
+  "fullscreen": false,
+
+  "handshake": true,
+  "ready_flag": "C:/Temp/eyecal_ready.flag",
+  "handshake_wait_s": 0.0,
+
+  "anchor": true,
+  "anchor_exposure": null,
+  "anchor_hold_s": 0.25
+}

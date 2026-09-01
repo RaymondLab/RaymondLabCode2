@@ -89,10 +89,8 @@ Proc ToolbarStartup()
     ToolbarSet(0, "Idle", ToolbarIdle%);
     ToolbarSet(1, "Quit", ToolbarQuit%);
     ToolbarSet(2, "New File", ToolbarNewFile%);
-    ToolbarSet(3, "File Comments", ToolbarFileComments%);
-    ToolbarSet(4, "Opto Settings", ToolbarOptoSettings%);
-    ToolbarSet(5, "Expmt Settings", ToolbarExpmtSettings%);
-    'TODO: ToolbarSet(9, "Sine On", ToolbarSineOn%);
+    ToolbarSet(3, "Opto Settings", ToolbarOptoSettings%);
+    ToolbarSet(4, "Expmt Settings", ToolbarExpmtSettings%);
     ToolbarSet(40, "Run Expmt", ToolbarRunExpmt%);
     ToolbarEnable(initialDisabled%, 0); 
     Toolbar("", 231);

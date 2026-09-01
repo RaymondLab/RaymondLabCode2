@@ -13,32 +13,55 @@ const sequencerFile$ := "sine_protocols/sine_calibration.pls";
 #include "sine_core.s2s"
 
 ' Calibration block parameters
-var calBlockDuration := 135;  'Total duration (s) to run calibration block [default 135]
+var calBlockDuration := 10; '120;  'Total duration (s) to run calibration block [default 120]
 var calTargetFPS := 30;  'Target frames-per-second to generate TTL5 pulses [default 30]
 
 ' Calculate number of cycles needed for calibration block
 var nCalBlockCycles% := Round(calBlockDuration * chairFreq) + 1;
 
 'Convert FPS to sequencer tick values
-var calTargetTicks% := fpsToSequencerTicksMs(calTargetFPS); 
+var calTargetTicks% := FpsToSequencerTicksMs(calTargetFPS); 
 
 ' Generate the simple calibration block list
 trainingType% := 1;  'Change default stimulus type to VORx2
-blockList$[0] := "Pp";
+blockList$[0] := "Qq";
 blockLabelList$[0] := "CAL";
 nBlocks% := Len(blockList$[]);
 PrintLog("\nBlock list generated:  ", blockList$[]);
 PrintLog("Block labels:          ", blockLabelList$[], "\n");
 
+' TODO: Get these variables from an external source
+var PY$ := "\"C:/Users/Public/RaymondLabCode2/.venv/Scripts/python.exe\"";
+var TOOLPATH$ := " \"C:/Users/Public/RaymondLabCode2/eye_sensor_calibration/recording_app/eye-calibration-recording.py\"";
+var CAM$ := " --camera ov2311";
+VAR DUR$ := " --seconds "+Str$(calBlockDuration);
+var OUTPATH$ := " --out \"C:/Temp/test\"";
+var FLAGPATH$ := "C:/Temp/eyecal_ready.flag";
+var CMD$ := PY$ + TOOLPATH$ + CAM$ + DUR$ + OUTPATH$;
+
 ToolbarStartup();
 
 
 '--------------------------------------------------------------------------------
-' PROTOCOL-SPECIFIC TOOLBAR FUNCTIONS
+' PROTOCOL-SPECIFIC TOOLBAR-RELATED FUNCTIONS
 '--------------------------------------------------------------------------------
 ' Updates sampling window with protocol-specific configuration
 Proc WindowUpdate()
-    'ChanShow("12");
+    ' Create Virtual Channels that show the instantaneous frequency of the camera strobes
+    var TTL5freq_ch% := VirtualChan(0, "", 0, 0.001);
+    VirtualChan(TTL5freq_ch%, "IF("+Str$(TTL5_ch%)+")", 0, 1.0/sampleRate);
+    ChanUnits$(TTL5freq_ch%, "Hz");
+    ChanTitle$(TTL5freq_ch%, "TTL5if"); 
+    ChanComment$(TTL5freq_ch%, "TTL5 Instantaneous Frequency");
+
+    var TTL6freq_ch% := VirtualChan(0, "", 0, 0.001);
+    VirtualChan(TTL6freq_ch%, "IF("+Str$(TTL6_ch%)+")", 0, 1.0/sampleRate);
+    ChanUnits$(TTL6freq_ch%, "Hz");
+    ChanTitle$(TTL6freq_ch%, "TTL6if"); 
+    ChanComment$(TTL6freq_ch%, "TTL6 Instantaneous Frequency");
+
+    ' Ensure calibration-related channels are not hidden
+    ChanShow(Str$(TTL5_ch%)+","+Str$(TTL6_ch%)+","+Str$(TTL5freq_ch%)+","+Str$(TTL6freq_ch%));
 End
 
 ' Initializes and enables our toolbar functions
@@ -48,8 +71,7 @@ Proc ToolbarStartup()
     ToolbarSet(0, "Idle", ToolbarIdle%);
     ToolbarSet(1, "Quit", ToolbarQuit%);
     ToolbarSet(2, "New File", ToolbarNewFile%);
-    ToolbarSet(3, "File Comments", ToolbarFileComments%);
-    ToolbarSet(5, "Calib Settings", ToolbarCalibSettings%);
+    ToolbarSet(3, "Calib Settings", ToolbarCalibSettings%);
     ToolbarSet(40, "Run Expmt", ToolbarRunExpmt%);
     ToolbarEnable(initialDisabled%, 0); 
     Toolbar("", 231);
@@ -128,7 +150,7 @@ Func ToolbarCalibSettings%()
     nCalBlockCycles% := Round(calBlockDuration * chairFreq) + 1;
 
     ' Re-calculate FPS in sequencer ticks
-    calTargetTicks% := fpsToSequencerTicksMs(calTargetFPS);
+    calTargetTicks% := FpsToSequencerTicksMs(calTargetFPS);
 
     ' Re-compute sine_core values
     period% := Round(sampleRate / chairFreq);
@@ -143,9 +165,18 @@ Func ToolbarCalibSettings%()
     ' Send new variable values to the sequencer
     SetSequencerValues();
 
-    ' Save settings metadata to File Comment 5 for reference
-    SaveExpSettingsToFileCommentFive();
     return 1;
+End
+
+Func FpsToSequencerTicksMs(fps)
+    const seqTickMs := 1.0; 'This MUST match SET directive in sine_calibration.pls
+    var t;
+    if (fps <= 0) or (seqTickMS <= 0) then return 0 endif;
+    t := 1000.0 / (fps * seqTickMs);
+    if t < 4.0 then t := 4.0 endif;  'Floor: keeps S-option duty within reasonable limits
+    if t > 2147483647.0 then t := 2147483647.0 endif;
+    PrintLog("Camera Target Sequencer Ticks per Second:  ", t);
+    return Round(t);
 End
 
 
@@ -174,34 +205,101 @@ Proc SetSequencerValues()
     SampleSeqVar(23, calTargetTicks%);  'CamFps
 End
 
-Func AddTextMark(samplekey$, blocknumber%)
+
+'--------------------------------------------------------------------------------
+' ADDITIONAL PROTOCOL-SPECIFIC FUNCTIONS
+'--------------------------------------------------------------------------------
+Func BeforeBlockFunc(bNum%, bStartT, upSampKey$)
+    ' Any additional actions can be defined here 
+    RunPythonEyeCalTool(bNum%, bStartT, upSampKey$);
+End
+
+Func AfterBlockFunc(bNum%, bEndT, lowSampKey$)
+    ' Any additional actions can be defined here
+    var SAVEPATH$, smrxOK%, smrOK%, nCh%, list%[2001];
+
+    Yield(2);
+    runFlag% := 0;  'Set experiment flag to off
+    SampleKey("R");  'Reset 1401 sequencer to initial state
+    SampleText("END", -1, 0); 
+    SampleKey("a");  'Sends a lower-case keyboard command that defines the end of the experiment (useful only for analysis)
+    ToolbarSet(40, "Run Expmt", ToolbarRunExpmt%);
+    Yield(1);
+    XRange();  'Zoom out to view entire experiement
+
+    if ViewKind() <> 0 then return -1 endif;
+    if SampleStatus() = 2 then SampleStop(); endif;
+
+    var fh% := FileOpen(FLAGPATH$, 8, 0);
+    Read(SAVEPATH$);
+    FileClose();
+    PrintLog("[%g] Read save file path from flag: %s\n", fh%, SAVEPATH$);
+
+    ' Save Native 64-bit SMRX file
+    PrintLog("Saving SMRX and SMR files to save file path...\n\n");
+    smrxOK% := FileSaveAs(savePath$ + "\\calibration.smrx", -1);
+    if smrxOK% = 0 then
+        PrintLog("SMRX saved successfully!\n");
+        ' Work out valid channel count for 32-bit SMR file
+        nCh% := ChanList(list%[], 0x2063ff);  'Disk channels present
+        if nCh% < 32 then nCh% := 32 endif;
+        if nCh% > 64 then nCh% := 64 endif;  'Defines the hard limit for SMR files
+        ' Export the 32-bit SMR file
+        ExportChanList(2);  'Clear list (RealWave -> Waveform)
+        ExportChanList(0.0, MaxTime(), -1);  'Whole file (all channels)
+        smrOK% := FileSaveAs(savePath$ + "\\calibration.smr", 0, 1, "", nCh%, 1);
+        if smrOK% = 0 then
+            PrintLog("SMR saved successfully!\n");
+        else
+            PrintLog("WARNING: SMR saved unsuccessfully!\n");
+        endif;
+    else
+        PrintLog("WARNING: SMRX and SMR files saved unsuccessfully!\n");
+    endif;
+
+    Message("CALIBRATION COMPLETED SUCCESSFULLY!");
+    halt;
+    return 0;
+End
+
+Func RunPythonEyeCalTool(bNum%, bStartT, upSampKey$)
+    FileDelete(FLAGPATH$);
+
+    PrintLog("\nLaunching Eye Calibration Image Acquisition Window: \n%s\n\n", CMD$);
+    var st% := 0;
+    var fh% := -1;
+    if SampleStatus() = 0 then SampleStart(); endif;
+    var hProg% := ProgRun(cmd$, 1, 10, 15, 85, 80);
+    PrintLog("Eye Calibration Image Acquisition Window running...\n");
+    repeat
+        Yield(0.1);
+        st% := ProgStatus(hProg%);
+        fh% := FileStatus(FLAGPATH$);
+    until (fh% <> -1) or (st% <> 1);
+
+    if st% <> 1 then 
+        PrintLog("\nImage Acquisition Window cancelled - HALTING!\n");
+        if SampleStatus() = 2 then SampleStop(); endif;
+        return 0;
+    endif;
+
+    PrintLog("Running %g sinusoidal stimulus cycles...\n", nCalBlockCycles%+1);
+    AddTextMark("", -1, "-START");  'Add a TextMark key to denote the start of a block and/or event
+    SampleKey("P");  'Send SampleKey() command to the 1401 sequencer of the current block's letter marker
+    repeat
+        Yield(0.05);
+        st% := ProgStatus(hProg%);
+    until st% <> 1;
+    PrintLog("Image Acquisition Window closed with %g status...\n", st%);
+
+    AddTextMark("", -1, "-STOP");
+    return 1;
+End
+
+Func AddTextMark(samplekey$, blocknumber%, suffixStr$)
     ' Search Index "Marker codes, Colour for" for more info on marker code colors
     var text$, code%;
-    var label$ := blockLabelList$[blocknumber%];   ' semantic label set in GenerateBlockList
-    if label$ = "CAL" then
-        text$ := "CAL";
-        code% := 2;
-    endif;
+    text$ := "CAL"+suffixStr$;
+    code% := 2;
     return SampleText(text$, -1, code%);
-End
-
-Proc SaveExpSettingsToFileCommentFive() 
-    fileComments$[4] := Print$("exp=sine-calibration" + 
-        ";stimType=%d;calDur=%g;calFPS=%g" + 
-        ";drumAmp=%g;drumFreq=%g;drumPhs=%g" +
-        ";chairAmp=%g;chairFreq=%g;chairPhs=%g",
-        trainingType%, calBlockDuration, calTargetFPS,
-        drumAmp, drumFreq, drumPhase,
-        chairAmp, chairFreq, chairPhase);
-End
-
-Func fpsToSequencerTicksMs(fps)
-    const seqTickMs := 1.0; 'This MUST match SET directive in sine_calibration.pls
-    var t;
-    if (fps <= 0) or (seqTickMS <= 0) then return 0 endif;
-    t := 1000.0 / (fps * seqTickMs);
-    if t < 4.0 then t := 4.0 endif;  'Floor: keeps S-option duty within reasonable limits
-    if t > 2147483647.0 then t := 2147483647.0 endif;
-    PrintLog("Camera Target Sequencer Ticks per Second:  ", t);
-    return Round(t);
 End
