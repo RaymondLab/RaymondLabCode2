@@ -87,7 +87,8 @@ const APP$       := " \"C:/Users/Public/RaymondLabCode2/eye_sensor_calibration/r
 const OUT$       := "C:/Temp/test";
 
 var id$  := "m123_run01";
-var cmd$ := PY$ + APP$ + " --camera ov2311 --seconds 10.0" +
+' the camera preset is detected from the devices unless --camera says otherwise
+var cmd$ := PY$ + APP$ + " --seconds 10.0" +
             " --out \"" + OUT$ + "\" --session-id " + id$ +
             " --ready-flag \"" + readyPath$ + "\"";
 
@@ -198,7 +199,7 @@ An unknown key is an error, not a shrug.
 
 | key | default | notes |
 |---|---|---|
-| `camera` | `ov2311` | preset name; see `eyecal/cameras.py` |
+| `camera` | `auto` | identifies the family (`elp` / `ov2311` / `ov9281`) from the geometries the device offers; set a preset name to force one |
 | `devices` | `[1, 2]` | 1-based, as MATLAB's winvideo numbers them |
 | `format`, `exposure` | `null` | override the preset |
 | `seconds` | `30.0` | recording duration |
@@ -215,6 +216,21 @@ An unknown key is an error, not a shrug.
 | `anchor` | `true` | the strobe bracket |
 | `anchor_exposure` | `null` | `null` = normal + 4 stops |
 | `anchor_hold_s` | `0.25` | |
+
+### Camera detection
+
+`camera: auto` asks the cameras what they are. Each preset's native full frame is offered by one
+family and no other, so the app asks every device for every preset's geometry and reads back what
+the driver settled on. DirectShow does not synthesise a mode a camera does not have — it snaps to
+the nearest one it does have, so an ELP asked for `1280x800` answers `1280x720` — and exactly one
+preset reads back what it asked for. That is the identification. It costs about 5 s per camera,
+all of it before Spike2 starts sampling.
+
+Windows friendly names and USB VID/PID are deliberately **not** used: the two Arducam models
+share a VID/PID, neither carries a serial number, and Windows caches the name against the port,
+so moving a cable renames a camera. The limit is that this identifies the camera **family**, not
+the unit — two of the same model cannot be told apart by anything software can see here. The
+readbacks it decided on are kept in `session.json` under `requested.cameraDetection`.
 
 ### The two recording-preview settings are coupled
 
@@ -306,7 +322,7 @@ Spike2 file and read the report.
 
 ```
 eye-calibration-recording.py   entry point: CLI, phase sequencing, exit codes
-eyecal/cameras.py              open + format negotiation + verification, presets
+eyecal/cameras.py              open + identify + format negotiation + verification, presets
 eyecal/capture.py              CameraReader thread, open_all / close_all
 eyecal/display.py              overlay, crosshair, tiling, letterbox, Window
 eyecal/align.py                alignment phase -> accepted order and rotation
@@ -334,7 +350,7 @@ Useful from a terminal, but **not** what Spike2 reads:
 | code | meaning |
 |---|---|
 | 0 | recorded and finalised |
-| 1 | failed — camera would not open, wrong format, not streaming |
+| 1 | failed — camera would not open or could not be identified, wrong format, not streaming |
 | 2 | bad command line |
 | 3 | recorded, but a guard tripped — read `warnings` in `session.json` |
 | 4 | cancelled by the operator at the alignment stage |

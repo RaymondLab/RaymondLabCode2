@@ -33,11 +33,10 @@ PrintLog("Block labels:          ", blockLabelList$[], "\n");
 ' TODO: Get these variables from an external source
 var PY$ := "\"C:/Users/Public/RaymondLabCode2/.venv/Scripts/python.exe\"";
 var TOOLPATH$ := " \"C:/Users/Public/RaymondLabCode2/eye_sensor_calibration/recording_app/eye-calibration-recording.py\"";
-var CAM$ := " --camera ov2311";
 VAR DUR$ := " --seconds "+Str$(calBlockDuration);
 var OUTPATH$ := " --out \"C:/Temp/test\"";
 var FLAGPATH$ := "C:/Temp/eyecal_ready.flag";
-var CMD$ := PY$ + TOOLPATH$ + CAM$ + DUR$ + OUTPATH$;
+var CMD$ := PY$ + TOOLPATH$ + DUR$ + OUTPATH$;
 
 ToolbarStartup();
 

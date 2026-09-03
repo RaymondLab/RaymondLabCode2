@@ -10,7 +10,8 @@ from pathlib import Path
 
 DEFAULTS = {
     # what to open
-    "camera": "elp",                    # preset name; see eyecal/cameras.py
+    "camera": "auto",                   # auto identifies the family from the device's
+                                        # geometries; or a preset name, see eyecal/cameras.py
     "devices": [1, 2],                  # 1-based, as MATLAB's winvideo numbers them
     "format": None,                     # override the preset's native format, e.g. MJPG_1280x720
     "exposure": None,                   # override the preset's Exposure value

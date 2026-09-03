@@ -1,7 +1,7 @@
 {
   "_comment": "Defaults for eye-calibration-recording.py. Anything here can be overridden on the command line; Spike2 should normally pass only --session-id (and --seconds if it varies). Unknown keys are an error, not a shrug.",
 
-  "camera": "ov2311",
+  "camera": "auto",
   "devices": [1, 2],
   "format": null,
   "exposure": null,

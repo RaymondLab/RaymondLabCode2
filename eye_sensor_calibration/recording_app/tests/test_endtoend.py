@@ -2,15 +2,17 @@
 
     python tests/test_endtoend.py
 
-Runs main() for real -- config, camera open, alignment, ready flag, recording, session.json,
-exit code -- with cv2.VideoCapture replaced by a fake that honours whatever format it is asked
-for, and the preview window replaced by one that presses keys on cue.
+Runs main() for real -- config, camera identification, camera open, alignment, ready flag,
+recording, session.json, exit code -- with cv2.VideoCapture replaced by a fake that offers one
+camera model's mode list, and the preview window replaced by one that presses keys on cue.
 
 The flag protocol is asserted from Spike2's side: the app must CREATE the flag and never delete
 it, must not hang when nobody answers, and must finish in about the requested duration.
 """
 
+import contextlib
 import importlib.util
+import io
 import json
 import sys
 import tempfile
@@ -44,15 +46,26 @@ def load_entry_point():
 
 
 class FakeCap:
-    """Honours whatever geometry and codec it is asked for; brightness follows the exposure."""
+    """Offers one camera model's mode list; brightness follows the exposure.
+
+    SUPPORTED is the OV2311's real list, so the shipped ov2311 preset works and everything else
+    does not. A geometry the camera does not have is never synthesised: DirectShow snaps the
+    request to the nearest mode it does have and reports THAT back, which is the whole basis of
+    cameras.identify_camera. SUPPORTED_BY_INDEX overrides it per device, for a mixed pair.
+    """
 
     DARK, BRIGHT = 30, 200
+    SUPPORTED = {(160, 120), (320, 240), (640, 480), (800, 600), (1280, 720), (1280, 960),
+                 (1600, 1200)}
+    SUPPORTED_BY_INDEX = {}             # OpenCV index -> geometries, when the pair is not alike
 
     def __init__(self, index, backend=None):
         self.index = index
+        self.supported = self.SUPPORTED_BY_INDEX.get(index, self.SUPPORTED)
         self.props = {cv2.CAP_PROP_FRAME_WIDTH: 640, cv2.CAP_PROP_FRAME_HEIGHT: 480,
                       cv2.CAP_PROP_FOURCC: float(cv2.VideoWriter_fourcc(*"YUY2")),
                       cv2.CAP_PROP_FPS: 30.0, cv2.CAP_PROP_EXPOSURE: -10.0}
+        self.asked = [640, 480]         # width and height arrive as two separate writes
         self.released = False
         self.n = 0
         self._lock = threading.Lock()
@@ -62,8 +75,19 @@ class FakeCap:
 
     def set(self, prop, value):
         with self._lock:
-            self.props[prop] = float(value)
-        return True
+            if prop in (cv2.CAP_PROP_FRAME_WIDTH, cv2.CAP_PROP_FRAME_HEIGHT):
+                # The driver negotiates on the PAIR, so each write is judged against the other
+                # value as it stands -- which is why asking for 1600 wide lands somewhere else
+                # until the matching height arrives.
+                self.asked[0 if prop == cv2.CAP_PROP_FRAME_WIDTH else 1] = int(value)
+                w, h = self.asked
+                got = ((w, h) if (w, h) in self.supported
+                       else min(self.supported, key=lambda m: (m[0] - w) ** 2 + (m[1] - h) ** 2))
+                self.props[cv2.CAP_PROP_FRAME_WIDTH] = float(got[0])
+                self.props[cv2.CAP_PROP_FRAME_HEIGHT] = float(got[1])
+            else:
+                self.props[prop] = float(value)
+        return True                     # True whether or not it was honoured, as the real one is
 
     def get(self, prop):
         with self._lock:
@@ -323,6 +347,80 @@ except RuntimeError as exc:
     check("refuses to record", "not under manual control" in str(exc))
     check("names every candidate it tried", "0.75" in str(exc) and "0.25" in str(exc))
 check("no session directory was left behind", not (Path(out7) / "run07").exists())
+
+# --- identifying the camera instead of being told which one it is -----------------------------
+ELP_MODES = {(320, 240), (640, 480), (800, 600), (1024, 768), (1280, 720), (1920, 1080)}
+
+
+def one_line(text, limit=110):
+    """Captured stderr, squashed to something a check line can carry."""
+    return " ".join(text.split())[:limit]
+
+
+def run_app_exit(argv, cap_class=FakeCap):
+    """Run main() the way __main__ does: any exception is exit 1, with the reason on stderr."""
+    err = io.StringIO()
+    try:
+        with contextlib.redirect_stderr(err):
+            return run_with(cap_class, argv), err.getvalue()
+    except Exception as exc:
+        return 1, err.getvalue() + f"\nFAILED: {exc}"
+
+
+print("\nno --camera given at all; config.json says auto")
+out8 = tempfile.mkdtemp(prefix="eyecal_e2e_")
+code = run_with(FakeCap, ["--devices", "1", "2", "--seconds", "1.0", "--anchor-hold-s", "0.15",
+                          "--out", out8, "--session-id", "run08", "--no-handshake",
+                          "--no-preview"])
+check("run completed (0, or 3 with timing warnings)", code in (0, 3), str(code))
+req = json.loads((Path(out8) / "run08" / "session.json").read_text())["requested"]
+check("the preset used is the one the cameras answered to", req["camera"] == "ov2311",
+      str(req["camera"]))
+check("what was actually asked for is recorded beside it", req["cameraRequested"] == "auto",
+      str(req["cameraRequested"]))
+check("every device is in the detection evidence",
+      [e["deviceId"] for e in req["cameraDetection"]] == [1, 2],
+      str([(e["deviceId"], e["detected"]) for e in req["cameraDetection"]]))
+check("both devices identified as the same camera",
+      all(e["detected"] == "ov2311" for e in req["cameraDetection"]))
+# The evidence is a readback, not a claim: the two presets this camera does not have were asked
+# for and answered with something else, which is what makes the third one an identification.
+probes = {pr["preset"]: pr for pr in req["cameraDetection"][0]["probes"]}
+check("the matching preset got exactly what it asked for",
+      probes["ov2311"]["asked"] == probes["ov2311"]["got"] == [1600, 1200], str(probes["ov2311"]))
+check("the other presets were snapped to a mode this camera does have",
+      probes["elp"]["got"] != probes["elp"]["asked"]
+      and probes["ov9281"]["got"] != probes["ov9281"]["asked"],
+      f"elp {probes['elp']['got']}, ov9281 {probes['ov9281']['got']}")
+
+print("\ntwo cameras of different models")
+out9 = tempfile.mkdtemp(prefix="eyecal_e2e_")
+flag9 = str(Path(out9) / "ready.flag")
+FakeCap.SUPPORTED_BY_INDEX = {1: ELP_MODES}         # device 2 is an ELP, device 1 is not
+try:
+    code, err = run_app_exit(["--devices", "1", "2", "--seconds", "1.0", "--out", out9,
+                              "--session-id", "run09", "--ready-flag", flag9, "--no-preview"])
+finally:
+    FakeCap.SUPPORTED_BY_INDEX = {}
+check("exit code 1 (failed)", code == 1, str(code))
+check("it names what each device is", "device 1: ov2311" in err and "device 2: elp" in err,
+      one_line(err))
+check("and says how to override it", "--camera" in err)
+check("no ready flag was ever created", not Path(flag9).exists())
+check("no session directory", not (Path(out9) / "run09").exists())
+
+print("\nan explicit --camera still overrides, and still fails loudly when it is wrong")
+out10 = tempfile.mkdtemp(prefix="eyecal_e2e_")
+flag10 = str(Path(out10) / "ready.flag")
+code, err = run_app_exit(["--camera", "elp", "--devices", "1", "2", "--seconds", "1.0",
+                          "--out", out10, "--session-id", "run10", "--ready-flag", flag10,
+                          "--no-preview"])
+check("exit code 1 (failed)", code == 1, str(code))
+check("the preset was taken as given, and the format checked against it",
+      "Driver would not deliver 1920x1080" in err, one_line(err))
+check("the wrong-preset hint still names the right one",
+      "re-run with --camera ov2311" in err, one_line(err[-140:]))
+check("no ready flag was ever created", not Path(flag10).exists())
 
 print("\n" + ("ALL TESTS PASSED" if not FAILS else f"{len(FAILS)} FAILED: {FAILS}"))
 sys.exit(1 if FAILS else 0)

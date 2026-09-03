@@ -1,4 +1,4 @@
-"""Opening a camera that actually honours what was asked, and the presets to ask for.
+"""Opening a camera that actually honours what was asked, and working out which one it is.
 
 Everything here talks to one cv2.VideoCapture and knows nothing about threads -- see capture.py
 for that. The rule that matters is stated in open_camera: the ORDER of the property writes is
@@ -38,6 +38,7 @@ CAMERA_PRESETS = {
     },
 }
 
+AUTO = "auto"               # camera setting meaning "ask the device"; see identify_camera
 MAX_RATE_SENTINEL = 240.0   # rate requested for FrameRate:"max"; above any camera in scope
 
 # --- proving manual exposure; see secure_manual_exposure -------------------------------------
@@ -139,6 +140,26 @@ def negotiated(cap):
             fourcc_str(cap.get(cv2.CAP_PROP_FOURCC)))
 
 
+def _open_live(device_id):
+    """Open the device and prove it really came up. Returns (cap, OpenCV index).
+
+    isOpened() is not a liveness test on DSHOW: it returns True for a capture whose device was
+    never really acquired, and every get() afterwards answers -1. Caught here so the failure is
+    named, instead of surfacing later as a bogus "driver would not deliver 1920x1080".
+    """
+    index = int(device_id) - 1        # MATLAB winvideo is 1-based; OpenCV is 0-based
+    cap = cv2.VideoCapture(index, cv2.CAP_DSHOW)
+    if not cap.isOpened():
+        raise CameraBusyError(f"Could not open camera at OpenCV index {index} "
+                              f"(device {device_id}).{_HELD_HINT}")
+    if int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) <= 0:
+        cap.release()
+        raise CameraBusyError(f"Camera at OpenCV index {index} (device {device_id}) reports "
+                              f"itself open but answers a non-positive frame "
+                              f"width.{_HELD_HINT}")
+    return cap, index
+
+
 def open_camera(device_id, fmt, source, anchor_exposure=None):
     """Open a camera, force the format, prove manual exposure. Returns (cap, text, evidence).
 
@@ -167,20 +188,7 @@ def open_camera(device_id, fmt, source, anchor_exposure=None):
     `anchor_exposure`, when given, is also checked for re-negotiating the media type.
     """
     fourcc, width, height = parse_format(fmt)
-    index = int(device_id) - 1        # MATLAB winvideo is 1-based; OpenCV is 0-based
-    cap = cv2.VideoCapture(index, cv2.CAP_DSHOW)
-    if not cap.isOpened():
-        raise CameraBusyError(f"Could not open camera at OpenCV index {index} "
-                              f"(device {device_id}).{_HELD_HINT}")
-
-    # isOpened() is not a liveness test on DSHOW: it returns True for a capture whose device was
-    # never really acquired, and every get() afterwards answers -1. Caught here so the failure is
-    # named, instead of surfacing later as a bogus "driver would not deliver 1920x1080".
-    if int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) <= 0:
-        cap.release()
-        raise CameraBusyError(f"Camera at OpenCV index {index} (device {device_id}) reports "
-                              f"itself open but answers a non-positive frame "
-                              f"width.{_HELD_HINT}")
+    cap, _ = _open_live(device_id)
 
     rate = source.get("FrameRate", "max")
     fps_hint = MAX_RATE_SENTINEL if str(rate).lower() == "max" else float(rate)
@@ -205,6 +213,102 @@ def open_camera(device_id, fmt, source, anchor_exposure=None):
         description += (f", manual exposure via AUTO_EXPOSURE={evidence['manualVia']} "
                         f"({evidence['responseRatio']:.2f}x)")
     return cap, description, evidence
+
+
+def identify_camera(device_id):
+    """Work out WHICH preset this camera is, by asking it for each preset's native geometry.
+
+    Returns (preset name, probes), where probes is the ask/got pair for every preset -- kept so
+    session.json carries the evidence the identification was made on.
+
+    WHY THE GEOMETRY AND NOT THE DEVICE NAME. Nothing Windows says about these devices can be
+    trusted. The two Arducam models share a USB VID/PID, neither carries a serial number, and
+    Windows caches the friendly name against the port, so moving a cable renames a camera. No PnP
+    data is read here at all. What IS distinctive is the set of formats each sensor offers: every
+    preset's native full frame is offered by that family and by no other -- 1920x1080 only on the
+    ELP, 1600x1200 only on the OV2311, 1280x800 only on the OV9281. The bench project's
+    findDevices.m identifies devices the same way.
+
+    A geometry the camera does not have is NOT synthesised. DirectShow snaps the request to the
+    nearest mode it does have and reports that back instead, so on an ELP asking for 1280x800
+    reads back 1280x720 and asking for 1600x1200 reads back 1920x1080. Only the camera that
+    really has the mode answers with exactly what was asked, which is what makes the readback a
+    capability test rather than a guess.
+
+    ONLY the geometry is set here -- no FOURCC, no FPS, no source properties. The ordering traps
+    described in open_camera are exactly what this must not walk into; the camera is released
+    again as soon as it is identified, and open_camera reopens it and does the full sequence.
+
+    Costs about 5 s per camera, all of it in phase 1, before Spike2 is sampling.
+    """
+    cap, index = _open_live(device_id)
+    try:
+        probes, matches = [], []
+        for name in sorted(CAMERA_PRESETS):
+            _, width, height = parse_format(CAMERA_PRESETS[name]["format"])
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+            got_w, got_h, _ = negotiated(cap)
+            probes.append({"preset": name, "asked": [width, height], "got": [got_w, got_h]})
+            if (got_w, got_h) == (width, height):
+                matches.append(name)
+    finally:
+        # On every path: an identification that left the device claimed would make the open that
+        # follows it fail for a reason this function invented.
+        cap.release()
+
+    # Built either way; three short strings, and both failure messages want it.
+    asked = "\n".join(f"    {p['preset']:<8} asked {p['asked'][0]}x{p['asked'][1]}, "
+                      f"got {p['got'][0]}x{p['got'][1]}" for p in probes)
+    if not matches:
+        raise RuntimeError(
+            f"Could not identify the camera at OpenCV index {index} (device {device_id}): no "
+            f"known preset's native geometry was delivered.\n{asked}\n"
+            f"  Each preset's full frame is offered by one camera family and no other, so a "
+            f"camera that delivers\n  none of them is not one this app has a preset for. Add "
+            f"it to CAMERA_PRESETS, or pass --camera <preset>\n  to force a format on it "
+            f"anyway.")
+    if len(matches) > 1:
+        raise RuntimeError(
+            f"Camera at OpenCV index {index} (device {device_id}) answered to more than one "
+            f"preset: {', '.join(matches)}.\n{asked}\n"
+            f"  This cannot happen with the presets as shipped -- no two of them share a native "
+            f"geometry -- so\n  either CAMERA_PRESETS has been edited or this camera really "
+            f"offers both. Pass --camera <preset>\n  to say which one to use.")
+    return matches[0], probes
+
+
+def detect_preset(devices):
+    """Identify every camera and insist they agree. Returns (preset name, evidence).
+
+    The evidence goes to session.json as requested.cameraDetection, so a session can be checked
+    afterwards for having identified the camera it says it recorded.
+
+    This identifies the camera FAMILY, not the unit. Two cameras of the same model cannot be told
+    apart by anything software can see here -- no serial number, and identical geometries by
+    definition. Which physical camera is device 1 is still the operator's business, and is what
+    the alignment stage is for.
+
+    CameraBusyError propagates untouched: a device the previous run has not let go of is the one
+    failure that clears itself, and the entry point retries identifying exactly as it retries
+    opening.
+    """
+    evidence, found = [], []
+    for device in devices:
+        name, probes = identify_camera(device)
+        evidence.append({"deviceId": device, "detected": name, "probes": probes})
+        found.append(name)
+        print(f"  device {device}: {name} ({CAMERA_PRESETS[name]['title']})")
+
+    if len(set(found)) > 1:
+        listing = "\n".join(f"    device {e['deviceId']}: {e['detected']}" for e in evidence)
+        raise RuntimeError(
+            f"The connected cameras are not the same model:\n{listing}\n"
+            f"  One preset is applied to both, so a mixed pair cannot be recorded as it stands. "
+            f"Either fix the\n  cabling so both devices are the intended pair, or pass "
+            f"--camera <preset> to force one format\n  on both and accept what the other "
+            f"camera makes of it.")
+    return found[0], evidence
 
 
 def verify_format(cap, width, height, fourcc, stage):

@@ -25,7 +25,7 @@ Process exit codes -- useful from a terminal, but NOT what Spike2 reads (ProgSta
 them; see eyecal/spike2.py):
 
     0  recorded and finalised
-    1  failed (camera would not open, wrong format, device not streaming)
+    1  failed (camera would not open or could not be identified, wrong format, not streaming)
     2  bad command line (argparse)
     3  recorded, but a guard tripped -- read the warnings in session.json
     4  cancelled by the operator at the alignment stage
@@ -54,18 +54,31 @@ def main(argv=None):
     args = parse_args(argv)
     cfg = config.apply_cli(config.load(args.config, required=args.config is not None), args)
 
-    if cfg["camera"] not in cameras.CAMERA_PRESETS:
+    if cfg["camera"] not in cameras.CAMERA_PRESETS and cfg["camera"] != cameras.AUTO:
         raise KeyError(f"Unknown camera {cfg['camera']!r}. "
-                       f"Known: {', '.join(sorted(cameras.CAMERA_PRESETS))}")
-    preset = cameras.CAMERA_PRESETS[cfg["camera"]]
+                       f"Known: {', '.join(sorted(cameras.CAMERA_PRESETS))}, "
+                       f"or {cameras.AUTO} to identify it")
     devices = [int(d) for d in cfg["devices"]]
     seconds = float(cfg["seconds"])
     if seconds <= 0:
         raise ValueError(f"seconds must be positive, got {seconds}")
 
+    # Identified FIRST, because everything downstream is built out of the preset: the recording
+    # anchor takes its normal exposure from it, and the format cannot be negotiated until it is
+    # known which camera is on the other end. It costs about 5 s a camera and is still phase 1,
+    # so Spike2 is not sampling and has been told nothing yet. Retried on a busy device exactly
+    # as the open is -- see _retry_busy.
+    camera, detection = cfg["camera"], None
+    if camera == cameras.AUTO:
+        print("Identifying cameras from the geometries they offer (auto)...")
+        camera, detection = _retry_busy(lambda: cameras.detect_preset(devices))
+    preset = cameras.CAMERA_PRESETS[camera]
+    camera_note = (preset["title"] if detection is None
+                   else f"{cameras.AUTO} -> {camera} ({preset['title']})")
+
     started = datetime.now(timezone.utc)
     session_id = args.session_id or (
-        started.strftime("%Y%m%d-%H%M%SZ") + f"_{cfg['camera']}_{len(devices)}cam_{seconds:g}s"
+        started.strftime("%Y%m%d-%H%M%SZ") + f"_{camera}_{len(devices)}cam_{seconds:g}s"
         + (f"_{args.tag}" if args.tag else ""))
     session_dir = Path(cfg["out"]).expanduser().resolve() / session_id
 
@@ -84,7 +97,7 @@ def main(argv=None):
         if float(cfg["handshake_wait_s"]) > 0:
             handshake_note += f"  (wait up to {float(cfg['handshake_wait_s']):g} s for delete)"
 
-    print(f"Camera      : {preset['title']}")
+    print(f"Camera      : {camera_note}")
     print(f"Format      : {cfg['format'] or preset['format']}")
     print(f"Devices     : {devices}")
     print(f"Duration    : {seconds:g} s")
@@ -127,32 +140,34 @@ def main(argv=None):
         # close_all is a no-op the second time.
         stuck = capture.close_all(readers)
 
-        info = finalise(sess, started, cfg, preset, devices, accepted, readers, anchors,
-                        stop_reason, seconds, args.tag, stuck)
+        info = finalise(sess, started, cfg, camera, detection, preset, devices, accepted,
+                        readers, anchors, stop_reason, seconds, args.tag, stuck)
         session.report(info)
         return EXIT_WARNINGS if info["warnings"] else EXIT_OK
     finally:
         capture.close_all(readers)
 
 
-def open_cameras(preset, devices, cfg, anchor):
-    """Open every camera, waiting out a device the previous run has not finished letting go of.
+def _retry_busy(fn):
+    """Run something that claims the cameras, waiting out a device a previous run still holds.
 
     Only CameraBusyError is retried, and deliberately so. That is the narrow class of failure
     where nothing is wrong with the request and nothing is wrong with the hardware -- the device
     simply has not been released yet, and Windows reclaims it on its own within a few seconds.
-    Every other opening failure -- the wrong preset, a geometry the camera cannot deliver, an
-    exposure change that re-negotiates the media type -- is a statement about the configuration
-    that will be exactly as true on the third attempt as it was on the first, so it is raised
-    immediately and the operator reads the message that says what to fix.
+    Every other failure -- the wrong preset, a geometry the camera cannot deliver, a camera that
+    matches no preset at all, an exposure change that re-negotiates the media type -- is a
+    statement about the configuration that will be exactly as true on the third attempt as it was
+    on the first, so it is raised immediately and the operator reads the message that says what
+    to fix.
 
-    Nothing has to be cleaned up between attempts: capture.open_all closes whatever it managed to
-    open before it re-raises, so a half-built set of cameras is never carried into the next try.
+    Used by both stages that touch the devices before recording: identifying them and opening
+    them. Neither leaves anything to clean up between attempts -- cameras.identify_camera
+    releases the capture on every path, and capture.open_all closes whatever it managed to open
+    before it re-raises, so a half-built set of cameras is never carried into the next try.
     """
     for attempt in range(1, OPEN_ATTEMPTS + 1):
         try:
-            return capture.open_all(preset, devices, cfg["format"], cfg["exposure"],
-                                    anchor.bright if anchor.enabled else None)
+            return fn()
         except cameras.CameraBusyError as exc:
             if attempt == OPEN_ATTEMPTS:
                 print(f"\n  Still claimed after {OPEN_ATTEMPTS} attempts. Giving up.",
@@ -163,6 +178,12 @@ def open_cameras(preset, devices, cfg, anchor):
                   f"retrying. Nothing has been recorded and Spike2 has not been signalled.",
                   file=sys.stderr)
             time.sleep(OPEN_RETRY_WAIT_S)
+
+
+def open_cameras(preset, devices, cfg, anchor):
+    """Open every camera, waiting out a device the previous run has not finished letting go of."""
+    return _retry_busy(lambda: capture.open_all(preset, devices, cfg["format"], cfg["exposure"],
+                                                anchor.bright if anchor.enabled else None))
 
 
 def signal_ready(readers, cfg, session_dir):
@@ -199,13 +220,16 @@ def signal_ready(readers, cfg, session_dir):
           else "  no acknowledgement, recording anyway.")
 
 
-def finalise(sess, started, cfg, preset, devices, accepted, readers, anchors, stop_reason,
-             seconds, tag, stuck=()):
+def finalise(sess, started, cfg, camera, detection, preset, devices, accepted, readers,
+             anchors, stop_reason, seconds, tag, stuck=()):
     """Write everything except the frames, session.json last of all."""
     sess.write_sidecars()
     tiffs = sess.write_first_frame_tiffs() if cfg["first_frame_tiff"] else []
     request = {
-        "camera": cfg["camera"], "format": cfg["format"] or preset["format"],
+        # "camera" is the preset that was USED, always a preset name, because that is what
+        # every downstream reader looks up. What was asked for is beside it.
+        "camera": camera, "cameraRequested": cfg["camera"], "cameraDetection": detection,
+        "format": cfg["format"] or preset["format"],
         "deviceIds": devices, "seconds": seconds,
         "recPreviewHz": cfg["rec_preview_hz"], "tag": tag,
         "source": preset["source"], "queueCap": capture.QUEUE_MAX,
@@ -226,7 +250,10 @@ def parse_args(argv):
                         "knows where to look for session.json afterwards")
     p.add_argument("--tag", default=None, help="free text appended to a generated session id")
 
-    p.add_argument("--camera", default=None, choices=sorted(cameras.CAMERA_PRESETS))
+    p.add_argument("--camera", default=None,
+                   choices=sorted(cameras.CAMERA_PRESETS) + [cameras.AUTO],
+                   help="preset name, or auto to identify the family from the geometries the "
+                        "device offers (default from config.json)")
     p.add_argument("--devices", type=int, nargs="+", default=None,
                    help="1-based device ids; the ORDER is the initial left-to-right arrangement")
     p.add_argument("--format", default=None, help="e.g. MJPG_1280x720")
