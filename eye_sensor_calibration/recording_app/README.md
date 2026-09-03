@@ -285,7 +285,9 @@ outlier, so a peak-based gate fires on healthy and struggling sessions alike.
 
 ## Bench checks
 
-Things only the real rig can answer. Worth doing once, at commissioning:
+Things only the real rig can answer. Worth doing once, at commissioning. `tools/strobe_timing.py`
+does the measurement for items 1-2 from a recorded session and its `.smrx` -- point it at the
+Spike2 file and read the report.
 
 1. **Does the exposure change widen the strobe, or gap it?** Run a short session and look at the
    first and last 0.25 s on the TTL channels. Wide pulses = as designed. A gap means the driver
@@ -313,7 +315,13 @@ eyecal/session.py              frame files, sidecars, ts.csv, session.json, repo
 eyecal/spike2.py               the ready flag
 tests/test_offline.py          the pieces, without a camera
 tests/test_endtoend.py         main() end to end, fake cameras and a fake Spike2
+tools/strobe_timing.py         measure a recorded session against its Spike2 file (bench check)
+tools/session_video.py         render a session to calibration_video.mp4 with its timestamps on it
 ```
+
+`tests/` holds tests: they exercise the code and assert. `tools/` holds things you run against a
+session after the fact; `strobe_timing.py` measures rather than asserts, and is kept out of
+`tests/` so no test runner ever collects it.
 
 Requires `opencv-python` and `numpy`. The measured DirectShow behaviour this depends on was
 verified on OpenCV 5.0.0 / Python 3.12; re-run both test files and one short real recording after

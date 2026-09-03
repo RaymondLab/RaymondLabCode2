@@ -15,4 +15,5 @@ dependencies = [
     "pyqtgraph",
     "scipy",
     "sonpy>=1.9.12",
+    "imageio-ffmpeg>=0.6.0",
 ]

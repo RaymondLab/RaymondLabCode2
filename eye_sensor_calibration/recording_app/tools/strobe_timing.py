@@ -1,9 +1,14 @@
-r"""Spike timing accuracy: do the camera strobes in Spike2 match the frames on disk?
+r"""Strobe timing: do the camera strobes in Spike2 match the frames on disk?
 
-    python "eye_sensor_calibration\recording_app\tests\test_spiketimingaccuracy.py" "C:\Temp\test\20260819-011856Z_ov2311_2cam_35s\calibration.smrx"
+    python tools\strobe_timing.py "C:\Temp\test\20260819-011856Z_ov2311_2cam_35s\calibration.smrx"
 
 Name the .smrx; frames/ and session.json are read from beside it. A session directory is
 accepted too when it holds exactly one .smrx.
+
+A tool, not a test. It lives in tools/ rather than tests/ because it evaluates the app's
+OUTPUT -- a recorded session, against the Spike2 file -- rather than the app's code, and
+because a test_ prefix is a discovery convention: pytest would collect a 1200-line module
+that asserts nothing.
 
 Reads the Spike2 .smrx with sonpy, extracts every channel, and analyses the two camera
 strobe trains -- TTL5 (Ch15) and TTL6 (Ch16) -- over the segment bracketed by the two
