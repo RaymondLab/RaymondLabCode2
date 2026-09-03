@@ -13,7 +13,7 @@ const sequencerFile$ := "sine_protocols/sine_calibration.pls";
 #include "sine_core.s2s"
 
 ' Calibration block parameters
-var calBlockDuration := 60; '120;  'Total duration (s) to run calibration block [default 120]
+var calBlockDuration := 30; '120;  'Total duration (s) to run calibration block [default 120]
 var calTargetFPS := 30;  'Target frames-per-second to generate TTL5 pulses [default 30]
 
 ' Calculate number of cycles needed for calibration block
