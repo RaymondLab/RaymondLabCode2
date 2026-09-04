@@ -1,6 +1,9 @@
-**/.DS_Store
 **/.asv
-**/.ipynb_checkpoints
-**/.pytest_cache
-**/.vscode
 **/.claude
+**/.DS_Store
+**/.ipynb_checkpoints
+**/__pycache__
+**/*.py[cod]
+**/.pytest_cache
+**/.venv
+**/.vscode
