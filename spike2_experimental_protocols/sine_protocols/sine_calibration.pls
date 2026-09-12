@@ -35,7 +35,7 @@
 
             ; --- Protocol-specific Sequencer Variables ---
             VAR    V22,TrainTyp=0  ;Stimulus Type
-            VAR    V23,CamFps=33   ;Target Pulse Per Second
+            VAR    V23,CamFps=100  ;Target Pulse Per Second
 
             ; Variables for storing dynamic drum/chair amp values
             VAR    V100,DrumTmp=0  ;Variable drum amplitude
@@ -170,13 +170,15 @@ VORDON: 'Y  MOVI   BlockFlg,1      ;Start VORD block   >VORD
             PHASE  1,ChairPhs      ;Set cosine relative phase >"
             ANGLE  1,0             ;Set cosine angle   >"
             RATE   1,ChairFrq      ;Set cosine frequency >"
+            CALL   TRIGON          ;Start triggering pulses >"
 VORD1:      OFFSET 1,ChairOff      ;Adjust cosine offset >"
             WAITC  1,VORD1         ;Wait for 0 phase   >"
             DBNZ   ChairCtr,VORD1  ;Run cycles until counter hits zero >"
 
-VORDOFF: 'y CLRC   1               ;Stop VORD block >"
+VORDOFF: 'y CLRC   1               ;Stop VORD block    >"
 VORD2:      OFFSET 1,ChairOff      ;Adjust cosine offset >"
             WAITC  1,VORD2         ;Wait for end of cycle >"
+            CALL   TRIGOFF         ;Stop triggering pulses >"
             RATE   1,0             ;Stop chair cosine  >"
             MOVI   DrumTmp,0       ;Set drum amplitude to zero >"
             MOVI   ChairTmp,0      ;Set chair amplitude to zero >"
@@ -202,19 +204,23 @@ VOR2ON: 'X  MOVI   BlockFlg,1      ;Start VORx2 block  >VORx2
             ANGLE  1,0             ;Set chair cosine angle >"
             RATE   0,DrumFrq       ;Set drum cosine frequency >"
             RATE   1,ChairFrq      ;Set chair cosine frequency >"
+            CALL   TRIGON          ;Start triggering pulses >"
 VOR21:      OFFSET 0,DrumOff       ;Adjust drum cosine offset >"
             OFFSET 1,ChairOff      ;Adjust chair cosine offset >"
             WAITC  1,VOR21         ;Wait for 0 chair phase >"
             DBNZ   ChairCtr,VOR21  ;Run cycles until counter hits zero >"
 
-VOR2OFF: 'x CLRC   1               ;Stop VORx2 block >"
+VOR2OFF: 'x CLRC   1               ;Stop VORx2 block   >"
 VOR22:      OFFSET 0,DrumOff       ;Adjust drum cosine offset >"
             OFFSET 1,ChairOff      ;Adjust chair cosine offset >"
             WAITC  1,VOR22         ;Wait for end of cycle >"
+            CALL   TRIGOFF         ;Stop triggering pulses >"
             RATE   0,0             ;Stop drum cosine   >"
             RATE   1,0             ;Stop chair cosine  >"
             MOVI   DrumTmp,0       ;Set drum amplitude to zero >"
             MOVI   ChairTmp,0      ;Set chair amplitude to zero >"
+            DIGPC  1,S             ;Stop pulses        >"
+            DIGPC  1,C             ;Clear flag         >"
             MOVI   BlockFlg,0      ;Set block as inactive >"
             JUMP   TTL1OFF
 
@@ -222,8 +228,8 @@ VOR22:      OFFSET 0,DrumOff       ;Adjust drum cosine offset >"
 ;-----------------------------------------------------------------------------
 ; OKR Block (Light on, Drum only)
 ;-----------------------------------------------------------------------------
-OKRON:  'Z  MOVI   BlockFlg,1      ;Start OKR block    >OKR
-            MOV    DrumTmp,DrumAmp ;Set drum amplitude >"
+OKRON:  'Z  MOVI   BlockFlg,1      ;Start OKR block >OKR
+MOV    DrumTmp,DrumAmp ;Set drum amplitude >"
             MOVI   ChairTmp,0      ;Set chair amplitude >"
             MOV    DrumCtr,NdrumT  ;Set number of cycles to run >"
             DIGOUT [.......1]      ;Turn light on      >"
@@ -232,18 +238,36 @@ OKRON:  'Z  MOVI   BlockFlg,1      ;Start OKR block    >OKR
             PHASE  0,DrumPhs       ;Set cosine relative phase >"
             ANGLE  0,0             ;Set cosine angle   >"
             RATE   0,DrumFrq       ;Set cosine frequency >"
+            CALL   TRIGON          ;Start triggering pulses >"
 OKR1:       OFFSET 0,DrumOff       ;Adjust cosine offset >"
             WAITC  0,OKR1          ;Wait for 0 phase   >"
             DBNZ   DrumCtr,OKR1    ;Run cycles until counter hits zero >"
 
-OKROFF: 'z  CLRC   0               ;Stop OKR block >"
+OKROFF: 'z  CLRC   0               ;Stop OKR block     >"
 OKR2:       OFFSET 0,DrumOff       ;Adjust cosine offset >"
             WAITC  0,OKR2          ;Wait for end of cycle >"
+            CALL   TRIGOFF         ;Stop triggering pulses >"
             RATE   0,0             ;Stop chair cosine  >"
             MOVI   DrumTmp,0       ;Set drum amplitude to zero >"
             MOVI   ChairTmp,0      ;Set chair amplitude to zero >"
             MOVI   BlockFlg,0      ;Set block as inactive >"
             JUMP   TTL1OFF
+
+
+;-----------------------------------------------------------------------------
+; Callable TTL Trigger for Cameras
+;-----------------------------------------------------------------------------
+TRIGON: 'T  DIGPS  1,P,CamFps      ;Pulse every "PulInt" ms >"
+            DIGPS  1,D,ms(1)       ;Pulse has duration of "PulDur" ms >"
+            DIGPC  1,G             ;Start pulses       >"
+            RETURN                 ;Return if applicable >"
+            JUMP   IDLELOOP
+
+TRIGOFF: 't DIGPC  1,S             ;Stop pulses        >"
+            DIGPC  1,C             ;Clear flag         >"
+            DIGOUT [......0.]      ;Ensure TTL is off  >"
+            RETURN                 ;Return if applicable >"
+            JUMP   IDLELOOP
 
 
 ;-----------------------------------------------------------------------------

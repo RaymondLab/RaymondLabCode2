@@ -135,15 +135,15 @@ Proc WindowSetup()
         AddWaveformChannel(hhvel_ch%, hhvel_port%, "deg/s", hhvel_chScaling, hhvel_chOffset, "hhvel", "Chair velocity feedback from motor encoder");
     endif
     
-    ' TTL 1: Shutter/LED/Light
+    ' TTL 1: LED/Light
     SampleEvent(TTL1_ch%, TTL1_port%, 2, sampleRate);
     SampleTitle$(TTL1_ch%, "TTL1");
-    SampleComment$(TTL1_ch%, "TTL1: Shutter");
+    SampleComment$(TTL1_ch%, "TTL1: Light");
 
-    ' TTL 2: Rising Trigger
-    SampleEvent(TTL2_ch%, TTL2_port%, 2, sampleRate);
+    ' TTL 2: Camera External Trigger
+    SampleEvent(TTL2_ch%, TTL2_port%, 1, sampleRate);
     SampleTitle$(TTL2_ch%, "TTL2");
-    SampleComment$(TTL2_ch%, "TTL2");
+    SampleComment$(TTL2_ch%, "TTL2: Camera Trigger");
     
     ' TTL 3: L Laser
     SampleEvent(TTL3_ch%, TTL3_port%, 2, sampleRate);

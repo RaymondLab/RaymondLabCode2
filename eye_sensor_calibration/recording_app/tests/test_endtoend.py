@@ -8,6 +8,12 @@ camera model's mode list, and the preview window replaced by one that presses ke
 
 The flag protocol is asserted from Spike2's side: the app must CREATE the flag and never delete
 it, must not hang when nobody answers, and must finish in about the requested duration.
+
+THE FSIN TRIGGER IS FAKED AT ITS OWN SEAM, dshow.Controls, not switched off. FakeControls is the
+control write, FakeControls.pulses is the pulse train, and FakeCap reads one frame per pulse
+while it runs and the driver's all-zero timeout frame while it does not -- so the trigger path,
+both fallbacks and the restore on every exit are exercised end to end. Nothing here may reach a
+real camera: the seam is patched in run_app, which every scenario goes through.
 """
 
 import contextlib
@@ -20,13 +26,26 @@ import threading
 import time
 from pathlib import Path
 
+import comtypes
 import cv2
 import numpy as np
 
 APP = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(APP))
 
-from eyecal import display
+from eyecal import display, dshow, session
+
+# The fake pulse rate, in the fake cameras and on the command line of the scenarios that give
+# --pulse-hz. 100 Hz is a 10 ms period: fast enough that a second of it is a real recording,
+# slow enough that a fake camera synthesising 1.9 MB frames can keep up.
+PULSE_HZ = 100.0
+
+# What a camera in trigger mode with no pulses does: answers ok=True with an ALL-ZERO frame after
+# about a second, which is the driver's timeout and not an exposure. Slept in slices so the fake
+# follows a train that starts, or a restore that puts it back to free-run, without sitting out
+# the whole second first. See eyecal/trigger.py for the measurement.
+NO_PULSE_S = 1.0
+NO_PULSE_SLICE_S = 0.05
 
 FAILS = []
 
@@ -43,6 +62,73 @@ def load_entry_point():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+class FakePulseTrain(threading.Event):
+    """The fake FSIN train: an Event to start and stop, plus the ONE CLOCK both cameras read.
+
+    The clock is the point. Timing each fake camera off its own sleep lets the two drift a frame
+    apart, which is exactly what cannot happen on the rig -- one train drives both FSIN pins, so
+    both sensors expose on the SAME pulses, and equal frame counts is the invariant
+    session._trigger_warnings checks for. Here a pulse therefore has a NUMBER and a DUE TIME, and
+    a camera that has fallen behind (synthesising a 1.9 MB frame is not free) catches up rather
+    than missing pulses the other one got.
+    """
+
+    t0 = 0.0                    # perf_counter when the train started
+    t_stop = 0.0                # and when it stopped: a pulse due after this never fired
+
+    def set(self):
+        self.t0, self.t_stop = time.perf_counter(), 0.0
+        super().set()
+
+    def clear(self):
+        self.t_stop = time.perf_counter()
+        super().clear()
+
+
+class FakeControls:
+    """Stands in for dshow.Controls: the ONE seam through which the app writes the FSIN trigger.
+
+    Patched in over eyecal.dshow.Controls for every run, so nothing in this file can reach a real
+    camera's controls -- and so the writes themselves can be asserted, which is the only evidence
+    that the app put both cameras into trigger mode and took them out again on the way out.
+
+    The state is class-level because the app binds a fresh Controls per write (trigger.py does,
+    deliberately) and the camera is what remembers the setting, exactly as the real one does
+    across a release and a reopen.
+    """
+
+    ae = {}                             # OpenCV index -> AE priority: 1 trigger, 0 free-running
+    writes = []                         # (index, prop_id, value) in order, the whole write log
+    fail_indices = set()                # indices whose set() raises, as a camera without prop 19
+    pulses = FakePulseTrain()           # the fake FSIN train; set = running
+
+    def __init__(self, index):
+        self.index = index
+        self.friendly_name = f"Fake Camera {index}"
+
+    def set(self, interface, prop_id, value, flags=2):
+        if self.index in FakeControls.fail_indices:
+            # E_FAIL, not the teardown HRESULT: trigger.write_ae_priority must fail FAST on this
+            # one rather than sleeping between three attempts. See trigger._is_teardown_error.
+            raise comtypes.COMError(-2147467259, "fake: no such camera control", None)
+        FakeControls.writes.append((self.index, prop_id, int(value)))
+        FakeControls.ae[self.index] = int(value)
+
+    def get(self, interface, prop_id):
+        return FakeControls.ae.get(self.index, 0), 2
+
+    def read(self):
+        return []
+
+    def close(self):
+        pass
+
+
+def writes_for(index):
+    """Just the values written to one device, in order. The pre-open/accept/exit sequence."""
+    return [value for i, _prop, value in FakeControls.writes if i == index]
 
 
 class FakeCap:
@@ -68,6 +154,8 @@ class FakeCap:
         self.asked = [640, 480]         # width and height arrive as two separate writes
         self.released = False
         self.n = 0
+        self.pulse_t0 = None            # the train this camera is counting pulses off
+        self.pulse_k = 0                # and how many of them it has exposed
         self._lock = threading.Lock()
 
     def isOpened(self):
@@ -94,7 +182,55 @@ class FakeCap:
             return self.props.get(prop, 0.0)
 
     def read(self):
-        time.sleep(0.004)
+        """One frame: free-running, or one per FSIN pulse while this camera is under the trigger.
+
+        MEASURED ON THE RIG and reproduced here because the app depends on all three (see
+        eyecal/trigger.py): at AE priority 1 the camera exposes only on a pulse; with no pulses it
+        does NOT fail, it answers ok=True with an ALL-ZERO frame after about a second; and written
+        back to 0 it free-runs again immediately, which is the fallback path's whole premise.
+        """
+        while FakeControls.ae.get(self.index, 0) == 1:
+            train = FakeControls.pulses
+            if train.is_set() or self.pulse_t0 == train.t0:
+                frame = self._next_pulse(train)
+                if frame is not None:
+                    return True, frame
+            for _ in range(int(NO_PULSE_S / NO_PULSE_SLICE_S)):
+                if FakeControls.pulses.is_set() or FakeControls.ae.get(self.index, 0) != 1:
+                    break                       # the train started, or free-run was restored
+                time.sleep(NO_PULSE_SLICE_S)
+            else:
+                return True, np.zeros(self._shape() + (3,), np.uint8)
+        time.sleep(0.004)                       # free-running, at the camera's own rate
+        return True, self._frame()
+
+    def _next_pulse(self, train):
+        """Wait for this camera's next pulse and expose it. None once there is no next pulse.
+
+        The pulse is identified by NUMBER off the train's own clock, not by sleeping a period, so
+        both cameras deliver the same ones however unevenly the fakes are scheduled. A camera
+        behind the train does not sleep at all -- it works through its backlog and stops at the
+        last pulse that really fired, which is where the driver's timeout frame then comes from.
+        """
+        if self.pulse_t0 != train.t0:
+            self.pulse_t0, self.pulse_k = train.t0, 0       # a new train; count from its first
+        due = train.t0 + self.pulse_k / PULSE_HZ
+        while time.perf_counter() < due:
+            if not train.is_set():
+                return None                                 # stopped before this one was due
+            time.sleep(0.001)
+        if not train.is_set() and due > train.t_stop:
+            return None                                     # caught up with a stopped train
+        self.pulse_k += 1
+        return self._frame()
+
+    def _shape(self):
+        with self._lock:
+            return (int(self.props[cv2.CAP_PROP_FRAME_HEIGHT]),
+                    int(self.props[cv2.CAP_PROP_FRAME_WIDTH]))
+
+    def _frame(self):
+        """A real exposure. Never all zero, so the app's timeout test can tell the two apart."""
         with self._lock:
             self.n += 1
             n = self.n
@@ -107,7 +243,7 @@ class FakeCap:
             w = int(self.props[cv2.CAP_PROP_FRAME_WIDTH])
         f = np.full((h, w, 3), int(level), np.uint8)   # BGR, as a real MJPG decode returns
         f[0, 0, 0] = n % 251
-        return True, f
+        return f
 
     def release(self):
         self.released = True
@@ -142,8 +278,12 @@ class FakeWindow:
         pass
 
 
-def fake_spike2(flag, delay=0.3, delete=True, timeout=20.0):
-    """Poll for the ready flag exactly as the .s2s loop does, then optionally delete it."""
+def fake_spike2(flag, delay=0.3, delete=True, timeout=20.0, pulses=None):
+    """Poll for the ready flag exactly as the .s2s loop does, then optionally delete it.
+
+    `pulses` is the fake FSIN train: given an Event, it is SET `delay` after the flag appears,
+    which is the operator's key on the real rig -- the flag is what tells Spike2 to start pulsing.
+    """
     seen = {"flag": False, "at": None}
 
     def run():
@@ -151,8 +291,11 @@ def fake_spike2(flag, delay=0.3, delete=True, timeout=20.0):
         while time.perf_counter() < deadline:
             if Path(flag).exists():
                 seen["flag"], seen["at"] = True, time.perf_counter()
-                if delete:
+                if delete or pulses is not None:
                     time.sleep(delay)
+                if pulses is not None:
+                    pulses.set()
+                if delete:
                     try:
                         Path(flag).unlink()
                     except FileNotFoundError:
@@ -165,29 +308,63 @@ def fake_spike2(flag, delay=0.3, delete=True, timeout=20.0):
     return seen, t
 
 
-def run_app(argv, accept_key=ord("a")):
+def stop_pulses_after(seconds, event=None, timeout=20.0):
+    """Stop the fake pulse train `seconds` after it STARTS -- Spike2 reaching the end of its run.
+
+    Timed from the set rather than from now, because the train does not start until the app has
+    written the flag, and how long the app takes to get there is exactly what is not fixed.
+    """
+    event = FakeControls.pulses if event is None else event
+
+    def run():
+        if event.wait(timeout=timeout):
+            time.sleep(seconds)
+            event.clear()
+
+    t = threading.Thread(target=run, daemon=True)
+    t.start()
+    return t
+
+
+def run_app(argv, accept_key=ord("a"), cap_class=None, fail_indices=()):
+    """main() against fake cameras, a fake preview window and a fake trigger control.
+
+    dshow.Controls is patched alongside the other two and put back in the finally. That seam is
+    not optional: unpatched, every run would write AE priority on whatever real cameras are
+    plugged into this machine.
+    """
     FakeWindow.created = []
     FakeWindow.key_after = {"camera alignment": (5, accept_key)}
+    FakeControls.ae, FakeControls.writes = {}, []
+    FakeControls.fail_indices = set(fail_indices)
+    FakeControls.pulses.clear()
     real_capture, real_window = cv2.VideoCapture, display.Window
-    cv2.VideoCapture = FakeCap
+    real_controls = dshow.Controls
+    cv2.VideoCapture = cap_class or FakeCap
     display.Window = FakeWindow
+    dshow.Controls = FakeControls
     try:
         return load_entry_point().main(argv)
     finally:
         cv2.VideoCapture, display.Window = real_capture, real_window
+        dshow.Controls = real_controls
+        FakeControls.pulses.clear()         # never leave a train running into the next scenario
 
 
 BASE = ["--camera", "ov2311", "--devices", "1", "2", "--seconds", "1.5",
         "--anchor-hold-s", "0.15", "--downsample", "2"]
 
 # --- the live protocol: Spike2 samples first, app signals, app records ------------------------
+# --no-trigger throughout this first group: these scenarios are about the flag protocol and the
+# strobe anchor, which is the FREE-RUNNING path. The trigger has its own scenarios below.
 print("accept -> flag -> record (no gating, as the .s2s script runs it)")
 out = tempfile.mkdtemp(prefix="eyecal_e2e_")
 flag = str(Path(out) / "ready.flag")
 spy, thread = fake_spike2(flag, delete=False)
 
 t0 = time.perf_counter()
-code = run_app(BASE + ["--out", out, "--session-id", "run01", "--ready-flag", flag])
+code = run_app(BASE + ["--no-trigger", "--out", out, "--session-id", "run01",
+                       "--ready-flag", flag])
 elapsed = time.perf_counter() - t0
 thread.join(timeout=5)
 
@@ -216,10 +393,13 @@ check("no queue-cap warnings (storage path kept up)",
       not [w for w in info["warnings"] if "queue" in w], str(info["warnings"]))
 check("frames stored as mono", all(c["height"] == 1200 and c["width"] == 1600
                                    for c in info["perCamera"]))
+# brightFrames only exists when the anchor ran, and under the trigger it deliberately does not
+# (strobeAnchors is {"enabled": False, "reason": ...} there), so the enabled flag is read first.
+anchors = info["strobeAnchors"]
 check("anchors found at both ends",
-      all(info["strobeAnchors"]["brightFrames"][c]["start"] and
-          info["strobeAnchors"]["brightFrames"][c]["end"] for c in ("cam1", "cam2")),
-      str(info["strobeAnchors"]["brightFrames"]["cam1"]))
+      anchors["enabled"] and all(anchors["brightFrames"][c]["start"] and
+                                 anchors["brightFrames"][c]["end"] for c in ("cam1", "cam2")),
+      str(anchors.get("brightFrames", {}).get("cam1")))
 check("both windows were created (alignment, then recording)",
       len(FakeWindow.created) == 2 and FakeWindow.created[0][0].startswith("camera alignment")
       and FakeWindow.created[1][0].startswith("RECORDING"), str(FakeWindow.created))
@@ -232,8 +412,8 @@ print("stale flag from a previous run")
 out2 = tempfile.mkdtemp(prefix="eyecal_e2e_")
 flag2 = str(Path(out2) / "ready.flag")
 Path(flag2).write_text("stale flag from a crashed run", encoding="utf-8")
-code = run_app(BASE + ["--out", out2, "--session-id", "run02", "--ready-flag", flag2,
-                       "--no-preview", "--seconds", "1.0"])
+code = run_app(BASE + ["--no-trigger", "--out", out2, "--session-id", "run02",
+                       "--ready-flag", flag2, "--no-preview", "--seconds", "1.0"])
 check("runs anyway with a stale flag present", code in (0, 3), str(code))
 check("flag still there (only Spike2 may delete it)", Path(flag2).exists())
 
@@ -243,8 +423,9 @@ out3 = tempfile.mkdtemp(prefix="eyecal_e2e_")
 flag3 = str(Path(out3) / "ready.flag")
 spy3, thread3 = fake_spike2(flag3, delay=0.5, delete=True)
 t0 = time.perf_counter()
-code = run_app(BASE + ["--out", out3, "--session-id", "run03", "--ready-flag", flag3,
-                       "--handshake-wait-s", "5.0", "--no-preview", "--seconds", "1.0"])
+code = run_app(BASE + ["--no-trigger", "--out", out3, "--session-id", "run03",
+                       "--ready-flag", flag3, "--handshake-wait-s", "5.0", "--no-preview",
+                       "--seconds", "1.0"])
 elapsed = time.perf_counter() - t0
 thread3.join(timeout=5)
 check("gated run completed", code in (0, 3), str(code))
@@ -256,8 +437,9 @@ print("gated start with no answer")
 out4 = tempfile.mkdtemp(prefix="eyecal_e2e_")
 flag4 = str(Path(out4) / "ready.flag")
 t0 = time.perf_counter()
-code = run_app(BASE + ["--out", out4, "--session-id", "run04", "--ready-flag", flag4,
-                       "--handshake-wait-s", "1.0", "--no-preview", "--seconds", "1.0"])
+code = run_app(BASE + ["--no-trigger", "--out", out4, "--session-id", "run04",
+                       "--ready-flag", flag4, "--handshake-wait-s", "1.0", "--no-preview",
+                       "--seconds", "1.0"])
 elapsed = time.perf_counter() - t0
 check("records anyway when Spike2 never answers", code in (0, 3), str(code))
 check("session.json still written", (Path(out4) / "run04" / "session.json").exists())
@@ -275,6 +457,10 @@ check("no ready flag was ever created", not Path(flag5).exists())
 check("no session directory", not (Path(out5) / "run05").exists())
 check("only the alignment window was created", len(FakeWindow.created) == 1,
       str(FakeWindow.created))
+# The trigger is left ENABLED here, unlike the scenarios above: a cancel must still write free-run
+# on the way out, because the control persists in the camera and the next run would open onto it.
+check("cancel never asked for trigger mode, and still restored free-run on the way out",
+      writes_for(0) == [0, 0] and writes_for(1) == [0, 0], str(FakeControls.writes))
 
 # --- manual exposure has to be PROVEN, not assumed ---------------------------------------------
 class AutoCap(FakeCap):
@@ -309,21 +495,14 @@ class StuckAutoCap(AutoCap):
 
 
 def run_with(cap_class, argv):
-    real_capture, real_window = cv2.VideoCapture, display.Window
-    FakeWindow.created = []
-    FakeWindow.key_after = {"camera alignment": (5, ord("a"))}
-    cv2.VideoCapture = cap_class
-    display.Window = FakeWindow
-    try:
-        return load_entry_point().main(argv)
-    finally:
-        cv2.VideoCapture, display.Window = real_capture, real_window
+    """run_app with a different camera class. One seam, patched in one place."""
+    return run_app(argv, cap_class=cap_class)
 
 
 print("a camera that starts in auto-exposure")
 out6 = tempfile.mkdtemp(prefix="eyecal_e2e_")
-code = run_with(AutoCap, BASE + ["--out", out6, "--session-id", "run06", "--no-handshake",
-                                 "--no-preview", "--seconds", "1.0"])
+code = run_with(AutoCap, BASE + ["--no-trigger", "--out", out6, "--session-id", "run06",
+                                 "--no-handshake", "--no-preview", "--seconds", "1.0"])
 check("recovers and records", code in (0, 3), str(code))
 info6 = json.loads((Path(out6) / "run06" / "session.json").read_text())
 ec = info6["perCamera"][0]["exposureControl"]
@@ -371,7 +550,7 @@ print("\nno --camera given at all; config.json says auto")
 out8 = tempfile.mkdtemp(prefix="eyecal_e2e_")
 code = run_with(FakeCap, ["--devices", "1", "2", "--seconds", "1.0", "--anchor-hold-s", "0.15",
                           "--out", out8, "--session-id", "run08", "--no-handshake",
-                          "--no-preview"])
+                          "--no-preview", "--no-trigger"])
 check("run completed (0, or 3 with timing warnings)", code in (0, 3), str(code))
 req = json.loads((Path(out8) / "run08" / "session.json").read_text())["requested"]
 check("the preset used is the one the cameras answered to", req["camera"] == "ov2311",
@@ -421,6 +600,116 @@ check("the preset was taken as given, and the format checked against it",
 check("the wrong-preset hint still names the right one",
       "re-run with --camera ov2311" in err, one_line(err[-140:]))
 check("no ready flag was ever created", not Path(flag10).exists())
+
+# --- the FSIN trigger, end to end -------------------------------------------------------------
+# TRIG is BASE without --seconds and without the anchor hold: every scenario below sets its own,
+# and the anchor only runs on the ones that fall back.
+TRIG = ["--camera", "ov2311", "--devices", "1", "2", "--downsample", "2", "--no-preview"]
+
+print("\ntriggered recording, stopped by the pulse train ending")
+out11 = tempfile.mkdtemp(prefix="eyecal_e2e_")
+flag11 = str(Path(out11) / "ready.flag")
+# The flag is what starts the train, exactly as on the rig: Spike2 sees it and begins pulsing.
+spy11, thread11 = fake_spike2(flag11, delay=0.3, delete=False, pulses=FakeControls.pulses)
+stop_pulses_after(1.2)
+t0 = time.perf_counter()
+code = run_app(TRIG + ["--seconds", "3", "--pulse-hz", str(PULSE_HZ), "--out", out11,
+                       "--session-id", "run11", "--ready-flag", flag11])
+elapsed = time.perf_counter() - t0
+thread11.join(timeout=5)
+
+check("triggered run completed (0, or 3 with timing warnings)", code in (0, 3), str(code))
+check("Spike2 saw the ready flag, which is what starts the train", spy11["flag"])
+# Measured 6.2 s: about 2.4 s of opening and proving manual exposure, the 0.25 s mode settle, a
+# 0.3 s wait for the train, its 1.2 s, the fakes' catch-up and the 1 s of silence that ends it.
+# The 8 s bound is still decisive, because the ceiling is 8 s from mark_start and that would land
+# near 11 s -- endReason is what says WHICH stop this was; this says it did not hang.
+check("it stopped when the train did, not on the clock", elapsed < 8.0,
+      f"{elapsed:.1f} s for a 1.2 s train")
+info11 = json.loads((Path(out11) / "run11" / "session.json").read_text())
+trig11 = info11["trigger"]
+check("recorded under the trigger", trig11["mode"] == "trigger",
+      f"{trig11['mode']} -- {trig11['reason']}")
+check("the pulse train ending is what ended it",
+      str(trig11["endReason"]).startswith("pulse train ended"), str(trig11["endReason"]))
+check("no strobe anchor under the trigger: frame k is pulse k",
+      info11["strobeAnchors"]["enabled"] is False, str(info11["strobeAnchors"]))
+counts11 = [c["nFrames"] for c in info11["perCamera"]]
+check("about one frame per pulse for 1.2 s of train", all(60 <= n <= 160 for n in counts11),
+      str(counts11))
+# Every camera sees the SAME pulses, which is the invariant the whole trigger path rests on.
+check("both cameras stored the same number of frames", counts11[0] == counts11[1], str(counts11))
+check("one timeout frame each -- the second of silence after the last pulse",
+      all(n == 1 for n in trig11["timeouts"].values()), str(trig11["timeouts"]))
+frames11 = session.read_frames(Path(out11) / "run11", 1)
+check("no all-zero timeout frame was ever stored",
+      all(f[::64, ::64].any() for f in frames11), f"{frames11.shape[0]} frames checked")
+check("the control was written 0 before the open, 1 at accept, 0 on the way out",
+      writes_for(0) == [0, 1, 0] and writes_for(1) == [0, 1, 0], str(FakeControls.writes))
+
+print("\ntrigger requested, no pulses ever arrive")
+out12 = tempfile.mkdtemp(prefix="eyecal_e2e_")
+code = run_app(TRIG + ["--anchor-hold-s", "0.15", "--seconds", "1.5", "--trigger-wait-s", "1.0",
+                       "--no-handshake", "--out", out12, "--session-id", "run12"])
+info12 = json.loads((Path(out12) / "run12" / "session.json").read_text())
+trig12 = info12["trigger"]
+check("fell back to free-run", trig12["mode"] == "free-run", trig12["mode"])
+check("and the reason says how long it waited", "no pulses within 1 s" in trig12["reason"],
+      trig12["reason"])
+check("a fallback is a warning, not a failure", code == 3, str(code))
+check("the fallback put every camera back to free-run, and recorded the readback",
+      all(e.get("value") == 0 for e in (trig12.get("aePriorityRestored") or {}).values()),
+      str(trig12.get("aePriorityRestored")))
+anchors12 = info12["strobeAnchors"]
+check("the strobe anchor is back on, because that is now the mapping",
+      anchors12["enabled"] and all(anchors12["brightFrames"][c]["start"] and
+                                   anchors12["brightFrames"][c]["end"] for c in ("cam1", "cam2")),
+      str(anchors12.get("brightFrames", {}).get("cam1")))
+check("written 0 pre-open, 1 at accept, 0 on the fallback and 0 again on the way out",
+      writes_for(0) == [0, 1, 0, 0] and writes_for(1) == [0, 1, 0, 0], str(FakeControls.writes))
+
+print("\na camera that does not have the control at all (the ELP case)")
+out13 = tempfile.mkdtemp(prefix="eyecal_e2e_")
+t0 = time.perf_counter()
+code = run_app(TRIG + ["--anchor-hold-s", "0.15", "--seconds", "1.0", "--no-handshake",
+                       "--out", out13, "--session-id", "run13"],
+               fail_indices={1})            # device 2 raises on every write
+elapsed = time.perf_counter() - t0
+info13 = json.loads((Path(out13) / "run13" / "session.json").read_text())
+trig13 = info13["trigger"]
+check("a half-written trigger falls back rather than recording two different things",
+      trig13["mode"] == "free-run", trig13["mode"])
+check("naming the device that refused",
+      trig13["reason"].startswith("trigger write failed on device 2"), trig13["reason"])
+check("a failed write is a warning, not a failure", code == 3, str(code))
+check("and it never waited for a pulse it had no reason to expect", elapsed < 6.0,
+      f"{elapsed:.1f} s")
+check("the readback shows which device took it and which did not",
+      trig13["aePriority"]["1"]["value"] == 1 and "error" in trig13["aePriority"]["2"],
+      str(trig13["aePriority"]))
+
+print("\ntrigger switched off entirely")
+out14 = tempfile.mkdtemp(prefix="eyecal_e2e_")
+code = run_app(TRIG + ["--anchor-hold-s", "0.15", "--seconds", "1.0", "--no-handshake",
+                       "--no-trigger", "--out", out14, "--session-id", "run14"])
+check("run completed (0, or 3 with timing warnings)", code in (0, 3), str(code))
+trig14 = json.loads((Path(out14) / "run14" / "session.json").read_text())["trigger"]
+check("session.json says it was never asked for", trig14["requested"] is False, str(trig14))
+check("and it recorded free-running", trig14["mode"] == "free-run", trig14["mode"])
+# --no-trigger must reach the camera controls too: not one COM write, on any device, anywhere.
+check("no camera control was written at all", not FakeControls.writes, str(FakeControls.writes))
+
+print("\na pulse train that never stops hits the ceiling")
+out15 = tempfile.mkdtemp(prefix="eyecal_e2e_")
+flag15 = str(Path(out15) / "ready.flag")
+spy15, thread15 = fake_spike2(flag15, delay=0.3, delete=False, pulses=FakeControls.pulses)
+code = run_app(TRIG + ["--seconds", "0.6", "--trigger-end-margin-s", "0.6", "--out", out15,
+                       "--session-id", "run15", "--ready-flag", flag15])
+thread15.join(timeout=5)
+check("ceiling run completed (0, or 3 with timing warnings)", code in (0, 3), str(code))
+trig15 = json.loads((Path(out15) / "run15" / "session.json").read_text())["trigger"]
+check("a train that never ends is stopped by seconds + margin",
+      str(trig15["endReason"]).startswith("ceiling reached"), str(trig15["endReason"]))
 
 print("\n" + ("ALL TESTS PASSED" if not FAILS else f"{len(FAILS)} FAILED: {FAILS}"))
 sys.exit(1 if FAILS else 0)

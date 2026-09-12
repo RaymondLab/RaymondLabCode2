@@ -1,5 +1,5 @@
 {
-  "_comment": "Defaults for eye-calibration-recording.py. Anything here can be overridden on the command line; Spike2 should normally pass only --session-id (and --seconds if it varies). Unknown keys are an error, not a shrug.",
+  "_comment": "Defaults for eye-calibration-recording.py. Anything here can be overridden on the command line; Spike2 should normally pass only --session-id (and --seconds if it varies, and --pulse-hz for the FSIN pulse rate it is driving). Unknown keys are an error, not a shrug.",
 
   "camera": "auto",
   "devices": [1, 2],
@@ -24,5 +24,10 @@
 
   "anchor": true,
   "anchor_exposure": null,
-  "anchor_hold_s": 0.25
+  "anchor_hold_s": 0.25,
+
+  "trigger": true,
+  "trigger_wait_s": 3.0,
+  "trigger_end_margin_s": 5.0,
+  "pulse_hz": null
 }

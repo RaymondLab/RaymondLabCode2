@@ -220,10 +220,15 @@ def clock_bridge(session):
 
 
 def summarise(session, started, request, readers, devices, order, anchors, stop_reason,
-              tiffs, rotate180, stuck_readers=()):
+              tiffs, rotate180, stuck_readers=(), trigger=None):
     """Build session.json and write it. Written LAST, because it is the success signal.
 
     `stuck_readers` is whatever capture.close_all reported -- see warnings_for.
+
+    `trigger` is the FSIN trigger block, or None when the feature is off entirely. It is the one
+    record of WHICH path a session took: under the trigger, stored frame k is pulse k, and a
+    session that fell back to free-run is read the old way, through the strobe anchors. Nothing
+    downstream can tell the two apart from the frames themselves.
     """
     per_cam = []
     for k in range(session.n_cams):
@@ -286,15 +291,16 @@ def summarise(session, started, request, readers, devices, order, anchors, stop_
         "stopReason": stop_reason,
         "perCamera": per_cam,
         "strobeAnchors": anchors,
+        "trigger": trigger,
         "firstFrameTiffs": list(tiffs or []),
-        "warnings": warnings_for(per_cam, session.recorded, anchors, stuck_readers),
+        "warnings": warnings_for(per_cam, session.recorded, anchors, stuck_readers, trigger),
     }
     with open(session.dir / "session.json", "w", encoding="utf-8") as fh:
         json.dump(info, fh, indent=2)
     return info
 
 
-def warnings_for(per_cam, recorded, anchors, stuck_readers=()):
+def warnings_for(per_cam, recorded, anchors, stuck_readers=(), trigger=None):
     """The guard rails. This strategy has no hardware drop counter -- the DirectShow backend
     exposes none -- so the queue depth, the frame ledger and the anchors are the available
     evidence that a session is trustworthy.
@@ -337,6 +343,7 @@ def warnings_for(per_cam, recorded, anchors, stuck_readers=()):
             w.append(f"cam {c['cam']}: worst frame gap {c['ifiMaxMs']:.1f} ms against a "
                      f"{c['ifiMedianMs']:.1f} ms median -- roughly "
                      f"{c['ifiMaxMs'] / c['ifiMedianMs']:.1f} frame periods missing.")
+    w.extend(_trigger_warnings(per_cam, trigger))
     if anchors and anchors.get("enabled"):
         for cam, marks in sorted(anchors.get("brightFrames", {}).items()):
             if not marks.get("start") or not marks.get("end"):
@@ -348,6 +355,55 @@ def warnings_for(per_cam, recorded, anchors, stuck_readers=()):
                  f"released, so this run may have left the camera claimed. THIS SESSION'S FRAMES "
                  f"ARE FINE. The risk is to the NEXT run: if it cannot open the camera, this is "
                  f"the run that caused it, and waiting a few seconds before retrying clears it.")
+    return w
+
+
+def _trigger_warnings(per_cam, trigger):
+    """The guard rails that only mean anything under the FSIN trigger.
+
+    Under the trigger the pulse train is the ground truth, and it says three things no free-run
+    recording can say: both cameras see the SAME pulses, so their frame counts must match; the
+    delivered rate must be the pulse rate; and a gap in the train shows up directly, as the
+    driver's one-second timeout frame (see eyecal/trigger.py). Each is a drop check that needs no
+    anchor and no queue-depth reasoning.
+
+    The fallback warning is the other half. A run that asked for the trigger and recorded
+    free-running instead is a perfectly good recording read an entirely different way, and the
+    operator must not find that out by counting pulses in Spike2 afterwards.
+    """
+    if not trigger:
+        return []
+    if trigger.get("mode") != "trigger":
+        if trigger.get("requested"):
+            return [f"FSIN trigger fell back to free-run: {trigger.get('reason')}. This session "
+                    f"has no pulse-to-frame identity; use the strobe anchors as usual."]
+        return []
+
+    w = []
+    pulse_hz = trigger.get("pulseHz")
+    if pulse_hz:
+        for c in per_cam:
+            fps = c["fpsEffective"]
+            if np.isfinite(fps) and abs(fps - pulse_hz) > 0.10 * float(pulse_hz):
+                w.append(f"cam {c['cam']}: stored {fps:.1f} frames per second against a "
+                         f"{float(pulse_hz):g} Hz pulse train -- more than 10 percent apart. "
+                         f"Either pulses were missed or the train was not the rate given.")
+    counts = {c["cam"]: c["nFrames"] for c in per_cam}
+    if len(set(counts.values())) > 1:
+        w.append("the cameras stored different frame counts "
+                 + ", ".join(f"cam {k} {n}" for k, n in sorted(counts.items()))
+                 + ". Every camera sees the SAME FSIN pulses, so under the trigger these must "
+                   "match; the difference is frames one camera lost.")
+    # One timeout frame is how a normally ended run ENDS -- it is the second of silence after the
+    # last pulse -- so it is not a gap. Every other one is a second in which the train stopped and
+    # started again, which the frame indices cannot show on their own.
+    ended_normally = str(trigger.get("endReason") or "").startswith("pulse train ended")
+    for cam, n in sorted((trigger.get("timeouts") or {}).items()):
+        gaps = n - 1 if ended_normally else n
+        if gaps > 0:
+            w.append(f"{cam}: {gaps} one-second gaps in the pulse train while recording. The "
+                     f"frames on either side of a gap are consecutive in c<K>.bin but are NOT "
+                     f"consecutive pulses.")
     return w
 
 
@@ -377,6 +433,18 @@ def report(info):
         print("\n  strobe anchors (bright frames -- match these to the wide strobe pulses):")
         for cam, marks in sorted(anchors.get("brightFrames", {}).items()):
             print(f"    {cam}: start {marks.get('start')}  end {marks.get('end')}")
+    trig = info.get("trigger")
+    if trig:
+        note = f" -- {trig['reason']}" if trig.get("reason") else ""
+        print(f"\n  FSIN trigger: {trig.get('mode')}{note}")
+    if trig and trig.get("mode") == "trigger":
+        rate = (f" against {float(trig['pulseHz']):g} Hz asked for" if trig.get("pulseHz")
+                else "")
+        for c in info["perCamera"]:
+            name = f"cam{c['cam']}"
+            print(f"    {name}: {c['nFrames']} frames at {c['fpsEffective']:.1f} fps{rate}, "
+                  f"{(trig.get('timeouts') or {}).get(name, 0)} one-second timeouts")
+        print(f"    stored frame k is pulse k. Ended: {trig.get('endReason')}")
     if info["warnings"]:
         print("\n  WARNINGS:")
         for w in info["warnings"]:

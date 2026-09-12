@@ -1,14 +1,21 @@
 """Align a camera pair, then record them. One process, cameras never released in between.
 
-    python eye-calibration-recording.py --session-id m123_run01 --seconds 30
+    python "eye_sensor_calibration/recording_app/eye-calibration-recording.py" --seconds 10 --out "C:/Temp/test"
 
 Run by Spike2 as a single step. The phases are:
 
     1. open both cameras and negotiate the format          Spike2 NOT sampling
     2. live alignment view; the operator presses 'a'       Spike2 NOT sampling
-    3. create the ready flag                               Spike2 sees it and marks the file
-    4. record, bracketed by the strobe anchor              Spike2 sampling
-    5. write session.json                                  Spike2 sees it and continues
+    3. put both cameras into FSIN trigger mode             Spike2 NOT sampling
+    4. create the ready flag                               Spike2 sees it and marks the file
+    5. record one frame per FSIN pulse                     Spike2 sampling and pulsing
+    6. write session.json                                  Spike2 sees it and continues
+
+Phase 5 falls back to a free-running recording, bracketed by the strobe anchor, if no pulses
+arrive within --trigger-wait-s. Under the trigger the mapping is free -- stored frame k IS pulse
+k -- and the anchor is not used; free-running, the anchor is how a frame is matched to a pulse.
+Both paths are recorded in session.json, and a fallback is a warning (exit code 3), because the
+two are read in completely different ways. See eyecal/trigger.py.
 
 Why one process. The cameras strobe once per exposure from the moment their graph starts, and
 those pulses are wired to Spike2 digital inputs. Anything that happens before SampleStart() is
@@ -37,7 +44,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-from eyecal import align, cameras, capture, config, record, session, spike2
+from eyecal import align, cameras, capture, config, record, session, spike2, trigger
 
 EXIT_OK, EXIT_FAILED, EXIT_USAGE, EXIT_WARNINGS, EXIT_CANCELLED = 0, 1, 2, 3, 4
 
@@ -62,6 +69,15 @@ def main(argv=None):
     seconds = float(cfg["seconds"])
     if seconds <= 0:
         raise ValueError(f"seconds must be positive, got {seconds}")
+
+    # BEFORE anything opens a camera, because the trigger control PERSISTS IN THE CAMERA between
+    # runs: one left in trigger mode by a crashed run delivers a single black frame a second, and
+    # capture.open_all would sit out its whole settle timeout on a camera that looks dead. ONE
+    # call is enough for both stages that follow -- identification releases each camera and the
+    # open reopens it, but nothing writes trigger mode in between, and the camera keeps the 0.
+    if cfg["trigger"]:
+        print("Putting every camera into free-run before opening it (the control persists)...")
+        trigger.free_run_all(devices)
 
     # Identified FIRST, because everything downstream is built out of the preset: the recording
     # anchor takes its normal exposure from it, and the format cannot be negotiated until it is
@@ -91,6 +107,12 @@ def main(argv=None):
     if anchor.enabled:
         anchor_note = (f"exposure {anchor.normal:g} -> {anchor.bright:g} for "
                        f"{anchor.hold_s:g} s at each end")
+    trigger_note = "off (free-running recording with the strobe anchor)"
+    if cfg["trigger"]:
+        trigger_note = (f"on (wait {float(cfg['trigger_wait_s']):g} s for the first pulse, then "
+                        f"fall back to free-run)")
+    pulse_note = ("not given (--pulse-hz; no rate check)" if cfg["pulse_hz"] is None
+                  else f"{float(cfg['pulse_hz']):g} Hz (from --pulse-hz)")
     handshake_note = "off (recording starts straight after accept)"
     if cfg["handshake"]:
         handshake_note = cfg["ready_flag"]
@@ -103,6 +125,8 @@ def main(argv=None):
     print(f"Duration    : {seconds:g} s")
     print(f"Session dir : {session_dir}")
     print(f"Anchor      : {anchor_note}")
+    print(f"Trigger     : {trigger_note}")
+    print(f"Pulse rate  : {pulse_note}")
     print(f"Handshake   : {handshake_note}")
     print("Opening cameras (nothing is recorded yet)...")
 
@@ -123,14 +147,46 @@ def main(argv=None):
             print("Nothing was recorded. Spike2 should halt.")
             return EXIT_CANCELLED
 
+        # BEFORE the ready flag, deliberately: the flag is what makes Spike2 start its pulse
+        # train, and a camera that is not yet in trigger mode when the first pulses arrive would
+        # miss them. The wait for the first pulse comes after the flag, for the same reason.
+        trig = attempt_trigger(readers, devices, cfg)
+
         if cfg["handshake"]:
             signal_ready(readers, cfg, session_dir)
 
         sess = session.Session(cfg["out"], session_id, len(devices))
-        stop_reason, anchors = record.run_recording(
-            readers, devices, accepted.order, sess, seconds, accepted.rotate180, anchor,
-            float(cfg["rec_preview_hz"]), int(cfg["rec_downsample"]), bool(cfg["fullscreen"]),
-            float(cfg["rec_window_scale"]))
+        pending = None
+        if trig["mode"] == "trigger":
+            # mark_start BEFORE the wait, not inside the recorder: the real frames the wait
+            # collects ARE pulse 0 onwards and are stored, so they and everything after them must
+            # be stamped against one origin.
+            sess.mark_start()
+            ok, pending, seen, timeouts = record.wait_for_pulses(readers, accepted.order,
+                                                                 trig["waitS"])
+            if not ok:
+                trig["aePriorityRestored"] = trigger.free_run_all(devices)
+                trig["mode"] = "free-run"
+                trig["reason"] = (f"no pulses within {trig['waitS']:g} s (real frames: "
+                                  f"{record.per_cam_counts(seen)}; timeout frames: "
+                                  f"{record.per_cam_counts(timeouts)})")
+                print(f"  {trig['reason']}\n  Recording free-running with the strobe anchor "
+                      f"instead.", file=sys.stderr)
+
+        if trig["mode"] == "trigger":
+            # No anchor under the trigger: there is nothing to mark when frame k is pulse k, and
+            # the exposure has to stay well inside the pulse period.
+            anchors = {"enabled": False, "reason": "trigger mode: frame k is pulse k"}
+            stop_reason, trig_report = record.run_triggered(
+                readers, devices, accepted.order, sess, seconds, pending, accepted.rotate180,
+                float(cfg["rec_preview_hz"]), int(cfg["rec_downsample"]),
+                bool(cfg["fullscreen"]), float(cfg["rec_window_scale"]), trig["endMarginS"])
+            trig.update(trig_report)
+        else:
+            stop_reason, anchors = record.run_recording(
+                readers, devices, accepted.order, sess, seconds, accepted.rotate180, anchor,
+                float(cfg["rec_preview_hz"]), int(cfg["rec_downsample"]), bool(cfg["fullscreen"]),
+                float(cfg["rec_window_scale"]))
 
         # Release the cameras HERE rather than leaving it to the finally, for two reasons. It is
         # the only point at which close_all's verdict can still reach session.json, which is
@@ -141,11 +197,19 @@ def main(argv=None):
         stuck = capture.close_all(readers)
 
         info = finalise(sess, started, cfg, camera, detection, preset, devices, accepted,
-                        readers, anchors, stop_reason, seconds, args.tag, stuck)
+                        readers, anchors, stop_reason, seconds, args.tag, stuck, trig)
         session.report(info)
         return EXIT_WARNINGS if info["warnings"] else EXIT_OK
     finally:
         capture.close_all(readers)
+        # EVERY exit path, including the operator cancelling at the alignment stage (which
+        # returns from inside the try, so this still runs) and any exception. The control
+        # persists in the camera, so a run that left one triggered would give the NEXT ordinary
+        # recording one black frame a second and nothing to explain it. After close_all, not
+        # before: the write fails for about half a second after a release, and trigger.py waits
+        # that out.
+        if cfg["trigger"]:
+            trigger.free_run_all(devices)
 
 
 def _retry_busy(fn):
@@ -220,8 +284,74 @@ def signal_ready(readers, cfg, session_dir):
           else "  no acknowledgement, recording anyway.")
 
 
+def attempt_trigger(readers, devices, cfg):
+    """Put every camera into FSIN trigger mode. Returns the trigger block for session.json.
+
+    `mode` is "trigger" only when EVERY device was written and read the value back. Anything else
+    -- the feature switched off, a COM failure, a driver that answered with a different value --
+    puts every device back to free-run and returns "free-run" with the reason, and the run
+    records exactly as it always did, with the strobe anchor. A trigger that half worked is the
+    one outcome that must not happen: one camera pulsing and one free-running produces two files
+    whose frame indices mean different things.
+
+    Called AFTER the operator accepts and BEFORE the ready flag, because the flag is what starts
+    Spike2's pulse train. The queues are drained here too, for the reason run_recording drains
+    its own: everything in them is free-running video from before the switch, and stored under
+    the trigger it would claim to be a pulse.
+
+    THE DRAIN WAITS trigger.MODE_SETTLE_S FIRST. Free-running frames keep landing for a moment
+    after the write (see the constant), so a drain that ran straight away would leave them
+    queued and the recording would store them as pulse 0, 1, 2. The quarter second is free:
+    Spike2 is not sampling until the ready flag, which is written after this returns.
+
+    Whether any pulses actually ARRIVE is a separate question, answered later by
+    record.wait_for_pulses -- this only proves the camera was told.
+    """
+    trig = {"requested": bool(cfg["trigger"]), "mode": "free-run", "reason": "",
+            "aePriority": None, "pulseHz": cfg["pulse_hz"],
+            "waitS": float(cfg["trigger_wait_s"]),
+            "endMarginS": float(cfg["trigger_end_margin_s"])}
+    if not cfg["trigger"]:
+        trig["reason"] = "trigger disabled in config"
+        return trig
+
+    print("\nWriting the FSIN trigger control on every camera...")
+    readback = trigger.set_all(devices, 1)
+    trig["aePriority"] = readback
+    if not trigger.all_agree(readback, 1):
+        trig["reason"] = _write_failure(devices, readback)
+        trig["aePriorityRestored"] = trigger.free_run_all(devices)
+        print(f"  {trig['reason']}\n  Recording free-running with the strobe anchor instead.",
+              file=sys.stderr)
+        return trig
+
+    time.sleep(trigger.MODE_SETTLE_S)
+    for r in readers:
+        capture.drain_newest(r)
+    trig["mode"] = "trigger"
+    return trig
+
+
+def _write_failure(devices, readback):
+    """Name the FIRST device the trigger write did not take on, and what it answered.
+
+    The first rather than all of them: the run falls back whichever it was, and one device and
+    one reason is what fits on the console line the operator actually reads.
+    """
+    for device in devices:
+        entry = readback.get(str(device), {})
+        if "error" in entry:
+            detail = entry["error"]
+        elif entry.get("value") != 1:
+            detail = f"the driver read it back as {entry.get('value')}, not 1"
+        else:
+            continue
+        return f"trigger write failed on device {device}: {detail}"
+    return "trigger write failed: no device was written"
+
+
 def finalise(sess, started, cfg, camera, detection, preset, devices, accepted, readers,
-             anchors, stop_reason, seconds, tag, stuck=()):
+             anchors, stop_reason, seconds, tag, stuck=(), trig=None):
     """Write everything except the frames, session.json last of all."""
     sess.write_sidecars()
     tiffs = sess.write_first_frame_tiffs() if cfg["first_frame_tiff"] else []
@@ -234,9 +364,10 @@ def finalise(sess, started, cfg, camera, detection, preset, devices, accepted, r
         "recPreviewHz": cfg["rec_preview_hz"], "tag": tag,
         "source": preset["source"], "queueCap": capture.QUEUE_MAX,
         "settleS": capture.SETTLE_S, "handshake": bool(cfg["handshake"]),
+        "trigger": bool(cfg["trigger"]), "pulseHz": cfg["pulse_hz"],
     }
     return session.summarise(sess, started, request, readers, devices, accepted.order,
-                             anchors, stop_reason, tiffs, accepted.rotate180, stuck)
+                             anchors, stop_reason, tiffs, accepted.rotate180, stuck, trig)
 
 
 def parse_args(argv):
@@ -282,6 +413,21 @@ def parse_args(argv):
     p.add_argument("--handshake-wait-s", type=float, default=None,
                    help="wait this long for Spike2 to DELETE the flag before storing, then "
                         "record regardless; 0 records as soon as the flag is written")
+
+    p.add_argument("--trigger", action="store_true", default=None,
+                   help="after accept, put both cameras into FSIN external trigger mode: one "
+                        "stored frame per pulse (default from config.json)")
+    p.add_argument("--no-trigger", dest="trigger", action="store_false", default=None,
+                   help="record free-running with the strobe anchor, as before")
+    p.add_argument("--trigger-wait-s", type=float, default=None,
+                   help="wait this long for the first FSIN pulse on every camera; if none "
+                        "arrives, fall back to a free-running recording")
+    p.add_argument("--trigger-end-margin-s", type=float, default=None,
+                   help="how long past --seconds a triggered recording may run before it stops "
+                        "without the pulse train having ended")
+    p.add_argument("--pulse-hz", type=float, default=None,
+                   help="the FSIN pulse rate Spike2 is driving. PASS THIS FROM SPIKE2: it is "
+                        "recorded, and the delivered rate is warned about if it disagrees")
 
     p.add_argument("--no-anchor", dest="anchor", action="store_false", default=None,
                    help="do not bracket the recording with the exposure/strobe anchor")

@@ -13,8 +13,8 @@ const sequencerFile$ := "sine_protocols/sine_calibration.pls";
 #include "sine_core.s2s"
 
 ' Calibration block parameters
-var calBlockDuration := 30; '120;  'Total duration (s) to run calibration block [default 120]
-var calTargetFPS := 30;  'Target frames-per-second to generate TTL5 pulses [default 30]
+var calBlockDuration := 10; '120;  'Total duration (s) to run calibration block [default 120]
+var calTargetFPS := 100;  'Target frames-per-second to generate TTL5 pulses [default 100]
 
 ' Calculate number of cycles needed for calibration block
 var nCalBlockCycles% := Round(calBlockDuration * chairFreq) + 1;
@@ -30,13 +30,26 @@ nBlocks% := Len(blockList$[]);
 PrintLog("\nBlock list generated:  ", blockList$[]);
 PrintLog("Block labels:          ", blockLabelList$[], "\n");
 
-' TODO: Get these variables from an external source
-var PY$ := "\"C:/Users/Public/RaymondLabCode2/.venv/Scripts/python.exe\"";
-var TOOLPATH$ := " \"C:/Users/Public/RaymondLabCode2/eye_sensor_calibration/recording_app/eye-calibration-recording.py\"";
+' TODO: 
+'     1. Some of these variables should come from an external source
+'     2. CMD$ needs to get rebuilt whenever calibration settings are changed
+PrintLog("FilePath$(0) = %s\n", FilePath$(0));
+PrintLog("FilePath$(1) = %s\n", FilePath$(1));
+PrintLog("FilePath$(2) = %s\n", FilePath$(2));
+
+var rlc2Path$:= "\"" + Replace$(rootpath$, "spike2_experimental_protocols", "");
+var PY$ := rlc2Path$ + ".venv/Scripts/python.exe\"";
+var TOOLPATH$ := " " + rlc2Path$ + "eye_sensor_calibration/recording_app/eye-calibration-recording.py\"";
 VAR DUR$ := " --seconds "+Str$(calBlockDuration);
+VAR CALFPS$ := " --pulse-hz "+Str$(calTargetFPS);
 var OUTPATH$ := " --out \"C:/Temp/test\"";
 var FLAGPATH$ := "C:/Temp/eyecal_ready.flag";
-var CMD$ := PY$ + TOOLPATH$ + DUR$ + OUTPATH$;
+var CMD$ := PY$ + TOOLPATH$ + DUR$ + CALFPS$ + OUTPATH$;
+
+PrintLog("rlc2Path$ = %s\n\n", rlc2Path$);
+PrintLog("PY$ = %s\n", PY$);
+PrintLog("TOOLPATH$ = %s\n", TOOLPATH$);
+PrintLog("CMD$ = %s\n\n", CMD$);
 
 ToolbarStartup();
 
@@ -60,7 +73,7 @@ Proc WindowUpdate()
     ChanComment$(TTL6freq_ch%, "TTL6 Instantaneous Frequency");
 
     ' Ensure calibration-related channels are not hidden
-    ChanShow(Str$(TTL5_ch%)+","+Str$(TTL6_ch%)+","+Str$(TTL5freq_ch%)+","+Str$(TTL6freq_ch%));
+    ChanShow(Str$(TTL2_ch%)+","+Str$(TTL5_ch%)+","+Str$(TTL6_ch%)+","+Str$(TTL5freq_ch%)+","+Str$(TTL6freq_ch%));
 End
 
 ' Initializes and enables our toolbar functions
@@ -224,39 +237,44 @@ Func AfterBlockFunc(bNum%, bEndT, lowSampKey$)
     SampleKey("a");  'Sends a lower-case keyboard command that defines the end of the experiment (useful only for analysis)
     ToolbarSet(40, "Run Expmt", ToolbarRunExpmt%);
     Yield(1);
-    XRange();  'Zoom out to view entire experiement
 
     if ViewKind() <> 0 then return -1 endif;
+    var msgBoxStatus% := CalCompleteMessageBox();
+
     if SampleStatus() = 2 then SampleStop(); endif;
+    XRange();  'Zoom out to view entire experiement
 
-    var fh% := FileOpen(FLAGPATH$, 8, 0);
-    Read(SAVEPATH$);
-    FileClose();
-    PrintLog("[%g] Read save file path from flag: %s\n", fh%, SAVEPATH$);
+    if msgBoxStatus% = 1 then
+        var fh% := FileOpen(FLAGPATH$, 8, 0);
+        Read(SAVEPATH$);
+        FileClose();
+        PrintLog("\n[%g] Read save file path from flag: %s\n", fh%, SAVEPATH$);
 
-    ' Save Native 64-bit SMRX file
-    PrintLog("Saving SMRX and SMR files to save file path...\n\n");
-    smrxOK% := FileSaveAs(savePath$ + "\\calibration.smrx", -1);
-    if smrxOK% = 0 then
-        PrintLog("SMRX saved successfully!\n");
-        ' Work out valid channel count for 32-bit SMR file
-        nCh% := ChanList(list%[], 0x2063ff);  'Disk channels present
-        if nCh% < 32 then nCh% := 32 endif;
-        if nCh% > 64 then nCh% := 64 endif;  'Defines the hard limit for SMR files
-        ' Export the 32-bit SMR file
-        ExportChanList(2);  'Clear list (RealWave -> Waveform)
-        ExportChanList(0.0, MaxTime(), -1);  'Whole file (all channels)
-        smrOK% := FileSaveAs(savePath$ + "\\calibration.smr", 0, 1, "", nCh%, 1);
-        if smrOK% = 0 then
-            PrintLog("SMR saved successfully!\n");
+        ' Save Native 64-bit SMRX file
+        PrintLog("Saving SMRX and SMR files to save file path...\n\n");
+        smrxOK% := FileSaveAs(savePath$ + "\\calibration.smrx", -1);
+        if smrxOK% = 0 then
+            PrintLog("SMRX saved successfully!\n");
+            ' Work out valid channel count for 32-bit SMR file
+            nCh% := ChanList(list%[], 0x2063ff);  'Disk channels present
+            if nCh% < 32 then nCh% := 32 endif;
+            if nCh% > 64 then nCh% := 64 endif;  'Defines the hard limit for SMR files
+            ' Export the 32-bit SMR file
+            ExportChanList(2);  'Clear list (RealWave -> Waveform)
+            ExportChanList(0.0, MaxTime(), -1);  'Whole file (all channels)
+            smrOK% := FileSaveAs(savePath$ + "\\calibration.smr", 0, 1, "", nCh%, 1);
+            if smrOK% = 0 then
+                PrintLog("SMR saved successfully!\n");
+            else
+                PrintLog("WARNING: SMR saved unsuccessfully!\n");
+            endif;
         else
-            PrintLog("WARNING: SMR saved unsuccessfully!\n");
+            PrintLog("WARNING: SMRX and SMR files saved unsuccessfully!\n");
         endif;
     else
-        PrintLog("WARNING: SMRX and SMR files saved unsuccessfully!\n");
+        PrintLog("Cancelled: This recording will not be saved!\n");
     endif;
-
-    Message("CALIBRATION COMPLETED SUCCESSFULLY!");
+    
     halt;
     return 0;
 End
@@ -271,7 +289,8 @@ Func RunPythonEyeCalTool(bNum%, bStartT, upSampKey$)
     var hProg% := ProgRun(cmd$, 1, 10, 15, 85, 80);
     PrintLog("Eye Calibration Image Acquisition Window running...\n");
     repeat
-        Yield(0.1);
+        ' Apply motor drift correction while window is running
+        driftFix%(); Yield(0.05);
         st% := ProgStatus(hProg%);
         fh% := FileStatus(FLAGPATH$);
     until (fh% <> -1) or (st% <> 1);
@@ -286,13 +305,23 @@ Func RunPythonEyeCalTool(bNum%, bStartT, upSampKey$)
     AddTextMark("", -1, "-START");  'Add a TextMark key to denote the start of a block and/or event
     SampleKey("P");  'Send SampleKey() command to the 1401 sequencer of the current block's letter marker
     repeat
-        Yield(0.05);
+        driftFix%(); Yield(0.05);
         st% := ProgStatus(hProg%);
     until st% <> 1;
     PrintLog("Image Acquisition Window closed with %g status...\n", st%);
 
     AddTextMark("", -1, "-STOP");
     return 1;
+End
+
+Func CalCompleteMessageBox()
+    DlgCreate("CALIBRATION COMPLETED!", 0, 0, 72, 3);  'Initialize new dialog window
+    var msgText$ := "Please disengage drum/chair motors before continuing. SAVE THIS RECORDING?";
+    DlgText(msgText$, 3, 1);
+    DlgAllow(0x3ff, ToolbarIdle%);  'Allow all, no idle, update settings function
+    var msgStatus := DlgShow();
+
+    return msgStatus;
 End
 
 Func AddTextMark(samplekey$, blocknumber%, suffixStr$)

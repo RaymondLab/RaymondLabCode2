@@ -1,8 +1,8 @@
 """Opening a camera that actually honours what was asked, and working out which one it is.
 
 Everything here talks to one cv2.VideoCapture and knows nothing about threads -- see capture.py
-for that. The rule that matters is stated in open_camera: the ORDER of the property writes is
-load-bearing, and was paid for in bench time.
+for that. The rule that matters is stated in open_negotiated: the ORDER of the property writes
+is load-bearing, and was paid for in bench time.
 """
 
 import re
@@ -47,6 +47,20 @@ MAX_RATE_SENTINEL = 240.0   # rate requested for FrameRate:"max"; above any came
 # opposite of the usual reading. Every candidate is still confirmed by measuring the image, so a
 # camera that does follow the convention is handled without a special case.
 MANUAL_AE_CANDIDATES = (0.75, 1.0, 0.25, 0.0)
+
+# Tried only after every single candidate above has failed. WHY PAIRS RATHER THAN MORE VALUES:
+# OpenCV's DirectShow backend maps AUTO_EXPOSURE 0.25 and 0.0 to IAMCameraControl::Set with the
+# MANUAL flag, and 0.75 and 1.0 to Set(the driver's default value, AUTO flag) -- four values, two
+# calls. So there is nothing left to try except the ORDER they are written in. The bench probe
+# that found 0.75 escaping had written a manual value immediately before it, which makes a
+# Manual-then-Auto transition, and the app's own candidate order never contains that transition
+# because it starts at 0.75. Each pair is written first value then second, and measured once.
+MANUAL_AE_PAIRS = ((0.25, 0.75), (0.0, 1.0))
+
+# Waited out between closing a camera that is stuck in auto-exposure and opening it again; see
+# open_camera. Measured on this rig 2026-09-07: the stuck state lives in the camera and survives
+# the application that caused it, so a reopen is worth one try and is not certain to help.
+REOPEN_WAIT_S = 2.0
 
 # The response probe spans the driver's full usable exposure range rather than stepping a few
 # stops around the operating point. Measured on this rig, a step down from the preset decides
@@ -104,6 +118,30 @@ _HELD_HINT = (
     "      driver without touching the cable, and clears a device Windows has not reclaimed\n"
     "    - unplug and replug only if none of the above clears it")
 
+# How to read the per-attempt means printed by _stuck_message. The ratio alone cannot separate
+# the two ways this check fails -- a camera pinned in auto and a camera looking at a lens cap
+# both report about 1.00x -- so the operator is given the numbers the verdict was made on.
+_MEANS_GUIDE = (
+    "\n  Reading the means: the same mid value on every attempt, dark and bright alike, "
+    "is the camera\n  running its own auto-exposure and holding its target against everything "
+    "written here. Every mean\n  near the black level -- below about 35 counts -- is a dark "
+    "scene instead, a lens cap or no light,\n  which this check cannot tell apart from auto. "
+    "Every mean near 255 is a saturated scene.")
+
+# Appended to the auto-exposure refusal, the way _HELD_HINT is appended to the busy one. Measured
+# on this rig 2026-09-07, on two OV9281s, after the Windows Camera app had been opened on them.
+_AUTO_STUCK_HINT = (
+    "\n\n  Close anything else using this camera and retry. If nothing else has it, the cause "
+    "is most likely\n  Windows itself: the Camera app -- and anything else that goes through "
+    "Windows' camera pipeline,\n  the Frame Server -- can leave the camera in an auto-exposure "
+    "mode that these writes cannot undo.\n  The state stays in the camera after that "
+    "application is closed, and has appeared a minute or two\n  AFTER closing it, so the "
+    "cause can look long finished. In order of escalation:\n"
+    "    - do not use the Windows Camera app on the rig cameras at all\n"
+    "    - if it was used, wait two minutes and retry: the state has cleared by itself\n"
+    "    - disable and re-enable the camera in Device Manager, under Cameras\n"
+    "    - unplug and replug it")
+
 
 class CameraBusyError(RuntimeError):
     """The device never really came up -- it is almost certainly still claimed by a previous run.
@@ -114,6 +152,23 @@ class CameraBusyError(RuntimeError):
     geometry the camera cannot deliver, still fails on the first attempt with the message that
     says so -- retrying those would only bury the diagnosis under two more identical failures.
     """
+
+
+class AutoExposureStuckError(RuntimeError):
+    """Nothing this app can write took the camera out of its OWN auto-exposure.
+
+    Carries `attempts`: the list of measurement dicts, exactly as it goes into session.json. That
+    is what lets open_camera catch this, reopen the device, and then report BOTH rounds instead
+    of only the round that raised last.
+
+    Deliberately NOT busy-class. The device opened, streamed, and answered every property query,
+    so the entry point's few-second retry would change nothing -- the state lives inside the
+    camera and clears on the order of minutes, if at all (see _AUTO_STUCK_HINT).
+    """
+
+    def __init__(self, message, attempts=()):
+        super().__init__(message)
+        self.attempts = list(attempts)
 
 
 def parse_format(fmt):
@@ -160,8 +215,8 @@ def _open_live(device_id):
     return cap, index
 
 
-def open_camera(device_id, fmt, source, anchor_exposure=None):
-    """Open a camera, force the format, prove manual exposure. Returns (cap, text, evidence).
+def open_negotiated(device_id, fmt, source):
+    """Open the device and put it into the requested media type. Returns cap.
 
     ORDER IS LOAD-BEARING, and not in the way you would guess. Two DirectShow traps, both
     measured on this rig with OpenCV 5.0.0:
@@ -180,12 +235,14 @@ def open_camera(device_id, fmt, source, anchor_exposure=None):
     OV2311 default-negotiates 31.8 fps against 49.4 available, so max asks for a sentinel above
     anything in scope and lets the driver clamp it.
 
-    Opening is deliberately sequential across cameras even though it costs ~7 s each. It all
-    happens before Spike2 starts sampling, so it is free in the only currency that matters here,
-    and OpenCV's DirectShow backend runs through a shared global that is not documented as
-    thread-safe.
+    Split out of open_camera only so this whole sequence can be run a SECOND time, identically,
+    when a camera has to be closed and reopened to get it out of auto-exposure. Nothing here may
+    be reordered or skipped on that second run; that is the point of it being one function.
 
-    `anchor_exposure`, when given, is also checked for re-negotiating the media type.
+    Public because tools/camera_check.py opens the cameras THE SAME WAY and deliberately stops
+    here, without proving manual exposure -- it exists to show what state a camera is already in,
+    so it hands over a source dict holding only FrameRate and lets apply_source find nothing to
+    write. Any other caller wanting a camera to record from wants open_camera, not this.
     """
     fourcc, width, height = parse_format(fmt)
     cap, _ = _open_live(device_id)
@@ -200,11 +257,66 @@ def open_camera(device_id, fmt, source, anchor_exposure=None):
 
     apply_source(cap, source)
     verify_format(cap, width, height, fourcc, "applying source properties")
+    return cap
+
+
+def open_camera(device_id, fmt, source, anchor_exposure=None):
+    """Open a camera, force the format, prove manual exposure. Returns (cap, text, evidence).
+
+    The property order that makes the format stick is in open_negotiated, and is the part of
+    this that was paid for in bench time.
+
+    Opening is deliberately sequential across cameras even though it costs ~7 s each. It all
+    happens before Spike2 starts sampling, so it is free in the only currency that matters here,
+    and OpenCV's DirectShow backend runs through a shared global that is not documented as
+    thread-safe.
+
+    `anchor_exposure`, when given, is also checked for re-negotiating the media type.
+
+    ONE REOPEN, AND ONLY ONE. A camera that will not leave its own auto-exposure is closed,
+    waited out for REOPEN_WAIT_S and opened again from scratch, then measured again. Measured on
+    this rig 2026-09-07: this state arrives from outside the app -- the Windows Frame Server
+    leaves it behind -- and a fresh graph on a fresh device sometimes starts clean where property
+    writes on the running one never do. It is one try because the state also persists across a
+    reopen often enough that a loop would only spend the operator's time; the failure message
+    then carries BOTH rounds' measurements, which is the evidence for what to do next.
+    """
+    fourcc, width, height = parse_format(fmt)
+    cap = open_negotiated(device_id, fmt, source)
 
     # Always, not only when the anchor is on: a camera left in auto-exposure invalidates the
     # exposure setting itself, not just the anchor.
-    evidence = secure_manual_exposure(cap, source, width, height, fourcc, device_id,
-                                      anchor_exposure)
+    reopened = False
+    try:
+        evidence = secure_manual_exposure(cap, source, width, height, fourcc, device_id,
+                                          anchor_exposure)
+    except AutoExposureStuckError as first:
+        print(f"  Device {device_id}: exposure stayed in auto after "
+              f"{_write_count(first.attempts)} writes; closing and reopening once before giving "
+              f"up.", file=sys.stderr)
+        # secure_manual_exposure already released it on that path. Released again here anyway,
+        # because this function must not depend on where inside the call the failure happened,
+        # and a device still claimed by this process is one the reopen cannot get back.
+        cap.release()
+        time.sleep(REOPEN_WAIT_S)
+        # A CameraBusyError raised by the reopen propagates untouched: THAT one clears itself,
+        # and the entry point already retries it.
+        cap = open_negotiated(device_id, fmt, source)
+        reopened = True
+        try:
+            evidence = secure_manual_exposure(cap, source, width, height, fourcc, device_id,
+                                              anchor_exposure)
+        except AutoExposureStuckError as second:
+            cap.release()
+            # from None: the chained message would be the first round printed twice, and the
+            # message raised here already contains both rounds, side by side.
+            raise AutoExposureStuckError(
+                _stuck_message(device_id, (("first open", first.attempts),
+                                           ("after close and reopen", second.attempts))),
+                list(first.attempts) + list(second.attempts)) from None
+
+    if evidence:
+        evidence["reopened"] = reopened
 
     got_w, got_h, got_fourcc = negotiated(cap)
     description = (f"{got_w}x{got_h} {got_fourcc or '(codec not reported)'}, "
@@ -212,6 +324,8 @@ def open_camera(device_id, fmt, source, anchor_exposure=None):
     if evidence:
         description += (f", manual exposure via AUTO_EXPOSURE={evidence['manualVia']} "
                         f"({evidence['responseRatio']:.2f}x)")
+        if reopened:
+            description += ", after one close and reopen"
     return cap, description, evidence
 
 
@@ -348,9 +462,9 @@ def apply_source(cap, source):
     on the next frame. Auto-exposure is the one that really matters: it lengthens integration as
     the scene darkens and the driver drops the frame rate to suit.
 
-    FrameRate is absent on purpose -- it is set once during negotiation in open_camera and must
-    never be re-applied. Its readback is worthless anyway; DirectShow echoes whatever it was
-    handed, answering 1000.0 after a 1000 fps request on a 50 fps camera.
+    FrameRate is absent on purpose -- it is set once during negotiation, in open_negotiated,
+    and must never be re-applied. Its readback is worthless anyway; DirectShow echoes whatever it
+    was handed, answering 1000.0 after a 1000 fps request on a 50 fps camera.
     """
     for name, prop in _MODE_MAP.items():
         # ExposureMode is NOT set here. It is the one mode whose effect can be measured, and
@@ -413,6 +527,49 @@ def _exposure_response(cap):
     return ratio, at_dark, at_bright
 
 
+def _write_count(attempts):
+    """How many AUTO_EXPOSURE writes those attempts actually made.
+
+    The first attempt measures what apply_source left behind and writes nothing; a pair attempt
+    writes twice. Only used for the one-line note before a reopen, but a count that matches what
+    the code did is what makes that note worth printing.
+    """
+    return sum(2 if " then " in str(a["autoExposure"]) else 1
+               for a in attempts if a["autoExposure"] != "as applied")
+
+
+def _attempt_lines(attempts):
+    """One line per attempt: what was written, and what the image did about it."""
+    return "\n".join(
+        f"    AUTO_EXPOSURE={a['autoExposure']}: mean {a['meanDark']:.1f} at exposure "
+        f"{PROBE_DARK:g} -> {a['meanBright']:.1f} at {PROBE_BRIGHT:g}  ({a['ratio']:.2f}x)"
+        for a in attempts)
+
+
+def _stuck_message(device_id, rounds):
+    """The refusal: every attempt's measurements, how to read them, and what to do about it.
+
+    `rounds` is (label, attempts) pairs -- one round for a plain failure, two once the camera has
+    also been closed and reopened. EVERY attempt is printed, not just the last ratio, because the
+    ratio on its own does not say which failure this is: a camera pinned in its own auto-exposure
+    and a camera looking at a lens cap both measure about 1.00x, and only the means separate them.
+    """
+    blocks = []
+    for label, attempts in rounds:
+        head = f"  {label}:\n" if label else ""
+        blocks.append(head + _attempt_lines(attempts))
+    return (
+        f"Device {device_id}: exposure is not under manual control. Driving it across its whole "
+        f"range, {PROBE_DARK:g} to {PROBE_BRIGHT:g}, never moved the image by the "
+        f"{MIN_RESPONSE_RATIO:g}x that manual control gives -- on any setting tried:\n"
+        + "\n".join(blocks) + "\n"
+        + _MEANS_GUIDE
+        + "\n\n  If this is auto-exposure, the preset Exposure value does nothing and the "
+          "recording anchor cannot\n  mark anything. Refusing to run either way: the frames "
+          "would look plausible and be untrustworthy."
+        + _AUTO_STUCK_HINT)
+
+
 def secure_manual_exposure(cap, source, width, height, fourcc, device_id, anchor_exposure=None):
     """Prove this camera is in MANUAL exposure, and that the anchor cannot break the format.
 
@@ -436,6 +593,10 @@ def secure_manual_exposure(cap, source, width, height, fourcc, device_id, anchor
     indistinguishable from a camera ignoring the write (see PROBE_DARK). Candidates are ordered by
     what works on this rig, but every one is confirmed by measurement, so a camera that does
     follow the standard is handled without a special case.
+
+    Raises AutoExposureStuckError, carrying every attempt's measurements, when nothing written
+    here moves the image. open_camera catches that one and tries a closed-and-reopened device
+    before the refusal reaches the operator.
 
     All of this happens in phase 1, before the ready flag exists and before Spike2 is sampling,
     so the second or two it costs is free.
@@ -461,18 +622,24 @@ def secure_manual_exposure(cap, source, width, height, fourcc, device_id, anchor
                 winner = candidate
                 break
 
+    # The last thing left to try before giving up: two values in sequence rather than one. See
+    # MANUAL_AE_PAIRS -- the backend has only a manual flag and an auto flag to hand the driver,
+    # so the TRANSITION between them is the one thing the single candidates cannot say.
+    if winner is None:
+        for first, second in MANUAL_AE_PAIRS:
+            cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, first)
+            cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, second)
+            ratio, at_dark, at_bright = _exposure_response(cap)
+            label = f"{first} then {second}"
+            attempts.append({"autoExposure": label, "ratio": ratio,
+                             "meanDark": at_dark, "meanBright": at_bright})
+            if ratio >= MIN_RESPONSE_RATIO:
+                winner = label
+                break
+
     if winner is None:
         cap.release()
-        tried = ", ".join(str(a["autoExposure"]) for a in attempts)
-        raise RuntimeError(
-            f"Device {device_id}: exposure is not under manual control. Driving it across its "
-            f"whole range, {PROBE_DARK:g} to {PROBE_BRIGHT:g}, moved the image by {ratio:.2f}x, "
-            f"where manual control gives at least {MIN_RESPONSE_RATIO:g}x.\n"
-            f"  Tried AUTO_EXPOSURE: {tried}.\n"
-            f"  The camera is running its own auto-exposure, so the preset Exposure value does "
-            f"nothing and\n  the recording anchor cannot mark anything. Refusing to run: the "
-            f"frames would look plausible\n  and be untrustworthy. Close anything else using "
-            f"this camera and retry.")
+        raise AutoExposureStuckError(_stuck_message(device_id, ((None, attempts),)), attempts)
 
     # Restore, then CHECK the restore -- an unverified restore is how a camera ends up running a
     # whole session at the probe value. The probe ended bright, so a failed restore is a big,

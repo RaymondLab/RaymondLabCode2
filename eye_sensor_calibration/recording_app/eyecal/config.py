@@ -49,6 +49,14 @@ DEFAULTS = {
     "anchor": True,
     "anchor_exposure": None,            # None = normal + 4 stops
     "anchor_hold_s": 0.25,
+
+    # FSIN external trigger (see eyecal/trigger.py)
+    "trigger": True,                    # attempt the FSIN trigger after accept; falls back to
+                                        # free-run when no pulses arrive
+    "trigger_wait_s": 3.0,              # how long to wait for the FIRST pulse on every camera
+    "trigger_end_margin_s": 5.0,        # how long past `seconds` the trigger recording may run
+                                        # before it stops without the train having ended
+    "pulse_hz": None,                   # Spike2 passes --pulse-hz; None = no rate check
 }
 
 

@@ -2,6 +2,7 @@ r"""Session video: watch a recorded session play back with its own timestamps on
 
     python tools\session_video.py "C:\Temp\test\20260821-205753Z_ov2311_2cam_10s"
     python tools\session_video.py                     # asks for the folder with a dialog
+    python eye_sensor_calibration\recording_app\tools\session_video.py
 
 Renders one recorded session to calibration_video.mp4 in the session folder: both cameras
 side by side at the top, and underneath them three growing histograms -- each camera's own
@@ -15,13 +16,28 @@ figures. This answers "does the recording LOOK right?" -- whether the two camera
 show the same moment, whether either one stutters, and where in the run any oddity sits.
 Some faults are obvious in motion and invisible in a summary statistic.
 
-Timestamps come from the Spike2 strobe train when that is trustworthy, and from the host
-arrival times in ts.csv when it is not. The strobe is the better clock by a wide margin --
-it is the camera's own exposure pulse, recorded by hardware -- but it is only usable when
-the anchor detection verifies, so the fallback is automatic and the console always says
-which source was used and why. Both sources are converted to seconds since that camera's
-own first frame before anything is drawn, so the two look the same on screen and neither
-is quietly flattering.
+Three clocks, and session.json picks between them. A session recorded under the FSIN
+trigger -- session.json trigger.mode == "trigger" -- is timed from the Spike2 TTL2 channel,
+the pulse train that drove the cameras: stored frame k of BOTH c1.bin and c2.bin is pulse k,
+so there is nothing to align and nothing to verify (see eyecal/trigger.py). Every other
+session, free-run or one that asked for the trigger and fell back, keeps the older path: the
+strobe train when its anchor verifies, and the host arrival times in ts.csv when it does not.
+A hardware clock beats host arrivals by a wide margin, so ts.csv is only ever the fallback,
+and the console always says which source was used and why. All three are converted to seconds
+since that camera's own first frame before anything is drawn, so they look the same on screen
+and none is quietly flattering.
+
+Two things about the trigger path are stated rather than worked around. The WHOLE TTL2 channel
+is used and its first spike is frame 0, so a test train recorded earlier in the same Spike2
+file would read every frame against an earlier pulse, with nothing on screen to show it --
+record the trigger train once, for the run. And both cameras take their times from the SAME
+spike array, so the simultaneity panel reads a flat zero by construction: that panel documents
+the shared clock there, it does not measure anything.
+
+A pulse count that does not match the stored frame count never refuses the render. Frame k is
+still shown against spike k from the START of the train, frames past the last pulse draw '--',
+the difference is printed per camera, and the on-screen label says COUNT MISMATCH so a still
+from the video cannot be mistaken for a clean run.
 
 Three decisions worth stating up front, because each one is a deliberate refusal:
 
@@ -90,10 +106,22 @@ FONT = cv2.FONT_HERSHEY_SIMPLEX
 # no glyphs above 127, so a plus-minus sign or a middle dot comes out as a hollow box.
 STROBE_LABEL = "strobe (Spike2), +/-2 frames"
 TSCSV_LABEL = "ts.csv arrival (no valid strobe)"
+TRIGGER_LABEL = "trigger (Spike2 TTL2), frame k = pulse k"
+TRIGGER_MISMATCH_LABEL = TRIGGER_LABEL + " -- COUNT MISMATCH, see console"
+
+# Where the trigger train is recorded: Spike2's TTL2 input. The channel number comes from
+# spike2_experimental_protocols/utils/sampling_window_config.s2s, which sets TTL2_ch% := 12
+# with the title "TTL2" and the comment "TTL2: Camera Trigger".
+TRIGGER_CHAN = 12
 
 
 class StrobeUnusable(Exception):
-    """The strobe train cannot time this session. Carries the reason, which gets printed."""
+    """A Spike2 clock -- strobe or trigger -- cannot time this session.
+
+    Carries the reason, which gets printed. One exception covers both clocks because the
+    handling is identical: say why on the console and fall back to ts.csv. The name is from
+    the strobe, which was the only Spike2 clock when this was written.
+    """
 
 
 # --- small drawing helpers --------------------------------------------------------------
@@ -129,7 +157,7 @@ def fmt_seconds(t):
     return f"{t:.5f} s" if np.isfinite(t) else "  --   s"
 
 
-# --- timestamps: the strobe train, or the host arrival times ----------------------------
+# --- timestamps: the trigger train, the strobe train, or the host arrival times ---------
 
 def fit(values, n):
     """Force an array to exactly n entries, padding short ones with NaN.
@@ -170,6 +198,19 @@ def frame_times_from_anchor(times, anchor, n):
     return relative(t)
 
 
+def find_smrx(session_dir):
+    """The session's single .smrx, or raise StrobeUnusable saying how many there were.
+
+    Shared by both Spike2 clocks: neither can be read without the file, and both treat none
+    and more-than-one the same way -- say so, and let the caller fall back to ts.csv.
+    """
+    found = sorted(Path(session_dir).glob("*.smrx"))
+    if len(found) != 1:
+        raise StrobeUnusable(f"the session holds {len(found)} .smrx files, not 1"
+                             + (f" ({', '.join(p.name for p in found)})" if found else ""))
+    return found[0]
+
+
 def strobe_times(session_dir, sess, counts):
     """Per-camera timestamps from the Spike2 strobe channels, or raise StrobeUnusable.
 
@@ -179,13 +220,7 @@ def strobe_times(session_dir, sess, counts):
     deliberately NOT gated on: it records a benign per-camera hardware difference in how the
     OFF-transition frame is handled, and gating on it rejects a healthy camera.
     """
-    session_dir = Path(session_dir)
-    found = sorted(session_dir.glob("*.smrx"))
-    if len(found) != 1:
-        raise StrobeUnusable(f"the session holds {len(found)} .smrx files, not 1"
-                             + (f" ({', '.join(p.name for p in found)})" if found else ""))
-    smrx = found[0]
-
+    smrx = find_smrx(session_dir)
     f, open_note = strobe_timing.open_sonfile(smrx)     # copies it if Spike2 has it locked
     channels = strobe_timing.read_all_channels(f)
     ttl5 = strobe_timing.find_channel(channels, strobe_timing.TTL5_CHAN, "TTL5")
@@ -217,6 +252,56 @@ def strobe_times(session_dir, sess, counts):
 
     return out, (f"{smrx.name} {open_note}; TTL5 = c{ttl5_cam}.bin because {why}; "
                  f"every anchor check passed on both channels")
+
+
+def frame_times_from_trigger(times, n):
+    """Frame k -> pulse k, the same pulses for both cameras.
+
+    Under the trigger there is nothing to align. The camera exposes only when a pulse tells it
+    to, so stored frame k IS pulse k of the train on every camera (see eyecal/trigger.py): no
+    anchor, no per-camera offset, and no OFF-gap question to refuse to guess at.
+
+    Frames past the last pulse get NaN, like any other missing timestamp, so a count that does
+    not match is reported rather than patched. See trigger_times.
+    """
+    return relative(fit(np.asarray(times, dtype=float), n))
+
+
+def trigger_times(session_dir, sess, counts):
+    """Per-camera timestamps from the Spike2 trigger train, or raise StrobeUnusable.
+
+    Returns (times_per_cam, why, mismatch). `mismatch` carries (frames, pulses) for each camera
+    whose stored frame count differs from the number of pulses, and is empty when they agree;
+    camera_times prints it and marks the label, and the render goes ahead either way.
+
+    THE WHOLE TTL2 CHANNEL IS USED, and its FIRST spike is frame 0. That is exact for a file
+    holding the run's trigger train and nothing else, and wrong for one that also holds a test
+    train recorded earlier -- every frame would then be read against an earlier pulse. Record
+    the trigger train once, for the run.
+
+    `sess` is not read. It is in the signature so camera_times can call this and strobe_times
+    the same way; under the trigger, session.json has nothing left to contribute to the timing.
+    """
+    smrx = find_smrx(session_dir)
+    f, open_note = strobe_timing.open_sonfile(smrx)     # copies it if Spike2 has it locked
+    channels = strobe_timing.read_all_channels(f)
+    try:
+        ttl2 = strobe_timing.find_channel(channels, TRIGGER_CHAN, "TTL2")
+    except KeyError as exc:
+        raise StrobeUnusable(f"no trigger train: {exc.args[0]}") from exc
+    times = ttl2["times"]
+    if times is None or not len(times):
+        raise StrobeUnusable(f"Ch{TRIGGER_CHAN} ({ttl2['title']}) holds no pulses, so there is "
+                             f"no trigger train to read the frames against")
+
+    # Both cameras from the SAME array, deliberately: that is what the trigger means. It also
+    # makes the simultaneity panel a flat zero, which documents the shared clock.
+    out = {cam: frame_times_from_trigger(times, counts[cam]) for cam in sorted(counts)}
+    mismatch = {cam: (counts[cam], len(times)) for cam in sorted(counts)
+                if counts[cam] != len(times)}
+    why = (f"{smrx.name} {open_note}; TTL2 (Ch{TRIGGER_CHAN}) {len(times)} spikes; "
+           + ", ".join(f"c{cam}.bin {counts[cam]} frames" for cam in sorted(counts)))
+    return out, why, mismatch
 
 
 def ts_csv_times(session_dir, counts):
@@ -254,11 +339,28 @@ def ts_csv_times(session_dir, counts):
 def camera_times(session_dir, sess, counts):
     """The timestamps to draw, plus the on-screen label saying where they came from.
 
-    Any failure on the strobe path -- a locked or absent .smrx, a channel that is not there,
+    session.json chooses the Spike2 clock: trigger.mode == "trigger" means the TTL2 pulse
+    train, anything else -- free-run, a run that fell back to free-run, or an older session
+    with no trigger block at all -- means the strobe anchors. A trigger session is never tried
+    against the strobe anchors: its anchor is switched off, so there is nothing there to verify.
+
+    Any failure on either Spike2 path -- a locked or absent .smrx, a channel that is not there,
     an anchor that does not verify, sonpy throwing -- falls back to ts.csv and prints the
     reason. There is always a render; there is never a silent substitution.
     """
+    triggered = bool(sess) and (sess.get("trigger") or {}).get("mode") == "trigger"
     try:
+        if triggered:
+            t, why, mismatch = trigger_times(session_dir, sess, counts)
+            label = TRIGGER_MISMATCH_LABEL if mismatch else TRIGGER_LABEL
+            print(f"  timestamps    {label}")
+            print(f"                {why}")
+            for cam in sorted(mismatch):
+                n_frames, n_pulses = mismatch[cam]
+                print(f"                COUNT MISMATCH cam {cam}: {n_frames} frames stored, "
+                      f"{n_pulses} TTL2 spikes -- frame k is still shown against spike k "
+                      f"from the start")
+            return t, label
         t, why = strobe_times(session_dir, sess, counts)
         print(f"  timestamps    {STROBE_LABEL}")
         print(f"                {why}")

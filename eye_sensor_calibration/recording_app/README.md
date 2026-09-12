@@ -10,9 +10,10 @@ python eye-calibration-recording.py --session-id m123_run01 --seconds 30
 |---|---|
 | 1. open both cameras, negotiate MJPG at full frame | — |
 | 2. live alignment view; operator presses `a` | — |
-| 3. create the ready flag | sees it, drops a `SampleKey("S")` marker |
-| 4. record, bracketed by the strobe anchor | sampling |
-| 5. write `session.json` | sees it and continues |
+| 3. put both cameras into FSIN trigger mode | — |
+| 4. create the ready flag | sees it, drops a `SampleKey("S")` marker, **starts the pulse train** |
+| 5. record one frame per FSIN pulse, or free-run + anchor if none come | sampling and pulsing |
+| 6. write `session.json` | sees it and continues |
 
 ## Why one process
 
@@ -192,6 +193,89 @@ arbitrary phase offset of up to one frame period, plus drift; index *k* on one c
 simultaneous with index *k* on the other, and the two counts need not even match. Pair on
 **strobe times** from Spike2. That is the whole point of having them.
 
+## FSIN trigger mode
+
+The anchor exists because nothing in a free-running pulse train says which pulse is frame 0.
+**Under the FSIN trigger that question does not arise: stored frame `k` IS pulse `k`**, on every
+camera, because the sensor exposes only when Spike2 tells it to. The whole mechanism is
+`eyecal/trigger.py`, which also carries the measurements it rests on.
+
+The switch is **one control write**, and OpenCV cannot reach it: `IAMCameraControl` property
+**19**, `AUTO_EXPOSURE_PRIORITY` — the UVC `CT_AE_PRIORITY_CONTROL`, Windows' "Low Light
+Compensation" checkbox, Linux's `exposure_dynamic_framerate`. It goes through a filter of the
+app's own (`eyecal/dshow.py`), beside whatever OpenCV is doing, and it works while the capture
+is streaming. Measured on this rig, 2026-09-11, on both Arducam B0332 (OV9281): `1` = one frame per
+rising edge on FSIN, `0` = free-running at ~121 fps again, immediately.
+
+### What happens after the operator presses `a`
+
+1. **write** AE priority 1 on every device and read it straight back. Anything less than every
+   device agreeing falls back — one camera pulsing and one free-running would produce two files
+   whose frame indices mean different things.
+2. **settle** a quarter second. Free-running frames keep landing for a moment after the write
+   (measured: 8–16 per camera, 9 ms apart), and drained too early they would be stored as pulse
+   0, 1, 2 and shift every index after them.
+3. **drain** the queues. Everything in them predates the switch.
+4. **create the ready flag.** This is what starts Spike2's pulse train, which is why the write
+   comes first: a camera not yet in trigger mode would miss the first pulses.
+5. **wait up to `trigger_wait_s`** (3 s) for a real frame from *every* camera. If none arrives,
+   every camera goes back to free-run and the run records exactly as it always did, with the
+   strobe anchor.
+6. **record one frame per pulse.** It stops when the *train* does, not on the clock —
+   `seconds + trigger_end_margin_s` is only a ceiling, so a Spike2 left pulsing cannot record
+   until the disk fills.
+
+**The camera remembers the setting** across a release, a reopen and the end of the process. So
+free-run is written *before* anything is opened and again on **every** exit path, cancel and
+crash included. Without that, the next ordinary recording gets one black frame a second and sits
+out its whole settle timeout looking dead.
+
+### Reading the `trigger` block in `session.json`
+
+`mode` is the first thing to read, and it decides how the whole session is read:
+
+| `mode` | what it means |
+|---|---|
+| `trigger` | stored frame `k` is pulse `k`. `strobeAnchors.enabled` is `false`: nothing to mark |
+| `free-run` | an ordinary recording. Map it through the anchors, and read `reason` for why |
+
+A fallback is **exit code 3** and a warning in `session.json`, because the operator must not
+discover it by counting pulses in Spike2 afterwards. `reason` names it: the feature switched off,
+`trigger write failed on device N`, or `no pulses within N s`. The rest of the block is
+`aePriority` (the readback per device, and `aePriorityRestored` after a fallback), `pulseHz`,
+`waitS`, `endMarginS`, `timeouts`, `framesDuringWait`, `lastRealFrameS` and `endReason`.
+
+**The per-frame timestamp is Spike2's own TTL2 loopback.** The train Spike2 drives out to FSIN
+is recorded back on TTL2, so every pulse carries a Spike2 timestamp — and pulse `k` is frame
+`k`, with nothing counted or assumed in between. `ts.csv` still carries host arrival times;
+they are for ordering and rate, not for timing.
+
+**Timeout frames.** In trigger mode with no pulses the read does *not* fail — the driver answers
+`ok=True` about once a second, after its ~1000 ms timeout, with an **all-zero** frame. Those are
+counted as `timeouts` and never stored: one in the ledger would be a frame the sensor never took,
+and it would shift every pulse after it. A really triggered frame cannot be all zero, because the
+sensor's black-level pedestal sits near 28 counts at any exposure. One timeout at the end is how
+a normal run *ends*; any others are one-second gaps in the train, and each is warned about.
+
+Settings: `trigger` (on), `trigger_wait_s` (3 s), `trigger_end_margin_s` (5 s) and `pulse_hz`
+(`null`). **Spike2 should pass `--pulse-hz`** — the rate it is actually driving. It is recorded,
+and a delivered rate more than 10 percent away from it is a warning. `--no-trigger` records
+free-running with the anchor, as before.
+
+### Bench tools
+
+```
+python tests\fsin_trigger_check.py --seconds 5              records, then reports rates
+python tests\fsin_trigger_check.py --seconds 5 --mode free  the control condition
+python tests\fsin_trigger_view.py                           live: the panes ARE the pulses
+```
+
+`fsin_trigger_check.py` is the measurement: start the train, run it, and compare the delivered
+rate against the pulse rate and against `--mode free`. `fsin_trigger_view.py` is the live view —
+each pane goes black within 100 ms of the train stopping, so somebody can start and stop it and
+watch. Both drive `eyecal/trigger.py`, so neither can disagree with the app, and both put every
+camera back to free-run on the way out.
+
 ## Settings
 
 `config.json` sits beside the script and is loaded automatically. The command line overrides it.
@@ -216,6 +300,10 @@ An unknown key is an error, not a shrug.
 | `anchor` | `true` | the strobe bracket |
 | `anchor_exposure` | `null` | `null` = normal + 4 stops |
 | `anchor_hold_s` | `0.25` | |
+| `trigger` | `true` | attempt FSIN trigger mode after accept; falls back if no pulses come |
+| `trigger_wait_s` | `3.0` | how long to wait for the FIRST pulse on every camera |
+| `trigger_end_margin_s` | `5.0` | how long past `seconds` a triggered run may go on |
+| `pulse_hz` | `null` | the rate Spike2 is driving; pass `--pulse-hz`, and it is checked |
 
 ### Camera detection
 
@@ -312,11 +400,50 @@ Spike2 file and read the report.
 2. **Does a failed `cap.read()` still leave a pulse behind?** This is the only thing that can
    silently shift the mapping by one frame. Compare the pulse count between anchors against the
    stored frame count between them over a long run.
-3. **Is there a trigger *input* on the camera board?** The OV2311 is a global-shutter sensor
-   designed for external triggering, and if that pin is broken out next to the strobe you already
-   tap, Spike2 could drive both cameras from one output. Exposures would then be simultaneous by
-   construction, pulse count would equal frame count exactly, and the anchor would become a
-   convenience rather than the mechanism.
+3. **Is there a trigger *input* on the camera board? Yes — and it works.** Measured on this rig,
+   2026-09-11, on both Arducam B0332 (OV9281): FSIN driven from a Power1401 digital output gives
+   one frame per rising edge, and the switch is `IAMCameraControl` property **19**
+   (`AUTO_EXPOSURE_PRIORITY`), *not* Backlight Compensation, whatever the application note's name
+   for it suggests — 0, 1 and 2 on that control all leave the camera free-running at ~121 fps and
+   only change the brightness. Exposures are now simultaneous by construction, pulse count equals
+   frame count, and the anchor is a fallback rather than the mechanism. See
+   [FSIN trigger mode](#fsin-trigger-mode).
+
+**If the app refuses with "exposure is not under manual control"**, read the means it prints. It
+drives the exposure from −13 to −6 on every `AUTO_EXPOSURE` setting it knows, twice, with one
+close and reopen in between, and lists what each attempt measured. Means pinned at the same middle
+value on every line are the camera running its own auto-exposure; means near the black level
+(below about 35 counts) are a dark scene instead — lens cap, lights off — which this check cannot
+tell apart from auto. A real pin usually comes from the **Windows Camera app**: it, and anything
+else that goes through Windows' Frame Server, can leave a camera in an auto mode these writes
+cannot undo, and the state has appeared a minute or two *after* the app was closed. Do not use the
+Camera app on the rig cameras. If it has been used, wait two minutes and retry, or disable and
+re-enable the camera in Device Manager under Cameras.
+
+### Use `tools/camera_check.py`, not the Windows Camera app
+
+```
+python tools\camera_check.py
+```
+
+That is what it is for. It shows both cameras live, side by side, and **writes nothing to any
+camera control** — it opens them exactly as the app does, in the same load-bearing property
+order, but hands the open a source dict holding only `FrameRate`, so each camera keeps whatever
+state it was already in. Per camera it shows the device number and Windows' friendly name, the
+negotiated media type and both frame rates, and then **every control the driver exposes** —
+value, range, step, default, and whether it is on **AUTO**, in red. That last column is the one
+thing the app itself cannot tell you: it comes from DirectShow's `IAMCameraControl` and
+`IAMVideoProcAmp` through `eyecal/dshow.py`, and it is instant. Measured on this rig, both
+OV9281s report `WhiteBalance` on AUTO and everything else on MANUAL out of the box.
+
+The AUTO flag is a **hint, not the proof** — it says what the driver was last told. `m` runs the
+app's real measurement (`cameras.secure_manual_exposure`) on demand and prints the evidence; that
+verdict is the one that decides whether a session runs. `p` saves two PNGs: the canvas exactly as
+shown, and the full-resolution frames tiled with nothing drawn on them. A camera that will not
+open keeps its pane and shows the failure in red while the other one goes on running; `o` retries
+it. Keys: `Esc` quit · `p` snapshot · `m` prove manual exposure · `o` reopen failed · `c` colour ·
+`r` rotate · `s` swap sides · `h` hide overlay. `--snapshot PATH` and `--quit-after S` run it
+unattended.
 
 ## Layout
 
@@ -326,20 +453,25 @@ eyecal/cameras.py              open + identify + format negotiation + verificati
 eyecal/capture.py              CameraReader thread, open_all / close_all
 eyecal/display.py              overlay, crosshair, tiling, letterbox, Window
 eyecal/align.py                alignment phase -> accepted order and rotation
-eyecal/record.py               recording phase + the strobe anchor
+eyecal/record.py               recording phase: the strobe anchor, and one frame per FSIN pulse
 eyecal/session.py              frame files, sidecars, ts.csv, session.json, report
 eyecal/spike2.py               the ready flag
+eyecal/dshow.py                DirectShow control readout: value, range and AUTO/MANUAL per property
+eyecal/trigger.py              the FSIN trigger: the control write, the restore, the timeout frame
 tests/test_offline.py          the pieces, without a camera
-tests/test_endtoend.py         main() end to end, fake cameras and a fake Spike2
+tests/test_endtoend.py         main() end to end, fake cameras, a fake Spike2 and a fake FSIN train
+tests/fsin_trigger_check.py    bench check: record N seconds under the trigger and report rates
+tests/fsin_trigger_view.py     bench check: watch the pulse train drive both cameras, live
 tools/strobe_timing.py         measure a recorded session against its Spike2 file (bench check)
 tools/session_video.py         render a session to calibration_video.mp4 with its timestamps on it
+tools/camera_check.py          live camera state + snapshots; use INSTEAD of the Windows Camera app
 ```
 
 `tests/` holds tests: they exercise the code and assert. `tools/` holds things you run against a
 session after the fact; `strobe_timing.py` measures rather than asserts, and is kept out of
 `tests/` so no test runner ever collects it.
 
-Requires `opencv-python` and `numpy`. The measured DirectShow behaviour this depends on was
+Requires `opencv-python`, `numpy` and `comtypes`. The measured DirectShow behaviour this depends on was
 verified on OpenCV 5.0.0 / Python 3.12; re-run both test files and one short real recording after
 changing the interpreter.
 

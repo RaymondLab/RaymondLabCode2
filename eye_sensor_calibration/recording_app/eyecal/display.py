@@ -102,6 +102,33 @@ def recording_pane(img, cam, device, frames, queue_depth):
     return canvas
 
 
+def trigger_pane(img, cam, device, frames, timeouts, rate_fps, waiting, shape):
+    """One camera's pane while recording under the FSIN trigger. Black when no pulse is arriving.
+
+    THE BLANKING IS THE POINT, and it is why this exists beside recording_pane. A preview that
+    keeps showing the last frame it got looks identical whether the pulse train is running or
+    stopped, and "are the pulses still coming?" is the only question this view has to answer. So
+    the caller passes `waiting` True -- or img None -- once nothing real has arrived within
+    trigger.HOLD_MS, and the pane goes black at `shape`, the geometry of the display copy it
+    would otherwise have drawn.
+
+    `timeouts` is the count of the driver's one-second all-zero frames, which are never stored
+    (see eyecal/trigger.py), and `rate_fps` is the STORED frame rate over the last second, which
+    under the trigger is the pulse rate.
+    """
+    canvas = (np.zeros(tuple(shape) + (3,), np.uint8) if img is None or waiting
+              else _canvas_from(img))
+    text(canvas, f"cam {cam} (device {device}) -> c{cam}.bin", (8, 20), RED)
+    text(canvas, f"TRIGGER   frames {frames}   timeouts {timeouts}   rate {rate_fps:.1f} fps",
+         (8, 40), RED)
+    # Red only for the state that stops a recording, so it reads as an alarm rather than as the
+    # colour everything on this pane happens to be. COLOURS[0] is green; see the note there.
+    text(canvas, "WAITING FOR FSIN PULSE" if waiting else "FRAMES ARRIVING", (8, 60),
+         RED if waiting else COLOURS[0][1])
+    cv2.rectangle(canvas, (0, 0), (canvas.shape[1] - 1, canvas.shape[0] - 1), RED, 1)
+    return canvas
+
+
 def tile(panes):
     """Panes side by side in ONE window. n windows would be n blits, n sets of window chrome and
     n compositor surfaces."""
