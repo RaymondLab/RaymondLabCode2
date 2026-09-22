@@ -106,12 +106,14 @@ DSINEON: 'D MOV    DrumTmp,DrumAmp ;Set drum amplitude >"
             PHASE  0,-90           ;Set cosine relative phase >"
             ANGLE  0,0             ;Set cosine angle   >"
             RATE   0,DrumFrq       ;Set cosine frequency
-DSINE1:     WAITC  0,DSINE1        ;                   >"
-            OFFSET 0,DrumOff       ;                   >"
+DSINE1:     OFFSET 0,DrumOff       ;Adjust drum cosine offset >"
+            OFFSET 1,ChairOff      ;Adjust chair cosine offset >"
+            WAITC  0,DSINE1        ;                   >"
             JUMP   DSINE1          ;Set cosine loop    > Drum running
 
 DSINEOFF: 'd CLRC  0               ;Stop drum sine at phase 0 >"
-DSINE2:     OFFSET 0,DrumOff       ;Adjust cosine offset >"
+DSINE2:     OFFSET 0,DrumOff       ;Adjust drum cosine offset >"
+            OFFSET 1,ChairOff      ;Adjust chair cosine offset >"
             WAITC  0,DSINE2        ;Wait for end of cycle >"
             MOVI   DrumTmp,0       ;Set drum amplitude >"
             RATE   0,0,IDLELOOP    ;Stop drum cosine then idle
@@ -127,12 +129,14 @@ CSINEON: 'C MOVI   DrumTmp,0       ;Set drum amplitude >"
             PHASE  1,-90           ;Set cosine relative phase >"
             ANGLE  1,0             ;Set cosine angle   >"
             RATE   1,ChairFrq      ;Set cosine frequency >"
-CSINE1:     WAITC  1,CSINE1        ;                   >"
-            OFFSET 1,ChairOff      ;                   >"
+CSINE1:     OFFSET 0,DrumOff       ;Adjust drum cosine offset >"
+            OFFSET 1,ChairOff      ;Adjust chair cosine offset >"
+            WAITC  1,CSINE1        ;                   >"
             JUMP   CSINE1          ;Set cosine loop    > Chair running
 
 CSINEOFF: 'c CLRC  1               ;Stop chair sine at phase 0 >"
-CSINE2:     OFFSET 1,ChairOff      ;Adjust cosine offset >"
+CSINE2:     OFFSET 0,DrumOff       ;Adjust drum cosine offset >"
+            OFFSET 1,ChairOff      ;Adjust chair cosine offset >"
             WAITC  1,CSINE2        ;Wait for end of cycle >"
             MOVI   ChairTmp,0      ;Set chair amplitude >"
             RATE   1,0,IDLELOOP    ;Stop chair cosine
@@ -153,14 +157,14 @@ SINEON: 'S  MOV    DrumTmp,DrumAmp ;Set drum amplitude >"
             ANGLE  1,0
             RATE   0,DrumFrq       ;Set cosine frequency >"
             RATE   1,ChairFrq
-SINE1:      WAITC  1,SINE1
-            OFFSET 0,DrumOff
-            OFFSET 1,ChairOff
+SINE1:      OFFSET 0,DrumOff       ;Adjust drum cosine offset >"
+            OFFSET 1,ChairOff      ;Adjust chair cosine offset >"
+            WAITC  1,SINE1.        ;                   >"
             JUMP   SINE1           ;Set cosine loop    > Sine running
 
 SINEOFF: 's CLRC   0               ;Stop sines at phase 0 of drum >"
-SINE2:      OFFSET 0,DrumOff       ;Adjust cosine offsets >"
-            OFFSET 1,ChairOff
+SINE2:      OFFSET 0,DrumOff       ;Adjust drum cosine offset >"
+            OFFSET 1,ChairOff      ;Adjust chair cosine offset >"
             WAITC  1,SINEOFF       ;Wait for end of chair cycle >"
             RATE   0,0             ;Stop both cosines  >"
             RATE   1,0             ;                   >"
@@ -210,11 +214,13 @@ TEST:   'P  MOVI   BlockFlg,1      ;Start TEST block   >TESTING
             PHASE  1,-90           ;Set cosine relative phase >"
             ANGLE  1,0             ;Set cosine angle   >"
             RATE   1,ChairFrq      ;Set cosine frequency >"
-TEST1:      OFFSET 1,ChairOff      ;Adjust cosine offset >"
+TEST1:      OFFSET 0,DrumOff       ;Adjust drum cosine offset >"
+            OFFSET 1,ChairOff      ;Adjust chair cosine offset >"
             WAITC  1,TEST1         ;Wait for 0 phase   >"
             DBNZ   ChairCtr,TEST1  ;Run cycles until counter hits zero >"
             CLRC   1               ;Stop chair sine at 0 phase >"
-TEST2:      OFFSET 1,ChairOff      ;Adjust cosine offset >"
+TEST2:      OFFSET 0,DrumOff       ;Adjust drum cosine offset >"
+            OFFSET 1,ChairOff      ;Adjust chair cosine offset >"
             WAITC  1,TEST2         ;Wait for end of cycle >"
             RATE   1,0             ;Stop chair cosine  >"
             MOVI   DrumTmp,0       ;Set drum amplitude to zero >"
@@ -246,7 +252,8 @@ OPTO0:      MOV    CyclCtr,EveryNth ;Set cycle interval between stims >"
             TABLD  DelValD,[DelIdx+30000] ;Get DelValD from table at DelIdx+30000 >"
             TABLD  DelChD,[DelIdx+35000] ;Get DelChD from table at DelIdx+35000 >"
 
-OPTO1:      OFFSET 1,ChairOff      ;Adjust cosine offset >"
+OPTO1:      OFFSET 0,DrumOff       ;Adjust drum cosine offset >"
+            OFFSET 1,ChairOff      ;Adjust chair cosine offset >"
             WAITC  1,OPTO1         ;Wait for 0 phase   >"
             DBNZ   CyclCtr,OPTO1   ;Repeat until cycle counter hits zero >"
             BGE    DelIdx,NDelays,OPTOOFF ;End block if index exceeds number of trials >"
@@ -312,7 +319,8 @@ OPTO3:      ADDI   DelIdx,1        ;Increment DelIdx by 1 >"
             JUMP   OPTO0
 
 OPTOOFF: 't CLRC   1               ;Stop chair sine at 0 phase >"
-OPTO4:      OFFSET 1,ChairOff      ;Adjust cosine offset >"
+OPTO4:      OFFSET 0,DrumOff       ;Adjust drum cosine offset >"
+            OFFSET 1,ChairOff      ;Adjust chair cosine offset >"
             WAITC  1,OPTO4         ;Wait for end of cycle >"
             RATE   1,0             ;Stop chair cosine  >"
             MOVI   DrumTmp,0       ;Set drum amplitude to zero >"
