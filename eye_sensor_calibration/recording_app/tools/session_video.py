@@ -101,6 +101,7 @@ HIST_OVERFLOW_ZONE = 34                 # px reserved at each axis end for the m
 CROSSHAIR = (0, 255, 0)                 # BGR green, blended to ~35% over the image
 
 FONT = cv2.FONT_HERSHEY_SIMPLEX
+_OUTLINE_KERNEL = np.ones((3, 3), dtype=np.uint8)   # one pixel of black around every glyph
 
 # Every string drawn on the canvas is ASCII on purpose: the Hershey fonts OpenCV ships hold
 # no glyphs above 127, so a plus-minus sign or a middle dot comes out as a hollow box.
@@ -140,15 +141,32 @@ def text(img, s, org, scale=0.5, colour=(255, 255, 255), weight=1, anchor="left"
     outline=True strokes the glyphs in black first. That is only needed over the camera
     images, where the background is whatever the camera happened to be looking at and white
     on white is a real possibility; over the flat panel surface it is just mud.
+
+    The outline is the glyphs' own footprint grown by one pixel, NOT the same string drawn
+    again with a thicker pen. OpenCV renders a thick Hershey string as a bolder, WIDER glyph
+    -- getTextSize gives 108 px at thickness 3 against 101 px at thickness 1 for
+    "cam 1 - c1.bin" at 0.55 -- so a thick black pass sticks out past the thin fill on the
+    right, and its anti-aliased edge shows as a faint ghost letter beside every label. Measured
+    on OpenCV 5.0.0. Drawing the fill onto a mask and dilating that keeps the halo hugging the
+    letters it belongs to.
     """
-    (w, _h), _ = cv2.getTextSize(s, FONT, scale, weight)
+    (w, h), base = cv2.getTextSize(s, FONT, scale, weight)
     x, y = org
     if anchor == "center":
         x -= w // 2
     elif anchor == "right":
         x -= w
     if outline:
-        cv2.putText(img, s, (x, y), FONT, scale, (0, 0, 0), weight + 2, cv2.LINE_AA)
+        # Only the strip the string occupies: a full-canvas mask per call would cost more than
+        # the draw itself, and draw_camera makes four of these per camera per frame.
+        pad = 3
+        x0, y0 = max(0, x - pad), max(0, y - h - pad)
+        x1, y1 = min(img.shape[1], x + w + pad), min(img.shape[0], y + base + pad)
+        if x1 > x0 and y1 > y0:
+            sub = img[y0:y1, x0:x1]
+            mask = np.zeros(sub.shape[:2], dtype=np.uint8)
+            cv2.putText(mask, s, (x - x0, y - y0), FONT, scale, 255, weight, cv2.LINE_AA)
+            sub[cv2.dilate(mask, _OUTLINE_KERNEL) > 0] = (0, 0, 0)
     cv2.putText(img, s, (x, y), FONT, scale, colour, weight, cv2.LINE_AA)
     return w
 
@@ -405,8 +423,8 @@ def make_panel(title, values, colour, as_rate=False):
     values[k] is the datapoint that arrives at frame k, NaN where there is none -- so the
     interval panels are empty at k=0 and every panel gains at most one count per frame.
 
-    as_rate=True also shows the median as a frequency, which is meaningful for an interval
-    (1000 / 20.27 ms = 49.33 Hz) and nonsense for a skew, so the simultaneity panel leaves
+    as_rate=True also shows the median as a frame rate, which is meaningful for an interval
+    (1000 / 20.27 ms = 49.33 fps) and nonsense for a skew, so the simultaneity panel leaves
     it off.
 
     The range is ROBUST: centred on the median, half-width the larger of IQR_MULT x IQR and
@@ -481,7 +499,7 @@ def draw_panel(img, box, panel, k, theme):
         med = float(np.median(seen))
         median = f"median {med:.3f}"
         if panel["as_rate"] and med > 0:
-            median += f" ({1000.0 / med:.2f} Hz)"
+            median += f" ({1000.0 / med:.2f} fps)"
         sd = f"{np.std(seen, ddof=1):.3f}" if len(seen) > 1 else "--"
         stat = f"n {len(seen)}   {median}   sd {sd} ms"
     else:

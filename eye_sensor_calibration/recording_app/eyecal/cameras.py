@@ -27,7 +27,7 @@ CAMERA_PRESETS = {
         "title": "Arducam B0322 / OV2311",
         "format": "MJPG_1600x1200",
         "grayscale": True,
-        "source": {"ExposureMode": "manual", "Exposure": -10, "WhiteBalanceMode": "manual",
+        "source": {"ExposureMode": "manual", "Exposure": -11, "WhiteBalanceMode": "manual",
                    "BacklightCompensation": "off", "Gain": 0, "FrameRate": "max"},
     },
     "ov9281": {
