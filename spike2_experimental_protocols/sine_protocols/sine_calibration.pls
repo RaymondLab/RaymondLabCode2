@@ -70,6 +70,8 @@ TTL1ON: 'L  DIGOUT [.......1]      ;Turn TTL 1 on      >=
 RESET:  'R  DIGPC  1,S             ;Suspend any camera trigger pulse trains >=
             DIGPC  1,C             ;Clear any stale cycle flags >=
             DIGOUT [00000000]      ;Reset to initial state >=
+            MOVI DrumTmp,0         ;Reset DrumTmp value >=
+            MOVI ChairTmp,0        ;Reset ChairTmp value >=
             RATE   0,0             ;Stop sine on drum  >=
             RATE   1,0             ;Stop sine on chair >=
             JUMP   IDLELOOP        ;Return to idle loop

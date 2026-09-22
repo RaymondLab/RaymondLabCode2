@@ -73,6 +73,8 @@ TTL1ON: 'L  DIGOUT [.......1]      ;Turn TTL 1 on      >=
 ; RESET: Resets sequencer to initial state
 ;-----------------------------------------------------------------------------
 RESET:  'R  DIGOUT [.......0]      ;Reset to initial state >=
+            MOVI DrumTmp,0         ;Reset DrumTmp value >=
+            MOVI ChairTmp,0        ;Reset ChairTmp value >=
             RATE   0,0             ;Stop sine on drum  >=
             RATE   1,0             ;Stop sine on chair >=
             JUMP   IDLELOOP        ;Return to idle loop
