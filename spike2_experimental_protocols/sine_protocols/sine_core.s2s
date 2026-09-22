@@ -20,7 +20,8 @@ var nTestBlocks%       := 3;      'Number of pre/post-training test blocks [defa
 var testBlockDuration  := 45.0;   'Total duration (s) of test blocks [default 45.0]
 var nTrainingBlocks%   := 3;      'Number of training blocks [default 3]
 var trainBlockDuration := 600.0;  'Total duration (s) of training block(s) [default 600.0]
-var trainingType%      := 0;      'Defines the training type for the experiment [default 0]
+var testingType%       := 3;      'Defines the testing type for the experiment [default 3, VORD]
+var trainingType%      := 0;      'Defines the training type for the experiment [default 0, VORx2]
 var includeMidTests%   := 1;      'Flag variable for defining whether to add mid-test blocks between training blocks [default 1]
 
 ' Gap block parameters
