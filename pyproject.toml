@@ -30,7 +30,7 @@ packages = ["src/raymondlab"]        # hatchling ships every file under the pack
 
 [project.scripts]
 rig-setup       = "raymondlab.apps.rig_setup:main"
-session-manager = "raymondlab.apps.session_manager:main"   # stub until the session-manager app exists
+session-manager = "raymondlab.apps.session_manager:main"
 
 [dependency-groups]
 dev = ["pytest>=8"]

@@ -1,0 +1,20 @@
+{
+  "project_id": "okr2026",
+  "mouse": {
+    "system_id": "20262280001218", "colony_mouse_id": "RL-0421",
+    "species": "Mus musculus", "strain": "C57BL/6J", "sex": "M", "date_of_birth": "2026-01-15",
+    "genotype": "wild-type", "alleles": [], "litter_id": "L-77", "colony_origin": "in-house",
+    "surgery": [{"date": "2026-03-20", "performed_by": "bangeles", "procedure": "sensor-implant",
+                 "description": "Magnetic eye sensor implanted; headpost.", "eye": "left"}],
+    "interval_log": []
+  },
+  "session": {
+    "weight": 24.5, "session_description": "Eye calibration before OKR training", "experimenter": "bangeles",
+    "eye_tracking_method": "magnetic-sensor",
+    "stimulus_frequency_hz": [0.5, 1.0], "stimulus_amplitude_deg_per_s": 10, "duration_s": 120,
+    "align_led_pulse_width_ms": 30, "align_led_pulse_rate_hz": 1,
+    "preamp_gain": 60, "lowpass_filter_hz": 100,
+    "camera_model": "OV2311", "camera_separation_deg": 40, "camera_equidistance_cm": 5,
+    "video_frame_rate_hz": 30, "ir_led_wavelength_nm": 875
+  }
+}
