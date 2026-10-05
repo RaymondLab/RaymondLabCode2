@@ -1,0 +1,3526 @@
+{
+  "compiled_at": "2026-09-28",
+  "facets": [
+    {
+      "key": "subject_id",
+      "note": "lab-unique; registry-allocated `m` + 5 base32 chars, 6 chars (DS-123)",
+      "origin": "captured",
+      "scope": [
+        "subject"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "system_id",
+      "note": "14-digit Transnetyx `SystemId`, zero-padded; lab-unique — the registry dedup key (DS-122)",
+      "origin": "captured",
+      "scope": [
+        "subject"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "colony_mouse_id",
+      "note": "Transnetyx `Mouse ID`; non-unique, display-only (F-5) (DS-122)",
+      "origin": "captured",
+      "scope": [
+        "subject"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "species",
+      "note": "latin binomial",
+      "origin": "captured",
+      "scope": [
+        "subject"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "strain",
+      "note": "free, e.g. `C57BL/6J`",
+      "origin": "captured",
+      "scope": [
+        "subject"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "allowed": [
+        "M",
+        "F",
+        "U",
+        "O"
+      ],
+      "key": "sex",
+      "note": "`M` `F` `U` `O`",
+      "origin": "captured",
+      "scope": [
+        "subject"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "key": "date_of_birth",
+      "note": "—",
+      "origin": "captured",
+      "scope": [
+        "subject"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "ISO-8601 date"
+    },
+    {
+      "key": "genotype",
+      "note": "free, display-only once `alleles` is present (C-22)",
+      "origin": "captured",
+      "scope": [
+        "subject"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "alleles[].designation",
+      "note": "e.g. `L7/Pcp2-Cre Jdhu`",
+      "origin": "captured",
+      "scope": [
+        "subject"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "allowed": [
+        "driver",
+        "reporter",
+        "floxed-target",
+        "null-allele",
+        "knock-in"
+      ],
+      "key": "alleles[].role",
+      "note": "`driver` `reporter` `floxed-target` `null-allele` `knock-in`",
+      "origin": "captured",
+      "scope": [
+        "subject"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "allowed": [
+        "hom",
+        "het",
+        "hemi",
+        "absent"
+      ],
+      "key": "alleles[].zygosity",
+      "note": "`hom` `het` `hemi` `absent`",
+      "origin": "captured",
+      "scope": [
+        "subject"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "key": "alleles[].chromosome",
+      "note": "autosome number, `X`, `Y` — required (C-16c)",
+      "origin": "captured",
+      "scope": [
+        "subject"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "alleles[].rrid",
+      "note": "e.g. `IMSR_JAX:010536`",
+      "origin": "captured",
+      "scope": [
+        "subject"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "allowed": [
+        "commercial",
+        "collaborator",
+        "in-house"
+      ],
+      "key": "alleles[].source",
+      "note": "`commercial` `collaborator` `in-house`",
+      "origin": "captured",
+      "scope": [
+        "subject"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "key": "alleles[].backcross_generations",
+      "note": "e.g. `>12` (C-16e)",
+      "origin": "captured",
+      "scope": [
+        "subject"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "int or `>N`"
+    },
+    {
+      "key": "colony_origin",
+      "note": "breeding population, e.g. `Stanford RAF`, `Charles River`",
+      "origin": "captured",
+      "scope": [
+        "subject"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "allowed": [
+        "littermate",
+        "same-colony",
+        "separate-source"
+      ],
+      "key": "control_matching",
+      "note": "`littermate` `same-colony` `separate-source` (C-16e)",
+      "origin": "derived",
+      "scope": [
+        "subject pair"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "allowed": [
+        "littermate",
+        "age-matched",
+        "sham-procedure",
+        "vehicle",
+        "empty-vector",
+        "positive-sample",
+        "negative-sample"
+      ],
+      "key": "control_type",
+      "note": "`littermate` `age-matched` `sham-procedure` `vehicle` `empty-vector` `positive-sample` `negative-sample` (C-68)",
+      "origin": "captured",
+      "scope": [
+        "subject",
+        "sample"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "key": "control_matched_on",
+      "note": "what the control equalizes and what it deliberately does not",
+      "origin": "captured",
+      "scope": [
+        "subject",
+        "sample"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "list[facet]"
+    },
+    {
+      "key": "control_differs_in",
+      "note": "what the control equalizes and what it deliberately does not",
+      "origin": "captured",
+      "scope": [
+        "subject",
+        "sample"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "list[facet]"
+    },
+    {
+      "key": "construct_id",
+      "note": "reference into the manifest construct registry (C-38a)",
+      "origin": "captured",
+      "scope": [
+        "session"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "construct.promoter",
+      "note": "typed architecture",
+      "origin": "captured",
+      "scope": [
+        "project"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "construct.payload",
+      "note": "typed architecture",
+      "origin": "captured",
+      "scope": [
+        "project"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "construct.linker",
+      "note": "typed architecture",
+      "origin": "captured",
+      "scope": [
+        "project"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "construct.reporter",
+      "note": "typed architecture",
+      "origin": "captured",
+      "scope": [
+        "project"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "construct.tags",
+      "note": "typed architecture",
+      "origin": "captured",
+      "scope": [
+        "project"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "construct.vector_type",
+      "note": "typed architecture",
+      "origin": "captured",
+      "scope": [
+        "project"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "construct.backbone",
+      "note": "cloning provenance",
+      "origin": "captured",
+      "scope": [
+        "project"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "construct.restriction_sites",
+      "note": "cloning provenance",
+      "origin": "captured",
+      "scope": [
+        "project"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "construct.modifications",
+      "note": "cloning provenance",
+      "origin": "captured",
+      "scope": [
+        "project"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "construct.source",
+      "note": "cloning provenance",
+      "origin": "captured",
+      "scope": [
+        "project"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "construct.packaging",
+      "note": "system, cell line, helper plasmids, harvest, concentration, storage",
+      "origin": "captured",
+      "scope": [
+        "project"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "typed block"
+    },
+    {
+      "key": "construct.used_in_study",
+      "note": "false for reagents built and validated but unused",
+      "origin": "captured",
+      "scope": [
+        "project"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "bool"
+    },
+    {
+      "key": "software_rrid",
+      "note": "e.g. `RRID:SCR_002798` (Prism), `RRID:SCR_001622` (MATLAB)",
+      "origin": "captured",
+      "scope": [
+        "analysis run"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "head_orientation_plane",
+      "note": "the skull landmarks set earth-horizontal, e.g. `lambda-bregma`",
+      "origin": "commanded",
+      "scope": [
+        "session"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "metric_space.components",
+      "note": "facets forming a vector metric (C-66)",
+      "origin": "captured",
+      "scope": [
+        "analysis run"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "list[facet]"
+    },
+    {
+      "allowed": [
+        "phasor",
+        "euclidean"
+      ],
+      "key": "metric_space.combination",
+      "note": "`phasor` `euclidean`",
+      "origin": "captured",
+      "scope": [
+        "analysis run"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "allowed": [
+        "paradigm-derived",
+        "measured",
+        "fixed"
+      ],
+      "key": "reference_point.origin",
+      "note": "`paradigm-derived` `measured` `fixed`",
+      "origin": "captured",
+      "scope": [
+        "analysis run"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "key": "reference_point.value",
+      "note": "the reference expressed in `metric_space`",
+      "origin": "derived",
+      "scope": [
+        "analysis run"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "vector"
+    },
+    {
+      "key": "litter_id",
+      "note": "makes littermate control derivable (C-16c)",
+      "origin": "captured",
+      "scope": [
+        "subject"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "allowed": [
+        "molecular-assay",
+        "marker-linked-inference",
+        "phenotypic"
+      ],
+      "key": "genotyping_method.kind",
+      "note": "`molecular-assay` `marker-linked-inference` `phenotypic` (C-16g)",
+      "origin": "captured",
+      "scope": [
+        "subject"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "key": "genotyping_method.assay",
+      "note": "required for `molecular-assay`",
+      "origin": "captured",
+      "scope": [
+        "subject"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "genotyping_method.sample_type",
+      "note": "required for `molecular-assay`",
+      "origin": "captured",
+      "scope": [
+        "subject"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "genotyping_method.performed_by",
+      "note": "required for `molecular-assay`",
+      "origin": "captured",
+      "scope": [
+        "subject"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "genotyping_method.linked_marker",
+      "note": "e.g. `Os` (oligosyndactylism)",
+      "origin": "captured",
+      "scope": [
+        "subject"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "genotyping_method.observable",
+      "note": "e.g. `digit morphology`",
+      "origin": "captured",
+      "scope": [
+        "subject"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "genotyping_method.eliminated_classes",
+      "note": "classes removed by lethality or phenotype",
+      "origin": "captured",
+      "scope": [
+        "subject"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "list"
+    },
+    {
+      "key": "supplier",
+      "note": "free",
+      "origin": "captured",
+      "scope": [
+        "subject"
+      ],
+      "section": "1",
+      "status": "provisional",
+      "type": "string"
+    },
+    {
+      "key": "administration_id",
+      "note": "identifies a drug-administration event (C-16d)",
+      "origin": "captured",
+      "scope": [
+        "subject"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "administration.compound",
+      "note": "e.g. `diazepam`, `0.5`, `mg/kg`, `IP`, `saline`",
+      "origin": "captured",
+      "scope": [
+        "subject"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "string / float / enum"
+    },
+    {
+      "key": "administration.dose",
+      "note": "e.g. `diazepam`, `0.5`, `mg/kg`, `IP`, `saline`",
+      "origin": "captured",
+      "scope": [
+        "subject"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "string / float / enum"
+    },
+    {
+      "key": "administration.dose_unit",
+      "note": "e.g. `diazepam`, `0.5`, `mg/kg`, `IP`, `saline`",
+      "origin": "captured",
+      "scope": [
+        "subject"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "string / float / enum"
+    },
+    {
+      "key": "administration.route",
+      "note": "e.g. `diazepam`, `0.5`, `mg/kg`, `IP`, `saline`",
+      "origin": "captured",
+      "scope": [
+        "subject"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "string / float / enum"
+    },
+    {
+      "key": "administration.vehicle",
+      "note": "e.g. `diazepam`, `0.5`, `mg/kg`, `IP`, `saline`",
+      "origin": "captured",
+      "scope": [
+        "subject"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "string / float / enum"
+    },
+    {
+      "key": "administration.at",
+      "note": "—",
+      "origin": "captured",
+      "scope": [
+        "subject"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "ISO-8601 datetime +tz"
+    },
+    {
+      "key": "target_window_label",
+      "note": "e.g. `2h` `18-24h` `1week` (C-16d-bis)",
+      "origin": "captured",
+      "scope": [
+        "session"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "hours_since_administration",
+      "note": "from `administration.at` and `session_start_time`",
+      "origin": "derived",
+      "scope": [
+        "session"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "float, h"
+    },
+    {
+      "key": "session_start_time",
+      "note": "—",
+      "origin": "captured",
+      "scope": [
+        "session"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "ISO-8601 datetime +tz"
+    },
+    {
+      "key": "experimenter",
+      "note": "—",
+      "origin": "captured",
+      "scope": [
+        "session"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "list[string]"
+    },
+    {
+      "key": "project_id",
+      "note": "joins to manifest",
+      "origin": "captured",
+      "scope": [
+        "session"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "protocol_id",
+      "note": "IACUC id",
+      "origin": "captured",
+      "scope": [
+        "session"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "allowed": [
+        "D241A",
+        "D241B",
+        "D243A",
+        "D243B",
+        "D253"
+      ],
+      "key": "rig_id",
+      "note": "`D241A` `D241B` `D243A` `D243B` `D253`",
+      "origin": "captured",
+      "scope": [
+        "session"
+      ],
+      "section": "1",
+      "status": "provisional",
+      "type": "enum"
+    },
+    {
+      "allowed": [
+        "vor",
+        "okr",
+        "eyecal",
+        "integrator"
+      ],
+      "key": "task",
+      "note": "`vor` `okr` `eyecal` `integrator`",
+      "origin": "captured",
+      "scope": [
+        "session"
+      ],
+      "section": "1",
+      "status": "provisional",
+      "type": "enum"
+    },
+    {
+      "allowed": [
+        "behavioral",
+        "eye-calibration",
+        "slice-ephys"
+      ],
+      "key": "schema_type",
+      "note": "`behavioral` `eye-calibration` `slice-ephys`; one value per modality file, added here when that file declares it",
+      "origin": "captured",
+      "scope": [
+        "session"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "key": "schema_version",
+      "note": "—",
+      "origin": "captured",
+      "scope": [
+        "session"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "semver"
+    },
+    {
+      "key": "appears_in_publications",
+      "note": "append-only; not the project's `related_publications` (C-49)",
+      "origin": "captured",
+      "scope": [
+        "session"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "list[DOI]"
+    },
+    {
+      "key": "weight",
+      "note": "body weight on the session day; NWB `Subject.weight` (DS-135)",
+      "origin": "captured",
+      "scope": [
+        "session"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "float, g"
+    },
+    {
+      "key": "lab",
+      "note": "fixed text, copied from the manifest (P-2c)",
+      "origin": "captured",
+      "scope": [
+        "session"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "institution",
+      "note": "fixed text, copied from the manifest (P-2c)",
+      "origin": "captured",
+      "scope": [
+        "session"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "protocol_template_id",
+      "note": "key into the manifest's `protocol_templates{}` (P-26); provenance only",
+      "origin": "captured",
+      "scope": [
+        "session"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "template_overrides[].field",
+      "note": "per-session departure from the template; `reason` required (P-27)",
+      "origin": "captured",
+      "scope": [
+        "session"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "template_overrides[].value",
+      "note": "per-session departure from the template; `reason` required (P-27)",
+      "origin": "captured",
+      "scope": [
+        "session"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "any"
+    },
+    {
+      "key": "template_overrides[].reason",
+      "note": "per-session departure from the template; `reason` required (P-27)",
+      "origin": "captured",
+      "scope": [
+        "session"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "surgery[].date",
+      "note": "one entry per procedure (C-16, C-16a)",
+      "origin": "captured",
+      "scope": [
+        "subject"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "ISO-8601 date"
+    },
+    {
+      "key": "surgery[].performed_by",
+      "note": "one entry per procedure (C-16, C-16a)",
+      "origin": "captured",
+      "scope": [
+        "subject"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "surgery[].description",
+      "note": "one entry per procedure (C-16, C-16a)",
+      "origin": "captured",
+      "scope": [
+        "subject"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "surgery[].procedure",
+      "note": "e.g. `headpost`, `magnet-implant`, `coil-implant`, `fiber-implant`, `craniotomy`",
+      "origin": "captured",
+      "scope": [
+        "subject"
+      ],
+      "section": "1",
+      "status": "provisional",
+      "type": "string"
+    },
+    {
+      "allowed": [
+        "left",
+        "right"
+      ],
+      "key": "surgery[].eye",
+      "note": "`left` `right`; the eye that received the sensor. The source of `eye_measured` (P-28)",
+      "origin": "captured",
+      "scope": [
+        "subject"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "key": "schema_version",
+      "note": "the registry record shape (R-3); a second scope entry per F-10",
+      "origin": "captured",
+      "scope": [
+        "subject"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "semver"
+    },
+    {
+      "key": "amendments[].seq",
+      "note": "append-only record history (R-3a, DS-132); `reason` required",
+      "origin": "captured",
+      "scope": [
+        "subject",
+        "rig"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "int"
+    },
+    {
+      "key": "amendments[].at",
+      "note": "append-only record history (R-3a, DS-132); `reason` required",
+      "origin": "captured",
+      "scope": [
+        "subject",
+        "rig"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "ISO-8601 datetime +tz"
+    },
+    {
+      "key": "amendments[].by",
+      "note": "append-only record history (R-3a, DS-132); `reason` required",
+      "origin": "captured",
+      "scope": [
+        "subject",
+        "rig"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "amendments[].field",
+      "note": "append-only record history (R-3a, DS-132); `reason` required",
+      "origin": "captured",
+      "scope": [
+        "subject",
+        "rig"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "amendments[].old",
+      "note": "append-only record history (R-3a, DS-132); `reason` required",
+      "origin": "captured",
+      "scope": [
+        "subject",
+        "rig"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "any"
+    },
+    {
+      "key": "amendments[].new",
+      "note": "append-only record history (R-3a, DS-132); `reason` required",
+      "origin": "captured",
+      "scope": [
+        "subject",
+        "rig"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "any"
+    },
+    {
+      "key": "amendments[].reason",
+      "note": "append-only record history (R-3a, DS-132); `reason` required",
+      "origin": "captured",
+      "scope": [
+        "subject",
+        "rig"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "registered_at",
+      "note": "`registered_via` ∈ `seed` `desk` `rig` (R-3)",
+      "origin": "captured",
+      "scope": [
+        "subject",
+        "rig"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "ISO-8601 datetime +tz"
+    },
+    {
+      "key": "registered_by",
+      "note": "`registered_via` ∈ `seed` `desk` `rig` (R-3)",
+      "origin": "captured",
+      "scope": [
+        "subject",
+        "rig"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "allowed": [
+        "seed",
+        "desk",
+        "rig"
+      ],
+      "key": "registered_via",
+      "note": "`registered_via` ∈ `seed` `desk` `rig` (R-3)",
+      "origin": "captured",
+      "scope": [
+        "subject",
+        "rig"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "key": "mint_slot",
+      "note": "opaque owner slot (R-5, R-6a, DS-133). MUST NOT appear in a query (C-8)",
+      "origin": "captured",
+      "scope": [
+        "rig"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "string, 2 chars"
+    },
+    {
+      "allowed": [
+        "active",
+        "retired"
+      ],
+      "key": "rig_status",
+      "note": "`active` `retired` (R-7)",
+      "origin": "captured",
+      "scope": [
+        "rig"
+      ],
+      "section": "1",
+      "status": "provisional",
+      "type": "enum"
+    },
+    {
+      "key": "session_description",
+      "note": "one line; NWB `NWBFile.session_description` is required (DS-139)",
+      "origin": "captured",
+      "scope": [
+        "session"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "allowed": [
+        "rig",
+        "desk"
+      ],
+      "key": "registered_via",
+      "note": "`rig` `desk` — how the subject facts in this sidecar were obtained; `rig` = typed at the rig before the registry existed (DS-139); second scope entry per F-10",
+      "origin": "captured",
+      "scope": [
+        "session"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "key": "runs[].run_index",
+      "note": "one entry per run of a multi-run session (eyecal), appended when the run is added; the verdict lives in `state.qc[]` (E-16b, DS-142)",
+      "origin": "captured",
+      "scope": [
+        "session"
+      ],
+      "section": "1",
+      "status": "provisional",
+      "type": "int"
+    },
+    {
+      "key": "closeout_files[].path",
+      "note": "written at close-out (C-2a): session-relative path with forward slashes, size, SHA-256; every file but the sidecar. The archive push verifies against it (DS-139)",
+      "origin": "captured",
+      "scope": [
+        "session"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "closeout_files[].bytes",
+      "note": "written at close-out (C-2a): session-relative path with forward slashes, size, SHA-256; every file but the sidecar. The archive push verifies against it (DS-139)",
+      "origin": "captured",
+      "scope": [
+        "session"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "int"
+    },
+    {
+      "key": "closeout_files[].sha256",
+      "note": "written at close-out (C-2a): session-relative path with forward slashes, size, SHA-256; every file but the sidecar. The archive push verifies against it (DS-139)",
+      "origin": "captured",
+      "scope": [
+        "session"
+      ],
+      "section": "1",
+      "status": "confirmed",
+      "type": "hex string"
+    },
+    {
+      "key": "series_id",
+      "note": "—",
+      "origin": "captured",
+      "scope": [
+        "series"
+      ],
+      "section": "2",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "allowed": [
+        "longitudinal",
+        "crossover",
+        "single-session"
+      ],
+      "key": "series_type",
+      "note": "`longitudinal` `crossover` `single-session`",
+      "origin": "captured",
+      "scope": [
+        "series"
+      ],
+      "section": "2",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "allowed": [
+        "session",
+        "cell",
+        "block"
+      ],
+      "key": "crossover_unit_scope",
+      "note": "`session` `cell` `block`",
+      "origin": "captured",
+      "scope": [
+        "series"
+      ],
+      "section": "2",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "key": "randomization_scheme.scheme",
+      "note": "`fixed` `pseudorandom` `counterbalanced` `latin-square` `alternating` `none` (C-67)",
+      "origin": "captured",
+      "scope": [
+        "series"
+      ],
+      "section": "2",
+      "status": "confirmed",
+      "type": "enum, absence_declarable"
+    },
+    {
+      "key": "randomization_scheme.balanced_on",
+      "note": "required when `counterbalanced`",
+      "origin": "captured",
+      "scope": [
+        "series"
+      ],
+      "section": "2",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "randomization_scheme.min_interval_h",
+      "note": "—",
+      "origin": "captured",
+      "scope": [
+        "series"
+      ],
+      "section": "2",
+      "status": "confirmed",
+      "type": "float, hours"
+    },
+    {
+      "allowed": [
+        "oculomotor-characterization",
+        "learning-experiment",
+        "baseline",
+        "training",
+        "post-training-exposure",
+        "retention-test"
+      ],
+      "key": "session_role",
+      "note": "see §2.1",
+      "origin": "captured",
+      "scope": [
+        "session"
+      ],
+      "section": "2",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "key": "sequence_position",
+      "note": "from `session_start_time` within `series_id`",
+      "origin": "derived",
+      "scope": [
+        "session"
+      ],
+      "section": "2",
+      "status": "confirmed",
+      "type": "int, 1-based"
+    },
+    {
+      "key": "hours_since_previous_session_in_series",
+      "note": "Δ of consecutive `session_start_time`",
+      "origin": "derived",
+      "scope": [
+        "session"
+      ],
+      "section": "2",
+      "status": "confirmed",
+      "type": "float, hours"
+    },
+    {
+      "key": "washout_satisfied",
+      "note": "manifest washout rule vs the above",
+      "origin": "derived",
+      "scope": [
+        "session"
+      ],
+      "section": "2",
+      "status": "provisional",
+      "type": "bool"
+    },
+    {
+      "key": "validated_against",
+      "note": "evidence the rule is adequate — washout, exclusion criterion, classification rule, coverage veto (C-26a)",
+      "origin": "captured",
+      "scope": [
+        "any declared rule"
+      ],
+      "section": "2",
+      "status": "confirmed",
+      "type": "list[criterion + result]"
+    },
+    {
+      "allowed": [
+        "pre-collection",
+        "post-collection",
+        "unspecified"
+      ],
+      "key": "specified_when",
+      "note": "`pre-collection` `post-collection` `unspecified` (C-26b)",
+      "origin": "captured",
+      "scope": [
+        "any declared rule"
+      ],
+      "section": "2",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "key": "basis",
+      "note": "evidence the rule derives from, incl. pilot data outside the dataset",
+      "origin": "captured",
+      "scope": [
+        "any declared rule"
+      ],
+      "section": "2",
+      "status": "confirmed",
+      "type": "ref"
+    },
+    {
+      "key": "age_at_session_days",
+      "note": "`session_start_time − date_of_birth`",
+      "origin": "derived",
+      "scope": [
+        "session"
+      ],
+      "section": "2",
+      "status": "confirmed",
+      "type": "float, days"
+    },
+    {
+      "key": "days_since_surgery",
+      "note": "`session_start_time − surgery.date`",
+      "origin": "derived",
+      "scope": [
+        "session"
+      ],
+      "section": "2",
+      "status": "confirmed",
+      "type": "float, days"
+    },
+    {
+      "allowed": [
+        "housing",
+        "rearing",
+        "treatment",
+        "washout"
+      ],
+      "key": "interval_log[].kind",
+      "note": "`housing` `rearing` `treatment` `washout`",
+      "origin": "captured",
+      "scope": [
+        "subject"
+      ],
+      "section": "3",
+      "status": "provisional",
+      "type": "enum"
+    },
+    {
+      "key": "interval_log[].epoch_index",
+      "note": "stable; required",
+      "origin": "captured",
+      "scope": [
+        "subject"
+      ],
+      "section": "3",
+      "status": "confirmed",
+      "type": "int, 1-based"
+    },
+    {
+      "key": "interval_log[].label",
+      "note": "free; not unique",
+      "origin": "captured",
+      "scope": [
+        "subject"
+      ],
+      "section": "3",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "interval_log[].start_date",
+      "note": "—",
+      "origin": "captured",
+      "scope": [
+        "subject"
+      ],
+      "section": "3",
+      "status": "confirmed",
+      "type": "ISO-8601 date"
+    },
+    {
+      "key": "interval_log[].end_date",
+      "note": "null = ongoing",
+      "origin": "captured",
+      "scope": [
+        "subject"
+      ],
+      "section": "3",
+      "status": "confirmed",
+      "type": "ISO-8601 date | null"
+    },
+    {
+      "key": "interval_log[].light_cycle",
+      "note": "e.g. `12:12-reversed`, `24h-dark`",
+      "origin": "captured",
+      "scope": [
+        "subject"
+      ],
+      "section": "3",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "epoch_index",
+      "note": "index of the interval containing the session",
+      "origin": "derived",
+      "scope": [
+        "session"
+      ],
+      "section": "3",
+      "status": "confirmed",
+      "type": "int"
+    },
+    {
+      "key": "epoch_label",
+      "note": "that interval's `label`",
+      "origin": "derived",
+      "scope": [
+        "session"
+      ],
+      "section": "3",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "days_since_epoch_onset",
+      "note": "relative to the current interval",
+      "origin": "derived",
+      "scope": [
+        "session"
+      ],
+      "section": "3",
+      "status": "confirmed",
+      "type": "float, days"
+    },
+    {
+      "key": "cumulative_days_in_kind_label",
+      "note": "summed across all prior matching intervals",
+      "origin": "derived",
+      "scope": [
+        "session"
+      ],
+      "section": "3",
+      "status": "confirmed",
+      "type": "float, days"
+    },
+    {
+      "key": "circadian_phase_h",
+      "note": "`session_start_time` vs the interval's `light_cycle`",
+      "origin": "derived",
+      "scope": [
+        "session"
+      ],
+      "section": "3",
+      "status": "confirmed",
+      "type": "float, hours"
+    },
+    {
+      "key": "rearing_condition",
+      "note": "= `epoch_label` where `kind == 'rearing'`; inputs: `interval_log`",
+      "origin": "derived",
+      "scope": [
+        "session"
+      ],
+      "section": "3",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "allowed": [
+        "pilot",
+        "production",
+        "superseded-by-rerun"
+      ],
+      "key": "lifecycle",
+      "note": "`pilot` `production` `superseded-by-rerun`",
+      "origin": "captured",
+      "scope": [
+        "session"
+      ],
+      "section": "4",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "allowed": [
+        "usable",
+        "excluded"
+      ],
+      "key": "qc_verdict",
+      "note": "`usable` `excluded`",
+      "origin": "captured",
+      "scope": [
+        "session",
+        "slice",
+        "cell"
+      ],
+      "section": "4",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "allowed": [
+        "incomplete",
+        "hardware-failure",
+        "calibration-failed",
+        "animal-health",
+        "experimenter-error",
+        "failed-quality-threshold",
+        "failed-outcome-precondition"
+      ],
+      "key": "qc_reason",
+      "note": "`incomplete` `hardware-failure` `calibration-failed` `animal-health` `experimenter-error` `failed-quality-threshold` `failed-outcome-precondition` (C-27f)",
+      "origin": "captured",
+      "scope": [
+        "session",
+        "slice",
+        "cell"
+      ],
+      "section": "4",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "allowed": [
+        "usable",
+        "excluded"
+      ],
+      "key": "qc_per_metric[<metric>].verdict",
+      "note": "as `qc_verdict`; overrides it for that metric only",
+      "origin": "captured",
+      "scope": [
+        "session",
+        "cell",
+        "unit"
+      ],
+      "section": "4",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "allowed": [
+        "incomplete",
+        "hardware-failure",
+        "calibration-failed",
+        "animal-health",
+        "experimenter-error",
+        "failed-quality-threshold",
+        "failed-outcome-precondition"
+      ],
+      "key": "qc_per_metric[<metric>].reason",
+      "note": "as `qc_reason`",
+      "origin": "captured",
+      "scope": [
+        "session",
+        "cell",
+        "unit"
+      ],
+      "section": "4",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "allowed": [
+        "usable",
+        "excluded",
+        "not-tested",
+        "not-applicable",
+        "undefined"
+      ],
+      "key": "eff_qc_verdict[<metric>]",
+      "note": "`usable` `excluded` `not-tested` `not-applicable` `undefined`",
+      "origin": "derived",
+      "scope": [
+        "session",
+        "cell",
+        "unit"
+      ],
+      "section": "4",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "allowed": [
+        "active",
+        "retired"
+      ],
+      "key": "subject_state",
+      "note": "`active` `retired`",
+      "origin": "captured",
+      "scope": [
+        "subject"
+      ],
+      "section": "4",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "allowed": [],
+      "key": "subject_state_reason",
+      "note": "free, incl. `perfused-for-histology`",
+      "origin": "captured",
+      "scope": [
+        "subject"
+      ],
+      "section": "4",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "allowed": [
+        "pilot",
+        "production",
+        "superseded-by-rerun"
+      ],
+      "key": "state.lifecycle[].value",
+      "note": "as `lifecycle`; append-only history, newest last; the form writes the first entry and close-out appends one (DS-139)",
+      "origin": "captured",
+      "scope": [
+        "session"
+      ],
+      "section": "4",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "key": "state.lifecycle[].at",
+      "note": "as `lifecycle`; append-only history, newest last; the form writes the first entry and close-out appends one (DS-139)",
+      "origin": "captured",
+      "scope": [
+        "session"
+      ],
+      "section": "4",
+      "status": "confirmed",
+      "type": "ISO-8601 datetime +tz"
+    },
+    {
+      "key": "state.lifecycle[].by",
+      "note": "as `lifecycle`; append-only history, newest last; the form writes the first entry and close-out appends one (DS-139)",
+      "origin": "captured",
+      "scope": [
+        "session"
+      ],
+      "section": "4",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "state.qc[].run_index",
+      "note": "as `qc_verdict`; one entry per run, written at close-out (E-16b)",
+      "origin": "captured",
+      "scope": [
+        "session"
+      ],
+      "section": "4",
+      "status": "confirmed",
+      "type": "int"
+    },
+    {
+      "allowed": [
+        "usable",
+        "excluded"
+      ],
+      "key": "state.qc[].verdict",
+      "note": "as `qc_verdict`; one entry per run, written at close-out (E-16b)",
+      "origin": "captured",
+      "scope": [
+        "session"
+      ],
+      "section": "4",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "allowed": [
+        "incomplete",
+        "hardware-failure",
+        "calibration-failed",
+        "animal-health",
+        "experimenter-error",
+        "failed-quality-threshold",
+        "failed-outcome-precondition"
+      ],
+      "key": "state.qc[].reason",
+      "note": "as `qc_reason`; null when the verdict is `usable`",
+      "origin": "captured",
+      "scope": [
+        "session"
+      ],
+      "section": "4",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "key": "training_target_gain",
+      "note": "≥0",
+      "origin": "captured",
+      "scope": [
+        "session"
+      ],
+      "section": "5",
+      "status": "confirmed",
+      "type": "float, dimensionless"
+    },
+    {
+      "key": "training_target_phase_deg",
+      "note": "−180…180; lag positive",
+      "origin": "captured",
+      "scope": [
+        "session"
+      ],
+      "section": "5",
+      "status": "confirmed",
+      "type": "float, degrees"
+    },
+    {
+      "key": "chair_frequency_hz",
+      "note": "—",
+      "origin": "commanded",
+      "scope": [
+        "block"
+      ],
+      "section": "5",
+      "status": "confirmed",
+      "type": "float, Hz"
+    },
+    {
+      "key": "chair_amplitude_deg_per_s",
+      "note": "—",
+      "origin": "commanded",
+      "scope": [
+        "block"
+      ],
+      "section": "5",
+      "status": "confirmed",
+      "type": "float, °/s peak"
+    },
+    {
+      "key": "drum_frequency_hz",
+      "note": "—",
+      "origin": "commanded",
+      "scope": [
+        "block"
+      ],
+      "section": "5",
+      "status": "confirmed",
+      "type": "float, Hz"
+    },
+    {
+      "key": "drum_amplitude_deg_per_s",
+      "note": "requires `reference_frame` (C-20f)",
+      "origin": "commanded",
+      "scope": [
+        "block"
+      ],
+      "section": "5",
+      "status": "confirmed",
+      "type": "float, °/s peak"
+    },
+    {
+      "allowed": [
+        "world",
+        "head"
+      ],
+      "key": "stimulus_reference_frame",
+      "note": "`world` `head` — required on every stimulus velocity (C-20f)",
+      "origin": "commanded",
+      "scope": [
+        "block"
+      ],
+      "section": "5",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "key": "canonical_drum_amplitude_deg_per_s",
+      "note": "the world-frame equivalent, whatever frame was stored",
+      "origin": "derived",
+      "scope": [
+        "block"
+      ],
+      "section": "5",
+      "status": "confirmed",
+      "type": "float, °/s peak"
+    },
+    {
+      "key": "drum_phase_deg_rel_chair",
+      "note": "−180…180",
+      "origin": "commanded",
+      "scope": [
+        "block"
+      ],
+      "section": "5",
+      "status": "confirmed",
+      "type": "float, degrees"
+    },
+    {
+      "allowed": [
+        "dark",
+        "lit"
+      ],
+      "key": "light_state",
+      "note": "`dark` `lit`",
+      "origin": "commanded",
+      "scope": [
+        "block"
+      ],
+      "section": "5",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "allowed": [
+        "none",
+        "bell",
+        "light-flash",
+        "sound-clap"
+      ],
+      "key": "alerting_stimulus",
+      "note": "`none` `bell` `light-flash` `sound-clap` — may vary within a study",
+      "origin": "commanded",
+      "scope": [
+        "block"
+      ],
+      "section": "5",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "key": "settling_duration_s",
+      "note": "pause after the alerting stimulus before measurement begins",
+      "origin": "commanded",
+      "scope": [
+        "block"
+      ],
+      "section": "5",
+      "status": "confirmed",
+      "type": "float, s"
+    },
+    {
+      "key": "paradigm_label",
+      "note": "rendered by the project's `paradigm_label_format` (C-22a)",
+      "origin": "derived",
+      "scope": [
+        "session"
+      ],
+      "section": "5",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "paradigm_label_aliases",
+      "note": "e.g. `x(−1)` ≡ `x1/180°lead` ≡ `inverted vision`",
+      "origin": "captured",
+      "scope": [
+        "project"
+      ],
+      "section": "5",
+      "status": "confirmed",
+      "type": "list[string]"
+    },
+    {
+      "allowed": [
+        "gain-training",
+        "gain-phase-training"
+      ],
+      "key": "paradigm_class",
+      "note": "`gain-training` (phase = 0) · `gain-phase-training` (phase ≠ 0)",
+      "origin": "derived",
+      "scope": [
+        "session"
+      ],
+      "section": "5",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "key": "block_index",
+      "note": "order within session",
+      "origin": "derived",
+      "scope": [
+        "block"
+      ],
+      "section": "6",
+      "status": "confirmed",
+      "type": "int, 1-based"
+    },
+    {
+      "allowed": [
+        "pre-test",
+        "training",
+        "test",
+        "post-test",
+        "gap"
+      ],
+      "key": "block_role",
+      "note": "see §6.1",
+      "origin": "commanded",
+      "scope": [
+        "block"
+      ],
+      "section": "6",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "key": "timepoint_min",
+      "note": "nominal design timepoint",
+      "origin": "commanded",
+      "scope": [
+        "block"
+      ],
+      "section": "6",
+      "status": "confirmed",
+      "type": "float, minutes"
+    },
+    {
+      "key": "elapsed_s_from_training_onset",
+      "note": "block start − first `training` block start",
+      "origin": "derived",
+      "scope": [
+        "block"
+      ],
+      "section": "6",
+      "status": "confirmed",
+      "type": "float, s"
+    },
+    {
+      "key": "window_label",
+      "note": "e.g. `first-min` `last-3-min` `settle` `measure` `post-stim` `pre-stim-baseline`",
+      "origin": "commanded",
+      "scope": [
+        "window"
+      ],
+      "section": "6",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "allowed": [
+        "block-start",
+        "event"
+      ],
+      "key": "window_anchor",
+      "note": "`block-start` `event`",
+      "origin": "commanded",
+      "scope": [
+        "window"
+      ],
+      "section": "6",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "key": "anchor_event",
+      "note": "required when `window_anchor == 'event'`",
+      "origin": "commanded",
+      "scope": [
+        "window"
+      ],
+      "section": "6",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "window_offset_s",
+      "note": "from the anchor; may be negative",
+      "origin": "commanded",
+      "scope": [
+        "window"
+      ],
+      "section": "6",
+      "status": "confirmed",
+      "type": "float, s"
+    },
+    {
+      "key": "window_duration_s",
+      "note": ">0",
+      "origin": "commanded",
+      "scope": [
+        "window"
+      ],
+      "section": "6",
+      "status": "confirmed",
+      "type": "float, s"
+    },
+    {
+      "key": "include_in_analysis",
+      "note": "—",
+      "origin": "commanded",
+      "scope": [
+        "window"
+      ],
+      "section": "6",
+      "status": "confirmed",
+      "type": "bool"
+    },
+    {
+      "allowed": [
+        "cycle",
+        "trial"
+      ],
+      "key": "repeat_unit",
+      "note": "`cycle` `trial` — which sibling this block uses (C-30a)",
+      "origin": "commanded",
+      "scope": [
+        "block"
+      ],
+      "section": "6",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "key": "cycle_index",
+      "note": "order within window",
+      "origin": "derived",
+      "scope": [
+        "cycle"
+      ],
+      "section": "6",
+      "status": "confirmed",
+      "type": "int, 1-based"
+    },
+    {
+      "key": "cycle_excluded",
+      "note": "—",
+      "origin": "metric",
+      "scope": [
+        "cycle"
+      ],
+      "section": "6",
+      "status": "confirmed",
+      "type": "bool"
+    },
+    {
+      "allowed": [
+        "saccade",
+        "motion-artifact",
+        "incomplete"
+      ],
+      "key": "cycle_exclusion_reason",
+      "note": "`saccade` `motion-artifact` `incomplete`",
+      "origin": "metric",
+      "scope": [
+        "cycle"
+      ],
+      "section": "6",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "key": "trial_index",
+      "note": "order within block",
+      "origin": "derived",
+      "scope": [
+        "trial"
+      ],
+      "section": "6",
+      "status": "confirmed",
+      "type": "int, 1-based"
+    },
+    {
+      "key": "trial_excluded",
+      "note": "—",
+      "origin": "metric",
+      "scope": [
+        "trial"
+      ],
+      "section": "6",
+      "status": "confirmed",
+      "type": "bool"
+    },
+    {
+      "allowed": [
+        "saccade",
+        "motion-artifact",
+        "incomplete",
+        "off-direction"
+      ],
+      "key": "trial_exclusion_reason",
+      "note": "`saccade` `motion-artifact` `incomplete` `off-direction`",
+      "origin": "metric",
+      "scope": [
+        "trial"
+      ],
+      "section": "6",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "allowed": [
+        "ipsiversive",
+        "contraversive"
+      ],
+      "key": "trial_direction",
+      "note": "`ipsiversive` `contraversive`",
+      "origin": "commanded",
+      "scope": [
+        "trial"
+      ],
+      "section": "6",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "key": "pair_class",
+      "note": "e.g. `CF-NoCF` `NoCF-NoCF`; from a declared sequence relation (C-30b)",
+      "origin": "derived",
+      "scope": [
+        "trial pair"
+      ],
+      "section": "6",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "allowed": [
+        "design",
+        "analysis"
+      ],
+      "key": "grouping[<name>].origin",
+      "note": "`design` `analysis` (C-56)",
+      "origin": "captured",
+      "scope": [
+        "parent scope"
+      ],
+      "section": "6",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "allowed": [
+        "block",
+        "subject"
+      ],
+      "key": "grouping[<name>].grouping_scope",
+      "note": "the scope of the members, e.g. `block`, `subject` (DS-83)",
+      "origin": "captured",
+      "scope": [
+        "parent scope"
+      ],
+      "section": "6",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "key": "grouping[<name>].member_index",
+      "note": "which member set this entity belongs to",
+      "origin": "captured",
+      "scope": [
+        "member entity"
+      ],
+      "section": "6",
+      "status": "confirmed",
+      "type": "int, 1-based"
+    },
+    {
+      "key": "grouping[<name>].member_label",
+      "note": "e.g. `set-visual-only`, `triad-3`, `cohort-A`",
+      "origin": "captured",
+      "scope": [
+        "member entity"
+      ],
+      "section": "6",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "grouping[<name>].relation_to",
+      "note": "`{relation ∈ {subset-of, disjoint-from, same-members-as}, other_grouping}` (C-56c)",
+      "origin": "captured",
+      "scope": [
+        "parent scope"
+      ],
+      "section": "6",
+      "status": "confirmed",
+      "type": "typed"
+    },
+    {
+      "key": "masked_frac",
+      "note": "fraction excluded by a propagated exclusion set (C-57a)",
+      "origin": "metric",
+      "scope": [
+        "window",
+        "cycle"
+      ],
+      "section": "6",
+      "status": "confirmed",
+      "type": "float, 0–1"
+    },
+    {
+      "allowed": [
+        "magnetic-sensor",
+        "scleral-coil",
+        "video-oculography"
+      ],
+      "key": "eye_tracking_method",
+      "note": "`magnetic-sensor` `scleral-coil` `video-oculography`",
+      "origin": "captured",
+      "scope": [
+        "signal"
+      ],
+      "section": "6C",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "allowed": [
+        "left",
+        "right"
+      ],
+      "key": "eye_measured",
+      "note": "`left` `right`; MUST equal `surgery[].eye` of the sensor implant, never a template value (P-28)",
+      "origin": "captured",
+      "scope": [
+        "signal"
+      ],
+      "section": "6C",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "allowed": [
+        "single-channel-position",
+        "dual-channel-ridge-position",
+        "dual-channel-quadratic-ridge-position",
+        "single-channel-velocity-ratio"
+      ],
+      "key": "calibration_result.model",
+      "note": "`single-channel-position` `dual-channel-ridge-position` `dual-channel-quadratic-ridge-position` `single-channel-velocity-ratio`",
+      "origin": "captured",
+      "scope": [
+        "calib run"
+      ],
+      "section": "6C",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "key": "calibration_result.parameters",
+      "note": "typed per model",
+      "origin": "metric",
+      "scope": [
+        "calib run"
+      ],
+      "section": "6C",
+      "status": "confirmed",
+      "type": "model-shaped map"
+    },
+    {
+      "key": "factor_deg_per_volt",
+      "note": "per channel; never zeroed",
+      "origin": "metric",
+      "scope": [
+        "calib run"
+      ],
+      "section": "6C",
+      "status": "confirmed",
+      "type": "float, deg/V"
+    },
+    {
+      "allowed": [
+        "1",
+        "2"
+      ],
+      "key": "calibration_result.selected_channel",
+      "note": "`1` `2`",
+      "origin": "captured",
+      "scope": [
+        "calib run"
+      ],
+      "section": "6C",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "allowed": [
+        "correlation-with-video-position",
+        "sinefit-r2"
+      ],
+      "key": "calibration_result.selection_criterion",
+      "note": "`correlation-with-video-position` `sinefit-r2`",
+      "origin": "captured",
+      "scope": [
+        "calib run"
+      ],
+      "section": "6C",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "key": "calibration_result.selection_statistic",
+      "note": "all candidates",
+      "origin": "metric",
+      "scope": [
+        "calib run"
+      ],
+      "section": "6C",
+      "status": "confirmed",
+      "type": "map channel → float"
+    },
+    {
+      "key": "polarity_flipped",
+      "note": "—",
+      "origin": "captured",
+      "scope": [
+        "calib run"
+      ],
+      "section": "6C",
+      "status": "confirmed",
+      "type": "map channel → bool"
+    },
+    {
+      "key": "align_led_pulse_width_ms",
+      "note": "—",
+      "origin": "commanded",
+      "scope": [
+        "session"
+      ],
+      "section": "6C",
+      "status": "confirmed",
+      "type": "float, ms"
+    },
+    {
+      "key": "align_led_pulse_rate_hz",
+      "note": "—",
+      "origin": "commanded",
+      "scope": [
+        "session"
+      ],
+      "section": "6C",
+      "status": "confirmed",
+      "type": "float, Hz"
+    },
+    {
+      "key": "preamp_gain",
+      "note": "—",
+      "origin": "captured",
+      "scope": [
+        "signal"
+      ],
+      "section": "6C",
+      "status": "confirmed",
+      "type": "float"
+    },
+    {
+      "key": "lowpass_filter_hz",
+      "note": "—",
+      "origin": "captured",
+      "scope": [
+        "signal"
+      ],
+      "section": "6C",
+      "status": "confirmed",
+      "type": "float, Hz"
+    },
+    {
+      "key": "camera_separation_deg",
+      "note": "—",
+      "origin": "captured",
+      "scope": [
+        "device"
+      ],
+      "section": "6C",
+      "status": "confirmed",
+      "type": "float, degrees"
+    },
+    {
+      "key": "camera_equidistance_cm",
+      "note": "—",
+      "origin": "captured",
+      "scope": [
+        "device"
+      ],
+      "section": "6C",
+      "status": "confirmed",
+      "type": "float, cm"
+    },
+    {
+      "key": "video_frame_rate_hz",
+      "note": "—",
+      "origin": "captured",
+      "scope": [
+        "signal"
+      ],
+      "section": "6C",
+      "status": "confirmed",
+      "type": "float, Hz"
+    },
+    {
+      "key": "calibration_session",
+      "note": "the declared pairing, sidecar-resident; writable while the session is open (E-16, DS-120)",
+      "origin": "captured",
+      "scope": [
+        "session"
+      ],
+      "section": "6C",
+      "status": "confirmed",
+      "type": "`session_uid`"
+    },
+    {
+      "key": "closed_at",
+      "note": "acquisition boundary; immutable thereafter (C-2a)",
+      "origin": "captured",
+      "scope": [
+        "session"
+      ],
+      "section": "6C",
+      "status": "confirmed",
+      "type": "ISO-8601 datetime +tz"
+    },
+    {
+      "key": "closed_by",
+      "note": "who closed it — closure is an operator action (C-2a)",
+      "origin": "captured",
+      "scope": [
+        "session"
+      ],
+      "section": "6C",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "session_open",
+      "note": "`closed_at is null`",
+      "origin": "derived",
+      "scope": [
+        "session"
+      ],
+      "section": "6C",
+      "status": "confirmed",
+      "type": "bool"
+    },
+    {
+      "key": "rig_reconfigured",
+      "note": "required when the rig is reconfigured between experiment and calibration (E-9b)",
+      "origin": "captured",
+      "scope": [
+        "session"
+      ],
+      "section": "6C",
+      "status": "confirmed",
+      "type": "bool + note"
+    },
+    {
+      "key": "calibration_run_id",
+      "note": "what this run consumed; lives in the derivative, never the sidecar (E-17, DS-119)",
+      "origin": "captured",
+      "scope": [
+        "analysis run"
+      ],
+      "section": "6C",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "applied_factor_deg_per_volt",
+      "note": "frozen by C-3",
+      "origin": "captured",
+      "scope": [
+        "analysis run"
+      ],
+      "section": "6C",
+      "status": "confirmed",
+      "type": "float, deg/V"
+    },
+    {
+      "allowed": [
+        "1",
+        "2"
+      ],
+      "key": "applied_channel",
+      "note": "`1` `2`",
+      "origin": "captured",
+      "scope": [
+        "analysis run"
+      ],
+      "section": "6C",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "key": "hours_since_calibration",
+      "note": "signed; from `calibration_session` (E-18b)",
+      "origin": "derived",
+      "scope": [
+        "session"
+      ],
+      "section": "6C",
+      "status": "confirmed",
+      "type": "float, hours"
+    },
+    {
+      "key": "eff_hours_since_calibration",
+      "note": "signed; from `calibration_run_id` — scope-qualified pair under F-10",
+      "origin": "derived",
+      "scope": [
+        "analysis run"
+      ],
+      "section": "6C",
+      "status": "confirmed",
+      "type": "float, hours"
+    },
+    {
+      "key": "days_since_calibration",
+      "note": "signed; derived from `hours_since_calibration` (E-9a)",
+      "origin": "derived",
+      "scope": [
+        "session"
+      ],
+      "section": "6C",
+      "status": "confirmed",
+      "type": "float, days"
+    },
+    {
+      "key": "calibration_stale",
+      "note": "vs manifest `calibration_max_age_days`; a capture-time warning",
+      "origin": "derived",
+      "scope": [
+        "session"
+      ],
+      "section": "6C",
+      "status": "confirmed",
+      "type": "bool"
+    },
+    {
+      "key": "calibration_substituted",
+      "note": "true when the consumed calibration's session ≠ `calibration_session` (E-21a)",
+      "origin": "derived",
+      "scope": [
+        "analysis run"
+      ],
+      "section": "6C",
+      "status": "confirmed",
+      "type": "bool"
+    },
+    {
+      "key": "stimulus_frequency_hz",
+      "note": "the set of frequencies a run selects from, e.g. `0.5` `1.0` `2.0` (E-11)",
+      "origin": "commanded",
+      "scope": [
+        "block"
+      ],
+      "section": "6C",
+      "status": "confirmed",
+      "type": "list[float], Hz"
+    },
+    {
+      "key": "stimulus_amplitude_deg_per_s",
+      "note": "`10` in Payne 2017, `20` in Payne 2019 (E-11, DS-94)",
+      "origin": "commanded",
+      "scope": [
+        "block"
+      ],
+      "section": "6C",
+      "status": "confirmed",
+      "type": "float, °/s peak"
+    },
+    {
+      "key": "duration_s",
+      "note": "60–120 in Payne 2019, 180 in Fanning 2021 (E-11)",
+      "origin": "commanded",
+      "scope": [
+        "session"
+      ],
+      "section": "6C",
+      "status": "confirmed",
+      "type": "float, s"
+    },
+    {
+      "key": "camera_model",
+      "note": "— (E-14)",
+      "origin": "captured",
+      "scope": [
+        "device"
+      ],
+      "section": "6C",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "ir_led_wavelength_nm",
+      "note": "e.g. `875` (E-14)",
+      "origin": "captured",
+      "scope": [
+        "device"
+      ],
+      "section": "6C",
+      "status": "confirmed",
+      "type": "float, nm"
+    },
+    {
+      "allowed": [
+        "per-entity-then-mean",
+        "pooled",
+        "weighted"
+      ],
+      "key": "aggregation_scheme",
+      "note": "`per-entity-then-mean` `pooled` `weighted` (C-50)",
+      "origin": "captured",
+      "scope": [
+        "group result"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "allowed": [
+        "cell",
+        "trial"
+      ],
+      "key": "aggregation_entity",
+      "note": "the scope level aggregated at, e.g. `cell` `trial`",
+      "origin": "captured",
+      "scope": [
+        "group result"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "key": "display_processing",
+      "note": "filters, truncation, gamma, projection (C-51)",
+      "origin": "captured",
+      "scope": [
+        "figure",
+        "image"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "map"
+    },
+    {
+      "key": "rng_seed",
+      "note": "required when randomization is used (C-52)",
+      "origin": "captured",
+      "scope": [
+        "analysis run"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "int"
+    },
+    {
+      "key": "n_iterations",
+      "note": "e.g. bootstrap `1000`",
+      "origin": "captured",
+      "scope": [
+        "analysis run"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "int"
+    },
+    {
+      "key": "external_reference_inputs",
+      "note": "published data consumed (C-54)",
+      "origin": "captured",
+      "scope": [
+        "analysis run"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "list[DOI + description]"
+    },
+    {
+      "key": "base_model",
+      "note": "repository, accession (e.g. `ModelDB 144523`), version (C-39a)",
+      "origin": "captured",
+      "scope": [
+        "analysis run"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "typed block"
+    },
+    {
+      "key": "parameter_delta",
+      "note": "only the parameters changed from `base_model`",
+      "origin": "captured",
+      "scope": [
+        "analysis run"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "map"
+    },
+    {
+      "key": "eff_model_parameters",
+      "note": "base merged with delta (F-9)",
+      "origin": "derived",
+      "scope": [
+        "analysis run"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "map"
+    },
+    {
+      "key": "validates_run_id",
+      "note": "this run checks another; set even when `not shown` (C-63)",
+      "origin": "captured",
+      "scope": [
+        "analysis run"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "input_runs[].run_id",
+      "note": "id of a consumed run (DS-127)",
+      "origin": "captured",
+      "scope": [
+        "analysis run"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "allowed": [
+        "calibration",
+        "nwb-signals",
+        "validation-target",
+        "base-model",
+        "artifact-reference",
+        "covariate"
+      ],
+      "key": "input_runs[].role",
+      "note": "`calibration` `nwb-signals` `validation-target` `base-model` `artifact-reference` `covariate` … (open) (DS-127)",
+      "origin": "captured",
+      "scope": [
+        "analysis run"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "key": "input_runs[].note",
+      "note": "free, optional (DS-127)",
+      "origin": "captured",
+      "scope": [
+        "analysis run"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "normalized_to",
+      "note": "per-entity reference and its scope (C-50a)",
+      "origin": "captured",
+      "scope": [
+        "group result"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "typed block"
+    },
+    {
+      "allowed": [
+        "lag-positive",
+        "lead-positive"
+      ],
+      "key": "sign_convention",
+      "note": "`lag-positive` `lead-positive` (C-65)",
+      "origin": "captured",
+      "scope": [
+        "analysis run"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "key": "gated_on",
+      "note": "the derivation and outcome required for this one to run (C-59c)",
+      "origin": "captured",
+      "scope": [
+        "group result"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "typed block"
+    },
+    {
+      "key": "test_selection_rule[]",
+      "note": "entries of kind `pretest` / `design-property` / `fixed` (C-59)",
+      "origin": "captured",
+      "scope": [
+        "group result"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "ordered list"
+    },
+    {
+      "allowed": [
+        "tukey",
+        "scheffe",
+        "dunn",
+        "dunnett",
+        "fishers-lsd",
+        "mann-whitney-u"
+      ],
+      "key": "post_hoc_test",
+      "note": "`tukey` `scheffe` `dunn` `dunnett` `fishers-lsd` `mann-whitney-u`",
+      "origin": "captured",
+      "scope": [
+        "group result"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "key": "comparability_distribution",
+      "note": "distribution of `control_matching`, `colony_origin`, `genotyping_method.kind` across members (C-50b)",
+      "origin": "derived",
+      "scope": [
+        "group result"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "map"
+    },
+    {
+      "key": "differential_procedures",
+      "note": "procedures applied to some arms and not others (C-50c)",
+      "origin": "derived",
+      "scope": [
+        "group result"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "list"
+    },
+    {
+      "key": "canonical_<metric>",
+      "note": "the metric restated in the reference convention (C-65a)",
+      "origin": "derived",
+      "scope": [
+        "any"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "as the metric"
+    },
+    {
+      "allowed": [
+        "transcriptomics"
+      ],
+      "key": "assay_type",
+      "note": "`transcriptomics` (C-64)",
+      "origin": "captured",
+      "scope": [
+        "assay derivative"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "key": "platform",
+      "note": "e.g. `Stanford MM cDNA array`",
+      "origin": "captured",
+      "scope": [
+        "assay derivative"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "tissue_source",
+      "note": "e.g. `dorsal flocculus` / `Purkinje`",
+      "origin": "captured",
+      "scope": [
+        "assay derivative"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "cell_type",
+      "note": "e.g. `dorsal flocculus` / `Purkinje`",
+      "origin": "captured",
+      "scope": [
+        "assay derivative"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "capture_method",
+      "note": "e.g. `laser-capture microdissection`",
+      "origin": "captured",
+      "scope": [
+        "assay derivative"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "amplification_rounds",
+      "note": "e.g. `2`",
+      "origin": "captured",
+      "scope": [
+        "assay derivative"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "int"
+    },
+    {
+      "allowed": [
+        "common-reference",
+        "direct"
+      ],
+      "key": "reference_design",
+      "note": "`common-reference` `direct` (C-64a)",
+      "origin": "captured",
+      "scope": [
+        "assay derivative"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "key": "reference_material",
+      "note": "composition and preparation of the shared reference",
+      "origin": "captured",
+      "scope": [
+        "assay derivative"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "typed block"
+    },
+    {
+      "key": "channels",
+      "note": "e.g. `Cy5` (sample), `Cy3` (reference)",
+      "origin": "captured",
+      "scope": [
+        "assay derivative"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "list"
+    },
+    {
+      "key": "repository",
+      "note": "e.g. Stanford Microarray Database",
+      "origin": "captured",
+      "scope": [
+        "assay derivative"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "accession",
+      "note": "e.g. Stanford Microarray Database",
+      "origin": "captured",
+      "scope": [
+        "assay derivative"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "displayed_derivations",
+      "note": "`group_derivations` rows the panel draws (C-51a)",
+      "origin": "captured",
+      "scope": [
+        "figure"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "list[ref]"
+    },
+    {
+      "key": "reference_overlay",
+      "note": "true when a displayed derivation's group differs from the figure's own",
+      "origin": "derived",
+      "scope": [
+        "figure"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "bool"
+    },
+    {
+      "key": "manual_measurement",
+      "note": "(C-37b)",
+      "origin": "captured",
+      "scope": [
+        "analysis run"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "bool"
+    },
+    {
+      "key": "acquired_blinded",
+      "note": "blinding at collection; explicit `false` is a disclosure (C-37c, C-67)",
+      "origin": "captured",
+      "scope": [
+        "session"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "bool, absence_declarable"
+    },
+    {
+      "key": "analysed_blinded",
+      "note": "blinding at analysis (C-37)",
+      "origin": "captured",
+      "scope": [
+        "analysis run"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "bool"
+    },
+    {
+      "allowed": [
+        "residual-threshold",
+        "guard-band",
+        "minimum-segment-duration",
+        "coverage-veto",
+        "refit"
+      ],
+      "key": "artifact_rejection[].stage",
+      "note": "`residual-threshold` `guard-band` `minimum-segment-duration` `coverage-veto` `refit` (C-61)",
+      "origin": "captured",
+      "scope": [
+        "analysis run"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "key": "coverage_veto.predicate",
+      "note": "may be conditional on other facets (C-61b)",
+      "origin": "captured",
+      "scope": [
+        "analysis run"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "predicate"
+    },
+    {
+      "key": "coverage_veto.evaluated_at",
+      "note": "the named entities the predicate is checked on",
+      "origin": "captured",
+      "scope": [
+        "analysis run"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "list[scope/label]"
+    },
+    {
+      "allowed": [],
+      "key": "coverage_veto.vetoes",
+      "note": "the scope discarded on failure; may be coarser than `evaluated_at`",
+      "origin": "captured",
+      "scope": [
+        "analysis run"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "key": "vetoed_by_uid",
+      "note": "the entity whose failure caused this one's exclusion (C-61d)",
+      "origin": "derived",
+      "scope": [
+        "entity"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "reported_fit_pass",
+      "note": "which fitting pass produced the reported value (C-61a)",
+      "origin": "captured",
+      "scope": [
+        "analysis run"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "int"
+    },
+    {
+      "key": "matching_procedure",
+      "note": "`matched_facet`, `target_statistic`, `tolerance`, algorithm, seed (C-60)",
+      "origin": "captured",
+      "scope": [
+        "group"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "typed block"
+    },
+    {
+      "key": "code_version",
+      "note": "commit SHA, bound tag, or SWH id — never a branch (C-62)",
+      "origin": "captured",
+      "scope": [
+        "analysis run"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "pooled_across",
+      "note": "factor, test and outcome that licensed pooling (C-59b)",
+      "origin": "captured",
+      "scope": [
+        "group result"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "typed block"
+    },
+    {
+      "key": "pooled_across.evidence",
+      "note": "`this-analysis` or a citation (C-59b-bis)",
+      "origin": "captured",
+      "scope": [
+        "group result"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "enum + ref"
+    },
+    {
+      "key": "objective_mag",
+      "note": "(C-53)",
+      "origin": "captured",
+      "scope": [
+        "image"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "float"
+    },
+    {
+      "key": "numerical_aperture",
+      "note": "(C-53)",
+      "origin": "captured",
+      "scope": [
+        "image"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "float"
+    },
+    {
+      "key": "derivative_covariate[<name>]",
+      "note": "an entity-scope measurement published by an image/assay derivative for other analyses (C-53a)",
+      "origin": "metric",
+      "scope": [
+        "subject"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "numeric"
+    },
+    {
+      "key": "derivative_covariate[<name>].sampling",
+      "note": "e.g. `every other 20 µm section`",
+      "origin": "captured",
+      "scope": [
+        "subject"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "derivative_covariate[<name>].denominator_source",
+      "note": "the entity the reference value came from, e.g. `representative mouse`",
+      "origin": "captured",
+      "scope": [
+        "subject"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "expression_percent",
+      "note": "first registered `derivative_covariate`; Nguyen-Vu 2013 range 10–54 %",
+      "origin": "metric",
+      "scope": [
+        "subject"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "float, %"
+    },
+    {
+      "key": "artifact_reference_method",
+      "note": "how the artifact reference was obtained (C-47)",
+      "origin": "captured",
+      "scope": [
+        "signal"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "excitation_nm",
+      "note": "—",
+      "origin": "captured",
+      "scope": [
+        "image"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "float"
+    },
+    {
+      "key": "z_step_um",
+      "note": "—",
+      "origin": "captured",
+      "scope": [
+        "image"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "float"
+    },
+    {
+      "key": "camera",
+      "note": "e.g. `ORCA Flash 4.0 LT`, `µManager`",
+      "origin": "captured",
+      "scope": [
+        "image"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "acquisition_software",
+      "note": "e.g. `ORCA Flash 4.0 LT`, `µManager`",
+      "origin": "captured",
+      "scope": [
+        "image"
+      ],
+      "section": "6E",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "allowed": [
+        "acquired",
+        "hardware-derived",
+        "software-derived"
+      ],
+      "key": "signal_provenance",
+      "note": "`acquired` `hardware-derived` `software-derived`",
+      "origin": "captured",
+      "scope": [
+        "signal"
+      ],
+      "section": "7",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "key": "signal_derivation",
+      "note": "expression; required when not `acquired`",
+      "origin": "captured",
+      "scope": [
+        "signal"
+      ],
+      "section": "7",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "sample_rate_hz",
+      "note": "—",
+      "origin": "commanded",
+      "scope": [
+        "signal"
+      ],
+      "section": "7",
+      "status": "confirmed",
+      "type": "float, Hz"
+    },
+    {
+      "key": "time_base",
+      "note": "`base_id` from the session registry (C-55)",
+      "origin": "captured",
+      "scope": [
+        "signal"
+      ],
+      "section": "7",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "source_time_base",
+      "note": "required when the series was resampled (C-55b)",
+      "origin": "captured",
+      "scope": [
+        "signal"
+      ],
+      "section": "7",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "target_time_base",
+      "note": "required when the series was resampled (C-55b)",
+      "origin": "captured",
+      "scope": [
+        "signal"
+      ],
+      "section": "7",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "resampling_method",
+      "note": "e.g. `linear-interpolation`",
+      "origin": "captured",
+      "scope": [
+        "signal"
+      ],
+      "section": "7",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "time_bases[].acquisition_system",
+      "note": "e.g. `Power1401 + Spike2`, `Bonsai + FLIR Blackfly`",
+      "origin": "captured",
+      "scope": [
+        "session"
+      ],
+      "section": "7",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "allowed": [
+        "master",
+        "slave"
+      ],
+      "key": "time_bases[].role",
+      "note": "`master` `slave`; exactly one `master`",
+      "origin": "captured",
+      "scope": [
+        "session"
+      ],
+      "section": "7",
+      "status": "confirmed",
+      "type": "enum"
+    },
+    {
+      "key": "time_bases[].sync.sync_signal",
+      "note": "e.g. `TTL5`",
+      "origin": "captured",
+      "scope": [
+        "session"
+      ],
+      "section": "7",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "time_bases[].sync.alignment_method",
+      "note": "e.g. `rising-edge-match`",
+      "origin": "captured",
+      "scope": [
+        "session"
+      ],
+      "section": "7",
+      "status": "confirmed",
+      "type": "string"
+    },
+    {
+      "key": "time_bases[].sync.residual_ms",
+      "note": "`null` when unmeasured — never `0` (C-55a)",
+      "origin": "metric",
+      "scope": [
+        "session"
+      ],
+      "section": "7",
+      "status": "confirmed",
+      "type": "float, ms"
+    }
+  ],
+  "required": {
+    "behavioral": {
+      "keys": [
+        "task",
+        "eye_measured",
+        "surgery[].eye",
+        "blockplan[].block_role",
+        "blockplan[].timepoint_min",
+        "blockplan[].light_state",
+        "blockplan[].chair_frequency_hz",
+        "blockplan[].chair_amplitude_deg_per_s",
+        "blockplan[].drum_frequency_hz",
+        "blockplan[].drum_amplitude_deg_per_s",
+        "blockplan[].drum_phase_deg_rel_chair",
+        "device.turntable",
+        "device.drum",
+        "device.eye_sensor"
+      ],
+      "source": "behavioral.md section 5"
+    },
+    "common": {
+      "keys": [
+        "schema_type",
+        "schema_version",
+        "subject_id",
+        "system_id",
+        "species",
+        "strain",
+        "sex",
+        "date_of_birth",
+        "weight",
+        "session_start_time",
+        "experimenter",
+        "lab",
+        "institution",
+        "project_id",
+        "rig_id",
+        "registered_via",
+        "session_description",
+        "protocol_id",
+        "state.lifecycle[]",
+        "state.qc[]"
+      ],
+      "source": "00_common-core.md section 2.3"
+    },
+    "eye-calibration": {
+      "keys": [
+        "task",
+        "eye_tracking_method",
+        "eye_measured",
+        "stimulus_frequency_hz",
+        "stimulus_amplitude_deg_per_s",
+        "duration_s",
+        "light_state",
+        "align_led_pulse_width_ms",
+        "align_led_pulse_rate_hz",
+        "preamp_gain",
+        "lowpass_filter_hz",
+        "camera_model",
+        "camera_separation_deg",
+        "camera_equidistance_cm",
+        "video_frame_rate_hz",
+        "runs[].run_index",
+        "surgery[].eye"
+      ],
+      "source": "eye-calibration.md section 6"
+    }
+  },
+  "sections": [
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "6C",
+    "6E",
+    "7"
+  ],
+  "source": "FACETS.md",
+  "source_version": "1.5.1"
+}
