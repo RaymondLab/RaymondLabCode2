@@ -104,7 +104,7 @@ Func driftFix%()
     endif;
 
     var dt := currentTime - lastDriftFixTime;
-    if dt < sampleStepsize then 
+    if dt < chairPeriod then 
         ' Limit drift correction to only once per stimulus cycle period (previously was "dt < sampleStepsize")
         return 1;  
     endif;
@@ -189,6 +189,7 @@ Func ToolbarIdle%()
                 blockStartTime := MaxTime();
                 blockMarkers$ := blockList$[blockNum%];
                 upperSampleKey$ := Left$(blockMarkers$, 1);
+                SampleSeqVar(1, 1);  'Mark block as started before the key goes out
                 SampleKey(upperSampleKey$);  'Send SampleKey() command to the 1401 sequencer of the current block's letter marker
                 AddTextMark(upperSampleKey$, blockNum%);
                 blockNum% := blockNum% + 1;  'Increase the block number by one

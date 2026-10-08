@@ -70,8 +70,8 @@ TTL1ON: 'L  DIGOUT [.......1]      ;Turn TTL 1 on      >=
 RESET:  'R  DIGPC  1,S             ;Suspend any camera trigger pulse trains >=
             DIGPC  1,C             ;Clear any stale cycle flags >=
             DIGOUT [00000000]      ;Reset to initial state >=
-            MOVI DrumTmp,0         ;Reset DrumTmp value >=
-            MOVI ChairTmp,0        ;Reset ChairTmp value >=
+            MOVI   DrumTmp,0       ;Reset DrumTmp value >=
+            MOVI   ChairTmp,0      ;Reset ChairTmp value >=
             RATE   0,0             ;Stop sine on drum  >=
             RATE   1,0             ;Stop sine on chair >=
             JUMP   IDLELOOP        ;Return to idle loop
@@ -88,13 +88,13 @@ DSINEON: 'D MOV    DrumTmp,DrumAmp ;Start Drum Sine    >"
             ANGLE  0,0             ;Set cosine angle   >"
             RATE   0,DrumFrq       ;Set cosine frequency >"
 DSINE1:     OFFSET 0,DrumOff       ;Adjust drum cosine offset >"
-            OFFSET 1,ChairOff      ;Adjust chair cosine offset >"
+            DAC    1,ChairOff      ;Adjust chair cosine offset >"
             WAITC  0,DSINE1        ;Wait for 0 drum phase >"
             JUMP   DSINE1          ;Set cosine loop    > Drum running
 
 DSINEOFF: 'd CLRC  0               ;Stop Drum Sine     >"
 DSINE2:     OFFSET 0,DrumOff       ;Adjust drum cosine offset >"
-            OFFSET 1,ChairOff      ;Adjust chair cosine offset >"
+            DAC    1,ChairOff      ;Adjust chair cosine offset >"
             WAITC  0,DSINE2        ;Wait for end of cycle >"
             MOVI   DrumTmp,0       ;Set drum amplitude >"
             RATE   0,0,IDLELOOP    ;Stop drum cosine then idle
@@ -110,13 +110,13 @@ CSINEON: 'C MOV    ChairTmp,ChairAmp ;Start Chair Sine >"
             PHASE  1,ChairPhs      ;Set cosine relative phase >"
             ANGLE  1,0             ;Set cosine angle   >"
             RATE   1,ChairFrq      ;Set cosine frequency >"
-CSINE1:     OFFSET 0,DrumOff       ;Adjust drum cosine offset >"
+CSINE1:     DAC    0,DrumOff       ;Adjust drum cosine offset >"
             OFFSET 1,ChairOff      ;Adjust chair cosine offset >"
             WAITC  1,CSINE1        ;Wait for 0 chair phase >"
             JUMP   CSINE1          ;Set cosine loop    > Chair running
 
 CSINEOFF: 'c CLRC  1               ;Stop Chair Sine    >"
-CSINE2:     OFFSET 0,DrumOff       ;Adjust drum cosine offset >"
+CSINE2:     DAC    0,DrumOff       ;Adjust drum cosine offset >"
             OFFSET 1,ChairOff      ;Adjust chair cosine offset >"
             WAITC  1,CSINE2        ;Wait for end of cycle >"
             MOVI   ChairTmp,0      ;Set chair amplitude >"
@@ -176,13 +176,13 @@ VORDON: 'Y  MOVI   BlockFlg,1      ;Start VORD block   >VORD
             PHASE  1,ChairPhs      ;Set cosine relative phase >"
             ANGLE  1,0             ;Set cosine angle   >"
             RATE   1,ChairFrq      ;Set cosine frequency >"
-VORD1:      OFFSET 0,DrumOff       ;Adjust drum cosine offset >"
+VORD1:      DAC    0,DrumOff       ;Adjust drum cosine offset >"
             OFFSET 1,ChairOff      ;Adjust chair cosine offset >"
             WAITC  1,VORD1         ;Wait for 0 phase   >"
             DBNZ   ChairCtr,VORD1  ;Run cycles until counter hits zero >"
 
-VORDOFF: 'y CLRC   1               ;Stop VORD block >"
-VORD2:      OFFSET 0,DrumOff       ;Adjust drum cosine offset >"
+VORDOFF: 'y CLRC   1               ;Stop VORD block    >"
+VORD2:      DAC    0,DrumOff       ;Adjust drum cosine offset >"
             OFFSET 1,ChairOff      ;Adjust chair cosine offset >"
             WAITC  1,VORD2         ;Wait for end of cycle >"
             RATE   1,0             ;Stop chair cosine  >"
@@ -215,7 +215,7 @@ VOR21:      OFFSET 0,DrumOff       ;Adjust drum cosine offset >"
             WAITC  1,VOR21         ;Wait for 0 chair phase >"
             DBNZ   ChairCtr,VOR21  ;Run cycles until counter hits zero >"
 
-VOR2OFF: 'x CLRC   1               ;Stop VORx2 block >"
+VOR2OFF: 'x CLRC   1               ;Stop VORx2 block   >"
 VOR22:      OFFSET 0,DrumOff       ;Adjust drum cosine offset >"
             OFFSET 1,ChairOff      ;Adjust chair cosine offset >"
             WAITC  1,VOR22         ;Wait for end of cycle >"
@@ -241,13 +241,13 @@ OKRON:  'Z  MOVI   BlockFlg,1      ;Start OKR block    >OKR
             ANGLE  0,0             ;Set cosine angle   >"
             RATE   0,DrumFrq       ;Set cosine frequency >"
 OKR1:       OFFSET 0,DrumOff       ;Adjust drum cosine offset >"
-            OFFSET 1,ChairOff      ;Adjust chair cosine offset >"
+            DAC    1,ChairOff      ;Adjust chair cosine offset >"
             WAITC  0,OKR1          ;Wait for 0 phase   >"
             DBNZ   DrumCtr,OKR1    ;Run cycles until counter hits zero >"
 
-OKROFF: 'z  CLRC   0               ;Stop OKR block >"
+OKROFF: 'z  CLRC   0               ;Stop OKR block     >"
 OKR2:       OFFSET 0,DrumOff       ;Adjust drum cosine offset >"
-            OFFSET 1,ChairOff      ;Adjust chair cosine offset >"
+            DAC    1,ChairOff      ;Adjust chair cosine offset >"
             WAITC  0,OKR2          ;Wait for end of cycle >"
             RATE   0,0             ;Stop chair cosine  >"
             MOVI   DrumTmp,0       ;Set drum amplitude to zero >"
