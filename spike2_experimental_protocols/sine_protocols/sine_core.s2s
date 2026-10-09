@@ -170,6 +170,12 @@ Func ToolbarIdle%()
     if ViewKind() <> 0 then
         return 1;
     endif;
+
+    ' Keep script commands on the sampling view even if another file is in front 
+    if SampleHandle(0) > 0 then 
+        View(SampleHandle(0)) 
+    endif;
+
     if runFlag% = 1 then  'Check whether the "Run Experiment" button was pressed
         blockFlag% := SampleSeqVar(1);  'Get the current blockFlag% value from the 1401 sequencer variable
         if blockFlag% <> prevBlockFlag% then  'Set driftFix suspension period after block transitions
