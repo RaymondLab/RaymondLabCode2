@@ -1,19 +1,53 @@
-function results = calc_cycleMetrics(hevel, stimvel)
-% CALC_CYCLEMETRICS Computes VOR response characterizations per half-cycle
+function results = calc_cycleMetrics(hevel, stimvel, stimtype, negVelMode)
+% CALC_CYCLEMETRICS Computes OKR/VOR response characterizations per half-cycle
 %
 % SYNTAX:
 %   results = calc_cycleMetrics(hevel, stimvel)
+%   results = calc_cycleMetrics(hevel, stimvel, stimtype)
+%   results = calc_cycleMetrics(hevel, stimvel, stimtype, negVelMode)
 %
 % INPUTS:
-%   hevel   - Horizontal eye velocity array of size CYCLELENGTHxNCYCLES or 
-%             NCYCLESxCYCLELENGTH (cycle length must be the larger dimension)
-%   stimvel - Stimulus velocity array, must have the same dimensions as hevel
+%   hevel      - Horizontal eye velocity array of size CYCLELENGTHxNCYCLES or
+%                NCYCLESxCYCLELENGTH (cycle length must be the larger dimension)
+%   stimvel    - Stimulus velocity array, must have the same dimensions as hevel
+%   stimtype   - (optional) Char/string containing 'OKR' (default) or 'VOR',
+%                case-insensitive. Sets the expected eye direction relative to
+%                the stimulus: OKR = same direction, VOR = opposite direction.
+%                Pass [] to use the default.
+%   negVelMode - (optional) How velocity opposite to the response direction is
+%                treated in metric groups 1-3. 'signed' or 'clamped',
+%                case-insensitive. Default: DEFAULT_NEG_VEL_MODE (set at the
+%                top of the function). See SIGNAL PREPARATION.
 %
 % OUTPUTS:
 %   results - Struct containing characterization metrics organized by group.
 %             Each metric is an NCYCLES x 2 matrix where:
 %               Column 1 = first half-cycle
 %               Column 2 = second half-cycle
+%
+% =========================================================================
+% SIGNAL PREPARATION (applies to metric groups 1-3)
+% =========================================================================
+% The direction (+/-) of each half-cycle is taken from stimvel: the half
+% whose mean velocity (pooled over all cycles) is positive is the positive
+% half. The eye direction is the same (OKR) or opposite (VOR). A warning is
+% issued and the default [+,-] is used if the two stim half means share a
+% sign or are below MIN_STIM_HALF_MEAN deg/s.
+%
+% Each half is then flipped so its response direction is positive,
+% s = sgn * x, and velocity opposite to the response direction (e.g. the
+% lag segment at the start of a half) is handled per negVelMode:
+%   'signed'  - kept as negative values. Negative samples subtract from the
+%               area and push the centroid mean away from their time. The
+%               quantile times use the first upward crossing of the running
+%               area, so they stay defined when the area dips. If the net
+%               area of a half is <= 0 the metrics are NaN.
+%   'clamped' - set to zero: s = max(sgn * x, 0). Only response-direction
+%               velocity counts. Always well defined if any response exists.
+% NaN samples count as zero in both modes. Signs are stored in
+% .metadata.halfCycleSigns. If the pooled hevel does not point in the
+% expected direction, a warning is issued and
+% .metadata.eyeDirectionAgrees is set to false (the signs are not changed).
 %
 % =========================================================================
 % METRIC GROUP 1: CENTROID (MEAN) BASED
@@ -126,7 +160,8 @@ function results = calc_cycleMetrics(hevel, stimvel)
 % METRIC GROUP 4: PEAK-BASED
 % =========================================================================
 % These metrics identify the two tallest peaks in each half-cycle using
-% findpeaks on the non-rectified eye velocity signal.
+% findpeaks on the signed (not clipped) eye velocity, flipped so the
+% response direction is positive.
 %
 %   Metric 4A - Two Tallest Peaks:
 %       .eye.peak1Val     - Amplitude of the tallest peak (deg/s)
@@ -137,8 +172,9 @@ function results = calc_cycleMetrics(hevel, stimvel)
 %       Interpretation: A naive characterization of the dominant peaks in
 %       the half-cycle response. If only one peak is detected, the second
 %       peak fields are NaN. If no peaks are detected, both are NaN.
-%       Peaks are found on the non-rectified signal with a minimum height of
-%       0.01 deg/s and a minimum inter-peak distance of 50 ms.
+%       Peaks are found with a minimum height of 0.01 deg/s and a minimum
+%       inter-peak distance of 50 ms. In a negative half-cycle the peaks are
+%       the deepest troughs and are reported with negative values.
 %
 % =========================================================================
 %
@@ -161,7 +197,35 @@ function results = calc_cycleMetrics(hevel, stimvel)
     if nargin < 2
         error('Both hevel and stimvel are required inputs.');
     end
-    
+    if nargin < 3 || isempty(stimtype)
+        stimtype = 'OKR';
+    end
+    if contains(stimtype, 'VOR', 'IgnoreCase', true)
+        eyeVsStim = -1;   % VOR: eye moves opposite to the stimulus
+    elseif contains(stimtype, 'OKR', 'IgnoreCase', true)
+        eyeVsStim = 1;    % OKR: eye moves with the stimulus
+    else
+        error('stimtype must contain ''OKR'' or ''VOR'' (got ''%s'').', string(stimtype));
+    end
+    if isempty(hevel) || isempty(stimvel)
+        error('hevel and stimvel must not be empty.');
+    end
+    if any(isinf(stimvel(:)))
+        error('stimvel contains Inf values.');
+    end
+
+    MIN_STIM_HALF_MEAN = 1;             % deg/s; below this a stim half is treated as unreliable
+    DEFAULT_NEG_VEL_MODE = 'signed';    % 'signed' or 'clamped'; see SIGNAL PREPARATION
+
+    if nargin < 4 || isempty(negVelMode)
+        negVelMode = DEFAULT_NEG_VEL_MODE;
+    end
+    negVelMode = lower(char(negVelMode));
+    if ~any(strcmp(negVelMode, {'signed', 'clamped'}))
+        error('negVelMode must be ''signed'' or ''clamped'' (got ''%s'').', negVelMode);
+    end
+    clampNeg = strcmp(negVelMode, 'clamped');
+
     [hevel, nCycles, cycleLength] = orientData(hevel);
     [stimvel, nCyclesStim, cycleLengthStim] = orientData(stimvel);
     
@@ -179,7 +243,32 @@ function results = calc_cycleMetrics(hevel, stimvel)
     % Time vector for half-cycle (in ms, assuming 1000 Hz sample rate)
     tHalf = (0:halfLength-1)';
     halfDuration = halfLength;
-    
+
+    %% Half-cycle direction from the stimulus
+    % Mean stim velocity of each half, pooled over all cycles (deg/s).
+    stimHalfMean = [mean(stimvel(1:halfLength, :),     'all', 'omitnan'), ...
+                    mean(stimvel(halfLength+1:end, :), 'all', 'omitnan')];
+    if any(abs(stimHalfMean) < MIN_STIM_HALF_MEAN) || sign(stimHalfMean(1)) == sign(stimHalfMean(2))
+        warning('calc_cycleMetrics:weakStim', ...
+            ['Stim half-cycle means (%.3g, %.3g deg/s) do not give a clear direction. ', ...
+             'Using default signs: half 1 = +, half 2 = -.'], stimHalfMean(1), stimHalfMean(2));
+        sgnStim = [1, -1];
+    else
+        sgnStim = sign(stimHalfMean);
+    end
+    sgnEye = eyeVsStim * sgnStim;
+
+    % Check that the eye actually moved in the expected direction. The half
+    % with the larger pooled sum should be the one sgnEye marks positive.
+    eyeHalfSum = [sum(hevel(1:halfLength, :),     'all', 'omitnan'), ...
+                  sum(hevel(halfLength+1:end, :), 'all', 'omitnan')];
+    eyeDirectionAgrees = sign(eyeHalfSum(1) - eyeHalfSum(2)) == sgnEye(1);
+    if ~eyeDirectionAgrees
+        warning('calc_cycleMetrics:eyeDirection', ...
+            ['Pooled hevel does not point in the direction expected for %s. ', ...
+             'Metrics in groups 1-3 are unreliable for this data.'], stimtype);
+    end
+
     %% Preallocate output arrays (NCYCLES x 2)
     
     % Group 1: Centroid (Mean) based
@@ -226,13 +315,19 @@ function results = calc_cycleMetrics(hevel, stimvel)
             eyeHalf = eyeHalves{h};
             stimHalf = stimHalves{h};
             
-            % Rectify signals for consistent computation across half-cycles
-            eyeRect = abs(eyeHalf);
-            stimRect = abs(stimHalf);
-            
+            % Flip each half so its response direction is positive. NaN
+            % samples become 0. Then, per negVelMode, either keep opposite-
+            % direction velocity as negative values or clamp it to zero.
+            eyePos  = sgnEye(h)  * eyeHalf;   eyePos(isnan(eyePos))   = 0;
+            stimPos = sgnStim(h) * stimHalf;  stimPos(isnan(stimPos)) = 0;
+            if clampNeg
+                eyePos  = max(eyePos,  0);
+                stimPos = max(stimPos, 0);
+            end
+
             %% Metric 1A: Temporal Centroid (Mean)
-            eyeCentroidMean = computeCentroid(eyeRect, tHalf);
-            stimCentroidMean = computeCentroid(stimRect, tHalf);
+            eyeCentroidMean = computeCentroid(eyePos, tHalf);
+            stimCentroidMean = computeCentroid(stimPos, tHalf);
             results.eye.centroidMean(c, h) = eyeCentroidMean;
             results.stim.centroidMean(c, h) = stimCentroidMean;
             
@@ -244,8 +339,8 @@ function results = calc_cycleMetrics(hevel, stimvel)
             results.stim.skewFromCentroidMean(c, h) = 1 - (2 * stimCentroidMean / halfDuration);
             
             %% Metric 2A & 2D: Quantile Times (including Centroid Median = t50)
-            [eyeT25, eyeT50, eyeT75] = computeQuantileTimes(eyeRect, tHalf);
-            [stimT25, stimT50, stimT75] = computeQuantileTimes(stimRect, tHalf);
+            [eyeT25, eyeT50, eyeT75] = computeQuantileTimes(eyePos, tHalf);
+            [stimT25, stimT50, stimT75] = computeQuantileTimes(stimPos, tHalf);
             
             results.eye.centroidMedian(c, h) = eyeT50;
             results.stim.centroidMedian(c, h) = stimT50;
@@ -291,10 +386,10 @@ function results = calc_cycleMetrics(hevel, stimvel)
             end
 
             %% Metric 4A: Two Tallest Peaks
-            if isequal(h,1), sgn=1; elseif isequal(h,2), sgn=-1; end
+            sgn = sgnEye(h);   % flip a negative half so troughs become peaks
             [eyePks, eyePkTimes] = findpeaks(sgn*eyeHalf, tHalf, ...
                 'SortStr','descend', 'NPeaks',2, ...
-                'MinPeakHeight',0.01, 'MinPeakDistance',0.05);
+                'MinPeakHeight',0.01, 'MinPeakDistance',50);   % tHalf is in ms
             if numel(eyePks) >= 1
                 results.eye.peak1Val(c, h)  = sgn*eyePks(1);
                 results.eye.peak1TimeMs(c, h) = eyePkTimes(1);
@@ -310,6 +405,16 @@ function results = calc_cycleMetrics(hevel, stimvel)
     results.metadata.nCycles = nCycles;
     results.metadata.cycleLength = cycleLength;
     results.metadata.halfCycleLength = halfLength;
+    results.metadata.stimtype = stimtype;
+    results.metadata.halfCycleSigns.eye = sgnEye;
+    results.metadata.halfCycleSigns.stim = sgnStim;
+    results.metadata.eyeDirectionAgrees = eyeDirectionAgrees;
+    results.metadata.negVelMode = negVelMode;
+    if clampNeg
+        results.metadata.signalPrep = 'Groups 1-3: each half flipped to its response direction and clamped at zero, s = max(sgn*x, 0). NaN counts as 0.';
+    else
+        results.metadata.signalPrep = 'Groups 1-3: each half flipped to its response direction, s = sgn*x; opposite-direction velocity kept as negative values. NaN counts as 0.';
+    end
     results.metadata.units.time = 'ms (assuming 1000 Hz sample rate)';
     results.metadata.units.skewIndices = 'dimensionless';
     results.metadata.columnLabels = {'HalfCycle1', 'HalfCycle2'};
@@ -396,8 +501,24 @@ function [t25, t50, t75] = computeQuantileTimes(signal, t)
     
     cumAreaNorm = cumArea / totalArea;
     
-    % Find quantile times via interpolation
-    t25 = interp1(cumAreaNorm, t, 0.25, 'linear');
-    t50 = interp1(cumAreaNorm, t, 0.50, 'linear');
-    t75 = interp1(cumAreaNorm, t, 0.75, 'linear');
+    % Find quantile times: first crossing of each level, with linear
+    % interpolation between the two bracketing samples. Unlike interp1 this
+    % tolerates flat (repeated) stretches in the cumulative area, which the
+    % zero-clipped signals produce wherever the velocity is zero.
+    t25 = firstCrossingTime(cumAreaNorm, t, 0.25);
+    t50 = firstCrossingTime(cumAreaNorm, t, 0.50);
+    t75 = firstCrossingTime(cumAreaNorm, t, 0.75);
+end
+
+function tq = firstCrossingTime(cumNorm, t, q)
+% FIRSTCROSSINGTIME Time at which a non-decreasing curve first reaches level q
+
+    i = find(cumNorm >= q, 1, 'first');
+    if isempty(i)
+        tq = NaN;
+    elseif i == 1
+        tq = t(1);
+    else
+        tq = t(i-1) + (q - cumNorm(i-1)) / (cumNorm(i) - cumNorm(i-1)) * (t(i) - t(i-1));
+    end
 end
