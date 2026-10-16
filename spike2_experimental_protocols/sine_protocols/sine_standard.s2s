@@ -71,6 +71,7 @@ Func UpdateExpmtSettings%(item%)
     var chairAmp_value := DlgValue(11);
     var chairFreq_value := DlgValue(12);
     var chairPhase_value := DlgValue(13);
+    var testingType_value% := DlgValue(15);
     DlgEnable(0, 10, 13);
     DlgEnable((nTrainingBlocks_value% > 1), 3, 14);
     DlgEnable((trainingType_value% <> 5), 2, 3, 14);
@@ -122,6 +123,24 @@ Func UpdateExpmtSettings%(item%)
             DlgValue(8, (-1) * chairAmp_value);
         case item% = 12 then 
             DlgValue(9, chairFreq_value);
+        case item% = 15 then
+            if testingType_value% = 4 then
+                DlgValue(2, 60);
+                DlgValue(3, 50);
+                DlgValue(4, 3);
+                DlgValue(5, 50);
+                DlgValue(8, 20.0);
+                DlgValue(11, -20.0);
+                DlgValue(14, 0);
+            else
+                DlgValue(2, 3);
+                DlgValue(3, 600);
+                DlgValue(4, 3);
+                DlgValue(5, 45);
+                DlgValue(8, 10.0);
+                DlgValue(11, -10.0);
+                DlgValue(14, 0);
+            endif;
     endcase;
 
     return 1;
